@@ -1,5 +1,7 @@
 mod config;
+mod db;
 mod doctor;
+mod library;
 mod login_window;
 mod secrets;
 mod session;
