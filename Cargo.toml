@@ -1,0 +1,8 @@
+[workspace]
+resolver = "3"
+members = ["crates/libsocial", "crates/polka"]
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+version = "0.1.0"
