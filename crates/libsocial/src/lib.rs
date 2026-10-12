@@ -8,6 +8,7 @@ pub mod auth;
 mod client;
 mod error;
 mod manga;
+pub mod mirrors;
 pub mod models;
 mod serde_util;
 mod site;

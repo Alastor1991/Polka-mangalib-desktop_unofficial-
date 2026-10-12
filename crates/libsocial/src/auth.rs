@@ -8,19 +8,20 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use url::Url;
 
-use crate::client::Client;
+use crate::client::{Auth, Client, join_url, status_error};
 use crate::error::{Error, Result};
+use crate::mirrors;
 use crate::models::Me;
 use crate::site::Site;
 
 /// Публичный веб-клиент lib.social. Свой клиент для десктопа выдают разработчики сервиса.
 pub const WEB_CLIENT_ID: &str = "1";
-pub const WEB_REDIRECT_URI: &str = "https://mangalib.me/ru/front/auth/oauth/callback";
+/// Путь страницы возврата после входа. Веб-клиент принимает его на любом домене сети.
+pub const CALLBACK_PATH: &str = "/ru/front/auth/oauth/callback";
 
 /// Сколько секунд до истечения считать токен уже просроченным.
 const EXPIRY_MARGIN: u64 = 120;
@@ -59,14 +60,6 @@ impl std::fmt::Debug for Token {
     }
 }
 
-impl std::fmt::Debug for AuthSession {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("AuthSession")
-            .field("state", &self.state)
-            .finish_non_exhaustive()
-    }
-}
-
 #[derive(Debug, Deserialize)]
 struct TokenResponse {
     access_token: String,
@@ -90,43 +83,64 @@ impl From<TokenResponse> for Token {
     }
 }
 
-/// Одна попытка входа: секреты PKCE и адрес, который надо открыть в браузере.
+/// Одна попытка входа: секреты PKCE и адреса, которые можно открыть в браузере.
 #[derive(Clone)]
 pub struct AuthSession {
     verifier: String,
     pub state: String,
-    pub authorize_url: String,
+    /// Адрес входа на каждом сервере авторизации. Все с одним PKCE, годится любой.
+    pub authorize_urls: Vec<String>,
     client_id: String,
     redirect_uri: String,
 }
 
+impl std::fmt::Debug for AuthSession {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthSession")
+            .field("state", &self.state)
+            .finish_non_exhaustive()
+    }
+}
+
 impl AuthSession {
-    pub fn new(auth_base: &str) -> AuthSession {
-        Self::with_client(auth_base, WEB_CLIENT_ID, WEB_REDIRECT_URI)
+    /// Вход веб-клиентом с возвратом на `web_origin` (например `https://mangalib.org`).
+    pub fn new(auth_mirrors: &[String], web_origin: &str) -> AuthSession {
+        let redirect = format!("{}{CALLBACK_PATH}", web_origin.trim_end_matches('/'));
+        Self::with_client(auth_mirrors, WEB_CLIENT_ID, &redirect)
     }
 
-    pub fn with_client(auth_base: &str, client_id: &str, redirect_uri: &str) -> AuthSession {
+    pub fn with_client(auth_mirrors: &[String], client_id: &str, redirect_uri: &str) -> AuthSession {
         let verifier = random_token(96);
         let state = random_token(30);
         let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
-        let mut url = Url::parse(auth_base).expect("auth_base должен быть корректным адресом");
-        url.set_path("/auth/oauth/authorize");
-        url.query_pairs_mut()
-            .append_pair("scope", "")
-            .append_pair("client_id", client_id)
-            .append_pair("response_type", "code")
-            .append_pair("redirect_uri", redirect_uri)
-            .append_pair("state", &state)
-            .append_pair("code_challenge", &challenge)
-            .append_pair("code_challenge_method", "S256")
-            .append_pair("prompt", "consent");
+        let authorize_urls = auth_mirrors
+            .iter()
+            .filter_map(|base| Url::parse(base).ok())
+            .map(|mut url| {
+                url.set_path("/auth/oauth/authorize");
+                url.query_pairs_mut()
+                    .append_pair("scope", "")
+                    .append_pair("client_id", client_id)
+                    .append_pair("response_type", "code")
+                    .append_pair("redirect_uri", redirect_uri)
+                    .append_pair("state", &state)
+                    .append_pair("code_challenge", &challenge)
+                    .append_pair("code_challenge_method", "S256")
+                    .append_pair("prompt", "consent");
+                url.into()
+            })
+            .collect();
         AuthSession {
             verifier,
             state,
-            authorize_url: url.into(),
+            authorize_urls,
             client_id: client_id.into(),
             redirect_uri: redirect_uri.into(),
         }
+    }
+
+    pub fn redirect_uri(&self) -> &str {
+        &self.redirect_uri
     }
 
     /// Достаёт код из вставленного адреса callback и проверяет `state`.
@@ -161,6 +175,11 @@ impl AuthSession {
 }
 
 impl Client {
+    /// Новая попытка входа веб-клиентом через зеркала из настроек клиента.
+    pub fn begin_login(&self) -> AuthSession {
+        AuthSession::new(self.auth_mirrors(), mirrors::web(Site::MangaLib)[0])
+    }
+
     /// Меняет код из callback на токены и запоминает их.
     pub async fn exchange_code(&self, session: &AuthSession, code: &str) -> Result<Token> {
         let body = serde_json::json!({
@@ -213,23 +232,24 @@ impl Client {
     }
 
     async fn token_request(&self, body: &serde_json::Value) -> Result<Token> {
-        let url = format!("{}/auth/oauth/token", self.config.api_base.trim_end_matches('/'));
-        // Запрос без Authorization: старый токен тут не нужен и может мешать.
-        let response = self
-            .http
-            .request(Method::POST, &url)
-            .headers(Client::site_headers(Site::MangaLib))
-            .header(reqwest::header::ACCEPT, "application/json")
-            .json(body)
-            .send()
-            .await?;
+        // Без Authorization: старый токен тут не нужен и может мешать.
+        let response = match self
+            .send_api(Auth::None, |http, base| {
+                http.post(join_url(base, "auth/oauth/token"))
+                    .headers(Client::site_headers(Site::MangaLib))
+                    .json(body)
+            })
+            .await
+        {
+            Ok(r) => r,
+            Err(Error::Http { status, body }) => {
+                return Err(Error::Auth(format!("сервер отказал в токене ({status}): {body}")));
+            }
+            Err(Error::Unauthorized) => return Err(Error::Auth("сервер отказал в токене".into())),
+            Err(e) => return Err(e),
+        };
         if !response.status().is_success() {
-            let status = response.status();
-            let text = response.text().await.unwrap_or_default();
-            return Err(Error::Auth(format!(
-                "сервер отказал в токене ({status}): {}",
-                text.chars().take(200).collect::<String>()
-            )));
+            return Err(status_error(response).await);
         }
         let bytes = response.bytes().await?;
         let parsed: TokenResponse = serde_json::from_slice(&bytes)
@@ -259,25 +279,38 @@ pub(crate) fn now_secs() -> u64 {
 mod tests {
     use super::*;
 
+    fn session() -> AuthSession {
+        let mirrors = mirrors::or_default(&[], mirrors::AUTH);
+        AuthSession::new(&mirrors, "https://mangalib.org/")
+    }
+
     #[test]
-    fn authorize_url_has_pkce() {
-        let s = AuthSession::new("https://auth.lib.social");
-        let url = Url::parse(&s.authorize_url).unwrap();
+    fn authorize_urls_have_pkce() {
+        let s = session();
+        assert_eq!(s.authorize_urls.len(), mirrors::AUTH.len());
+        let url = Url::parse(&s.authorize_urls[0]).unwrap();
         let q: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
         assert_eq!(url.host_str(), Some("auth.lib.social"));
         assert_eq!(q["client_id"], "1");
         assert_eq!(q["code_challenge_method"], "S256");
-        assert_eq!(q["redirect_uri"], WEB_REDIRECT_URI);
+        assert_eq!(q["redirect_uri"], "https://mangalib.org/ru/front/auth/oauth/callback");
         assert_eq!(q["state"], s.state);
         assert!(s.verifier.len() >= 43 && s.verifier.len() <= 128);
+        assert!(
+            s.verifier
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        );
+        let second = Url::parse(&s.authorize_urls[1]).unwrap();
+        assert_eq!(second.host_str(), Some("auth.cdnlibs.org"));
     }
 
     #[test]
     fn extract_code_checks_state() {
-        let s = AuthSession::new("https://auth.lib.social");
-        let good = format!("{WEB_REDIRECT_URI}?code=abc&state={}", s.state);
+        let s = session();
+        let good = format!("{}?code=abc&state={}", s.redirect_uri(), s.state);
         assert_eq!(s.extract_code(&good).unwrap(), "abc");
-        let bad = format!("{WEB_REDIRECT_URI}?code=abc&state=other");
+        let bad = format!("{}?code=abc&state=other", s.redirect_uri());
         assert!(s.extract_code(&bad).is_err());
         assert_eq!(s.extract_code("  rawcode ").unwrap(), "rawcode");
     }

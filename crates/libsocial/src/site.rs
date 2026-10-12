@@ -71,9 +71,14 @@ impl Site {
         if self.is_anime() { "anime" } else { "manga" }
     }
 
-    /// Адрес тайтла на сайте, чтобы открыть его в браузере.
+    /// Адрес тайтла на первом зеркале сайта, чтобы открыть его в браузере.
     pub fn title_url(self, slug_url: &str) -> String {
-        format!("{}/ru/{}/{}", self.origin(), self.catalog_path(), slug_url)
+        format!(
+            "{}/ru/{}/{}",
+            crate::mirrors::web(self)[0],
+            self.catalog_path(),
+            slug_url
+        )
     }
 }
 

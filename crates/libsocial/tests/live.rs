@@ -69,3 +69,22 @@ async fn anime_flow() {
     assert!(!ep.players.is_empty());
     assert_eq!(c.video_servers().await.unwrap().len(), 3);
 }
+
+#[tokio::test]
+#[ignore]
+async fn mirror_failover() {
+    let config = ClientConfig {
+        interface: std::env::var("POLKA_INTERFACE").ok(),
+        api_mirrors: vec![
+            "https://api.invalid/api".into(),
+            "https://api2.mangalib.me/api".into(),
+            "https://api.cdnlibs.org/api".into(),
+        ],
+        ..Default::default()
+    };
+    let c = Client::new(config).unwrap();
+    let page = c.search(Site::MangaLib, "берсерк", 1).await.unwrap();
+    assert!(!page.data.is_empty());
+    println!("рабочее зеркало: {}", c.api_base());
+    assert_ne!(c.api_base(), "https://api.invalid/api");
+}

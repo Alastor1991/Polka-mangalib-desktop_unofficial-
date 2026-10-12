@@ -179,13 +179,18 @@ impl Client {
     /// Скачивает страницу, перебирая серверы, пока один не ответит.
     pub async fn fetch_page(&self, site: Site, page: &PageImage, preferred_server: &str) -> Result<bytes::Bytes> {
         let mut last = None;
-        for url in self.page_urls(site, page, preferred_server).await? {
+        let urls = self.order_by_health(self.page_urls(site, page, preferred_server).await?);
+        for url in urls {
             match self.fetch_bytes(site, &url).await {
                 // Битые заглушки сервера бывают в сотню байт.
-                Ok(bytes) if bytes.len() > 600 => return Ok(bytes),
+                Ok(bytes) if bytes.len() > 600 => {
+                    self.mark_host(&url, true);
+                    return Ok(bytes);
+                }
                 Ok(_) => last = Some(Error::Other(format!("сервер вернул пустую картинку: {url}"))),
                 Err(e) => last = Some(e),
             }
+            self.mark_host(&url, false);
         }
         Err(last.unwrap_or(Error::NotFound))
     }
