@@ -36,3 +36,16 @@ where
 {
     Ok(Option::<T>::deserialize(d)?.unwrap_or_default())
 }
+
+/// Список, из которого молча выбрасываются элементы, не подходящие под тип.
+pub fn lenient_vec<'de, D, T>(d: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    let items = Option::<Vec<Value>>::deserialize(d)?.unwrap_or_default();
+    Ok(items
+        .into_iter()
+        .filter_map(|v| serde_json::from_value(v).ok())
+        .collect())
+}

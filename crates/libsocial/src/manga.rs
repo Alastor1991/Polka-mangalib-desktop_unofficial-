@@ -1,8 +1,6 @@
 use crate::client::Client;
 use crate::error::{Error, Result};
-use crate::models::{
-    Branch, Chapter, ChapterPages, Constants, MediaServer, PageImage, Paged, TitleDetails, TitleShort,
-};
+use crate::models::{Branch, Chapter, ChapterPages, MediaServer, PageImage, Paged, TitleDetails, TitleShort};
 use crate::site::Site;
 
 /// Поля полной карточки, которые сервер отдаёт только по запросу.
@@ -152,17 +150,6 @@ impl Client {
         Ok(pages)
     }
 
-    /// Справочник сервера, кэшируется на время жизни клиента.
-    pub async fn constants(&self) -> Result<Constants> {
-        if let Some(c) = self.constants.read().await.clone() {
-            return Ok(c);
-        }
-        let query = [("fields[]", "imageServers"), ("fields[]", "videoServers")];
-        let constants: Constants = self.get_data(Site::MangaLib, "constants", &query).await?;
-        *self.constants.write().await = Some(constants.clone());
-        Ok(constants)
-    }
-
     /// Адреса страницы на всех подходящих серверах, в порядке предпочтения.
     pub async fn page_urls(&self, site: Site, page: &PageImage, preferred_server: &str) -> Result<Vec<String>> {
         let constants = self.constants().await?;
@@ -178,19 +165,24 @@ impl Client {
 
     /// Скачивает страницу, перебирая серверы, пока один не ответит.
     pub async fn fetch_page(&self, site: Site, page: &PageImage, preferred_server: &str) -> Result<bytes::Bytes> {
-        let mut last = None;
         let urls = self.order_by_health(self.page_urls(site, page, preferred_server).await?);
-        for url in urls {
-            match self.fetch_bytes(site, &url).await {
-                // Битые заглушки сервера бывают в сотню байт.
-                Ok(bytes) if bytes.len() > 600 => {
-                    self.mark_host(&url, true);
-                    return Ok(bytes);
+        let mut last = None;
+        let mut tiny = None;
+        // Сначала по одной попытке на каждый сервер, потом ещё круг с повтором,
+        // чтобы упавший CDN не множил запросы.
+        for retries in [0, 1] {
+            for url in &urls {
+                match self.fetch_bytes_tries(site, url, retries).await {
+                    // Битые заглушки сервера бывают в сотню байт, такую пробуем заменить
+                    // картинкой с другого сервера, но если других нет, отдаём её.
+                    Ok(bytes) if bytes.len() <= 600 => tiny = Some(bytes),
+                    Ok(bytes) => return Ok(bytes),
+                    Err(e) => last = Some(e),
                 }
-                Ok(_) => last = Some(Error::Other(format!("сервер вернул пустую картинку: {url}"))),
-                Err(e) => last = Some(e),
             }
-            self.mark_host(&url, false);
+            if let Some(bytes) = tiny {
+                return Ok(bytes);
+            }
         }
         Err(last.unwrap_or(Error::NotFound))
     }

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
@@ -18,8 +18,12 @@ use crate::site::Site;
 
 /// Сколько раз повторять запрос при 429, 5xx и обрыве сети.
 const RETRIES: u32 = 3;
+/// Сколько помнить, что сервер картинок или видео не отвечал.
+const BAD_HOST_TTL: Duration = Duration::from_secs(5 * 60);
+/// Сколько не ходить за справочником после неудачи.
+const CONSTANTS_RETRY_AFTER: Duration = Duration::from_secs(30);
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ClientConfig {
     /// Зеркала API в порядке предпочтения. Пустой список – встроенные.
     pub api_mirrors: Vec<String>,
@@ -35,6 +39,18 @@ pub struct ClientConfig {
     pub api_interval: Duration,
 }
 
+/// Прокси может содержать логин и пароль, в логи он не попадает.
+impl std::fmt::Debug for ClientConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClientConfig")
+            .field("api_mirrors", &self.api_mirrors)
+            .field("auth_mirrors", &self.auth_mirrors)
+            .field("interface", &self.interface)
+            .field("proxy", &self.proxy.as_ref().map(|_| "<задан>"))
+            .finish_non_exhaustive()
+    }
+}
+
 impl Default for ClientConfig {
     fn default() -> Self {
         ClientConfig {
@@ -48,8 +64,15 @@ impl Default for ClientConfig {
     }
 }
 
-/// Вызывается, когда клиент получил или обновил токен, чтобы приложение его сохранило.
+/// Вызывается, когда клиент получил, обновил или окончательно потерял токен,
+/// чтобы приложение его сохранило или стёрло.
 pub type TokenListener = Arc<dyn Fn(Option<&Token>) + Send + Sync>;
+
+#[derive(Default)]
+struct ConstantsCache {
+    value: Option<Constants>,
+    failed_at: Option<Instant>,
+}
 
 /// Клиент API. Дёшево клонируется, все клоны делят токен, кэш, зеркала и очередь.
 #[derive(Clone)]
@@ -61,11 +84,11 @@ pub struct Client {
     active_api: Arc<AtomicUsize>,
     limiter: Arc<Mutex<Instant>>,
     pub(crate) token: Arc<RwLock<Option<Token>>>,
-    refresh_lock: Arc<Mutex<()>>,
+    pub(crate) refresh_lock: Arc<Mutex<()>>,
     listener: Option<TokenListener>,
-    pub(crate) constants: Arc<RwLock<Option<Constants>>>,
+    constants: Arc<Mutex<ConstantsCache>>,
     /// Хосты картинок и видео, которые недавно не ответили. Их пробуем последними.
-    bad_hosts: Arc<std::sync::Mutex<HashSet<String>>>,
+    bad_hosts: Arc<std::sync::Mutex<HashMap<String, Instant>>>,
 }
 
 impl std::fmt::Debug for Client {
@@ -81,16 +104,17 @@ impl std::fmt::Debug for Client {
 pub(crate) enum Auth {
     /// С токеном, если он есть, и с обновлением токена при 401.
     User,
-    /// Без токена: обмен кода и обновление самого токена.
-    None,
+    /// Без токена и без повторов после отправки: обмен кода и обновление токена.
+    /// Эти запросы одноразовые, повтор после потерянного ответа сжёг бы код.
+    TokenEndpoint,
 }
 
 impl Client {
     pub fn new(config: ClientConfig) -> Result<Client> {
         let mut builder = reqwest::Client::builder()
             .user_agent(&config.user_agent)
-            .connect_timeout(Duration::from_secs(15))
-            .timeout(Duration::from_secs(120));
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(60));
         #[cfg(any(target_os = "linux", target_os = "android", target_os = "fuchsia"))]
         if let Some(iface) = &config.interface {
             builder = builder.interface(iface);
@@ -108,8 +132,8 @@ impl Client {
             token: Arc::new(RwLock::new(None)),
             refresh_lock: Arc::new(Mutex::new(())),
             listener: None,
-            constants: Arc::new(RwLock::new(None)),
-            bad_hosts: Arc::new(std::sync::Mutex::new(HashSet::new())),
+            constants: Arc::new(Mutex::new(ConstantsCache::default())),
+            bad_hosts: Arc::new(std::sync::Mutex::new(HashMap::new())),
         })
     }
 
@@ -169,6 +193,12 @@ impl Client {
         tokio::time::sleep_until(wait_until).await;
     }
 
+    /// Сервер попросил притормозить: сдвигаем очередь для всех запросов сразу.
+    async fn penalize(&self, delay: Duration) {
+        let mut next = self.limiter.lock().await;
+        *next = (*next).max(Instant::now() + delay);
+    }
+
     pub(crate) fn site_headers(site: Site) -> HeaderMap {
         let mut headers = HeaderMap::new();
         headers.insert("Site-Id", HeaderValue::from(u16::from(site.id())));
@@ -214,11 +244,15 @@ impl Client {
 
     /// Отправляет запрос к API: очередь, зеркала, токен, повторы, одно обновление
     /// токена при 401. `build` получает адрес текущего зеркала API.
+    ///
+    /// Каждый проход цикла тратит одну из конечных попыток (смена зеркала, повтор,
+    /// обновление токена), поэтому цикл всегда заканчивается.
     pub(crate) async fn send_api<F>(&self, auth: Auth, build: F) -> Result<Response>
     where
         F: Fn(&reqwest::Client, &str) -> RequestBuilder,
     {
         let mirrors = self.api_mirrors.len();
+        let start = self.active_api.load(Ordering::Relaxed) % mirrors;
         let mut refreshed = false;
         let mut attempt = 0;
         let mut mirrors_tried = 1;
@@ -228,32 +262,52 @@ impl Client {
             let base = &self.api_mirrors[idx];
             let token = match auth {
                 Auth::User => self.token.read().await.clone(),
-                Auth::None => None,
+                Auth::TokenEndpoint => None,
             };
             let mut request = build(&self.http, base).header(ACCEPT, "application/json");
             if let Some(token) = &token {
                 request = request.header(AUTHORIZATION, token.header_value());
             }
 
-            let response = match request.send().await {
-                Ok(r) if !is_mirror_block(&r) => r,
+            let outcome = request.send().await;
+            let mirror_down = match &outcome {
+                Ok(r) => is_mirror_block(r),
+                Err(e) => e.is_connect() || (auth == Auth::User && e.is_timeout()),
+            };
+            if mirror_down && mirrors_tried < mirrors {
                 // Зеркало закрыто для этой сети или не отвечает: следующее, без паузы.
-                blocked if mirrors_tried < mirrors && mirror_unusable(&blocked) => {
-                    self.switch_mirror(idx);
-                    mirrors_tried += 1;
-                    continue;
+                self.switch_mirror(idx);
+                mirrors_tried += 1;
+                continue;
+            }
+            let response = match outcome {
+                Ok(r) => r,
+                Err(e) => {
+                    // Для одноразовых запросов повторяем, только если запрос точно не ушёл.
+                    let retry = match auth {
+                        Auth::User => e.is_timeout() || e.is_connect() || e.is_request(),
+                        Auth::TokenEndpoint => e.is_connect(),
+                    };
+                    if retry && attempt < RETRIES {
+                        attempt += 1;
+                        backoff(attempt).await;
+                        continue;
+                    }
+                    if mirror_down {
+                        // Не достучались ни до одного зеркала: вернёмся к исходному,
+                        // чтобы не запомнить последнее как рабочее.
+                        self.active_api.store(start, Ordering::Relaxed);
+                    }
+                    return Err(e.into());
                 }
-                Ok(r) => return Err(status_error(r).await),
-                Err(e) if attempt < RETRIES && (e.is_timeout() || e.is_connect() || e.is_request()) => {
-                    attempt += 1;
-                    backoff(attempt).await;
-                    continue;
-                }
-                Err(e) => return Err(e.into()),
             };
             let status = response.status();
-            if status.is_success() {
+            if status.is_success() && !mirror_down {
                 return Ok(response);
+            }
+            if mirror_down {
+                self.active_api.store(start, Ordering::Relaxed);
+                return Err(Error::Forbidden);
             }
             if status == StatusCode::UNAUTHORIZED && auth == Auth::User && token.is_some() && !refreshed {
                 refreshed = true;
@@ -261,10 +315,15 @@ impl Client {
                 Box::pin(self.refresh_after_401(token.as_ref())).await?;
                 continue;
             }
-            if (status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error()) && attempt < RETRIES {
+            let retryable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
+            if retryable && auth == Auth::User && attempt < RETRIES {
                 attempt += 1;
                 let delay = retry_after(&response).unwrap_or_else(|| backoff_delay(attempt));
-                tokio::time::sleep(delay).await;
+                if status == StatusCode::TOO_MANY_REQUESTS {
+                    self.penalize(delay).await;
+                } else {
+                    tokio::time::sleep(delay).await;
+                }
                 continue;
             }
             return Err(status_error(response).await);
@@ -280,6 +339,7 @@ impl Client {
     }
 
     /// Обновляет токен один раз на всех, даже если 401 словили несколько запросов сразу.
+    /// Токен стирается, только когда сервер явно отверг refresh token.
     async fn refresh_after_401(&self, stale: Option<&Token>) -> Result<()> {
         let _guard = self.refresh_lock.lock().await;
         let current = self.token.read().await.clone();
@@ -287,27 +347,36 @@ impl Client {
         if current.as_ref().map(|t| &t.access_token) != stale.map(|t| &t.access_token) {
             return Ok(());
         }
-        match current {
-            Some(token) if token.refresh_token.is_some() => match self.refresh_token(&token).await {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    self.set_token(None).await;
-                    self.notify_token(None);
-                    Err(e)
-                }
-            },
-            _ => {
-                self.set_token(None).await;
-                self.notify_token(None);
+        let Some(token) = current else {
+            return Err(Error::Unauthorized);
+        };
+        if token.refresh_token.is_none() {
+            self.drop_token().await;
+            return Err(Error::Unauthorized);
+        }
+        match self.refresh_unlocked(&token).await {
+            Ok(_) => Ok(()),
+            Err(Error::RefreshRejected) => {
+                self.drop_token().await;
                 Err(Error::Unauthorized)
             }
+            Err(e) => Err(e),
         }
     }
 
-    /// Упорядочивает адреса одного файла на разных серверах: недавно отказавшие в конец.
-    pub fn order_by_health(&self, mut urls: Vec<String>) -> Vec<String> {
-        let bad = self.bad_hosts.lock().expect("bad_hosts отравлен");
-        urls.sort_by_key(|u| bad.contains(mirrors::host_of(u)));
+    pub(crate) async fn drop_token(&self) {
+        self.set_token(None).await;
+        self.notify_token(None);
+    }
+
+    /// Упорядочивает адреса одного файла на разных серверах: недавно отказавшие
+    /// в конец, повторы убраны с сохранением порядка.
+    pub fn order_by_health(&self, urls: Vec<String>) -> Vec<String> {
+        let mut seen = std::collections::HashSet::new();
+        let mut urls: Vec<String> = urls.into_iter().filter(|u| seen.insert(u.clone())).collect();
+        let mut bad = self.bad_hosts.lock().expect("bad_hosts отравлен");
+        bad.retain(|_, since| since.elapsed() < BAD_HOST_TTL);
+        urls.sort_by_key(|u| bad.contains_key(mirrors::host_of(u)));
         urls
     }
 
@@ -317,13 +386,19 @@ impl Client {
         if ok {
             bad.remove(&host);
         } else {
-            bad.insert(host);
+            bad.insert(host, Instant::now());
         }
     }
 
-    /// Загружает файл (картинку, субтитры) с сервера контента. Без очереди API,
-    /// параллельность ограничивает вызывающий код.
+    /// Загружает файл (картинку, субтитры) с сервера контента с повторами.
+    /// Без очереди API, параллельность ограничивает вызывающий код.
     pub async fn fetch_bytes(&self, site: Site, url: &str) -> Result<bytes::Bytes> {
+        self.fetch_bytes_tries(site, url, RETRIES).await
+    }
+
+    /// Одна попытка плюс `retries` повторов при 429, 5xx, таймауте и обрыве тела.
+    /// Сервер, который не отвечает или падает, попадает в журнал плохих хостов.
+    pub(crate) async fn fetch_bytes_tries(&self, site: Site, url: &str, retries: u32) -> Result<bytes::Bytes> {
         let mut attempt = 0;
         loop {
             let result = self
@@ -332,16 +407,28 @@ impl Client {
                 .header(REFERER, format!("{}/", site.origin()))
                 .send()
                 .await;
-            match result {
-                Ok(r) if r.status().is_success() => return Ok(r.bytes().await?),
-                Ok(r)
-                    if (r.status() == StatusCode::TOO_MANY_REQUESTS || r.status().is_server_error())
-                        && attempt < RETRIES => {}
-                Ok(r) => return Err(status_error(r).await),
-                // Обрыв на середине тела или таймаут повторяем, отказ в соединении нет:
-                // у файла есть другие серверы.
-                Err(e) if attempt < RETRIES && (e.is_timeout() || e.is_body()) => {}
-                Err(e) => return Err(e.into()),
+            let error = match result {
+                Ok(r) if r.status().is_success() => match r.bytes().await {
+                    Ok(bytes) => {
+                        self.mark_host(url, true);
+                        return Ok(bytes);
+                    }
+                    Err(e) => Error::Network(e),
+                },
+                Ok(r) => {
+                    let transient = r.status() == StatusCode::TOO_MANY_REQUESTS || r.status().is_server_error();
+                    let error = status_error(r).await;
+                    if !transient {
+                        // 404 и подобные говорят о файле, а не о сервере.
+                        return Err(error);
+                    }
+                    error
+                }
+                Err(e) => Error::Network(e),
+            };
+            if attempt >= retries {
+                self.mark_host(url, false);
+                return Err(error);
             }
             attempt += 1;
             backoff(attempt).await;
@@ -364,6 +451,8 @@ impl Client {
     }
 
     /// Начинает потоковую загрузку большого файла (видео). Вызывающий читает тело сам.
+    /// При докачке сервер обязан ответить 206, иначе файл испортился бы дозаписью
+    /// с начала, и возвращается ошибка.
     pub async fn fetch_stream(&self, site: Site, url: &str, resume_from: u64) -> Result<Response> {
         let mut request = self
             .http
@@ -374,34 +463,58 @@ impl Client {
             request = request.header(reqwest::header::RANGE, format!("bytes={resume_from}-"));
         }
         let response = request.send().await?;
-        if response.status().is_success() {
+        let status = response.status();
+        if resume_from > 0 && status != StatusCode::PARTIAL_CONTENT {
+            return Err(Error::Other(format!(
+                "сервер не умеет докачивать ({status}), начните загрузку заново"
+            )));
+        }
+        if status.is_success() {
             Ok(response)
         } else {
             Err(status_error(response).await)
         }
     }
+
+    /// Справочник сервера, кэшируется на время жизни клиента. Параллельные вызовы
+    /// ждут одну загрузку, после неудачи полминуты сразу возвращают ошибку.
+    pub async fn constants(&self) -> Result<Constants> {
+        let mut cache = self.constants.lock().await;
+        if let Some(c) = &cache.value {
+            return Ok(c.clone());
+        }
+        if cache.failed_at.is_some_and(|t| t.elapsed() < CONSTANTS_RETRY_AFTER) {
+            return Err(Error::Other("справочник сервера недоступен, повторю чуть позже".into()));
+        }
+        let query = [("fields[]", "imageServers"), ("fields[]", "videoServers")];
+        match self.get_data::<Constants, _>(Site::MangaLib, "constants", &query).await {
+            Ok(c) => {
+                cache.value = Some(c.clone());
+                cache.failed_at = None;
+                Ok(c)
+            }
+            Err(e) => {
+                cache.failed_at = Some(Instant::now());
+                Err(e)
+            }
+        }
+    }
 }
 
-/// Ответ похож на страницу блокировки (DDoS-Guard, гео-фильтр), а не на ответ API.
+/// Ответ похож на страницу блокировки или упавший шлюз, а не на ответ API.
+/// Настоящие ответы API, в том числе ошибки, приходят в JSON.
 fn is_mirror_block(response: &Response) -> bool {
     let html = response
         .headers()
         .get(CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .is_some_and(|ct| ct.starts_with("text/html"));
-    match response.status() {
-        StatusCode::FORBIDDEN | StatusCode::NOT_FOUND => html,
-        // Cloudflare и DDoS-Guard отдают свои коды 52x, когда зеркало лежит.
-        s => (520..=530).contains(&s.as_u16()),
-    }
-}
-
-/// Зеркало вернуло страницу блокировки либо до него не достучаться.
-/// Сюда попадают только ответы, уже признанные блокировкой.
-fn mirror_unusable(result: &std::result::Result<Response, reqwest::Error>) -> bool {
-    match result {
-        Ok(_) => true,
-        Err(e) => e.is_connect() || e.is_timeout(),
+    let status = response.status();
+    match status.as_u16() {
+        200 | 403 | 404 => html,
+        // Шлюз перед зеркалом лежит. 52x отдают Cloudflare и DDoS-Guard.
+        502..=504 | 520..=530 => true,
+        _ => false,
     }
 }
 

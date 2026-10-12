@@ -8,11 +8,15 @@ pub enum Error {
     #[error("сервер ответил {status}: {body}")]
     Http { status: StatusCode, body: String },
 
-    #[error("доступ запрещён (403). Сервис закрыт для этого IP или региона")]
+    #[error("доступ запрещён (403) или все зеркала закрыты для этой сети")]
     Forbidden,
 
     #[error("нужен вход в аккаунт")]
     Unauthorized,
+
+    /// Сервер явно отверг refresh token: вход надо пройти заново.
+    #[error("сохранённый вход больше не действует, войдите заново")]
+    RefreshRejected,
 
     #[error("не найдено")]
     NotFound,

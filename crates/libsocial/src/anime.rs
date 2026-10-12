@@ -61,6 +61,7 @@ impl Client {
             .pick(max_quality)
             .ok_or_else(|| Error::Other("у озвучки нет ни одного качества".into()))?;
         let mut servers = self.video_servers().await?;
+        servers.retain(|s| !s.url.trim().is_empty());
         if servers.is_empty() {
             return Err(Error::Other("сервер не прислал адресов видео".into()));
         }

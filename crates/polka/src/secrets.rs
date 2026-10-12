@@ -48,7 +48,9 @@ impl TokenStore {
                 Err(e) => return Err(e).with_context(|| format!("не прочитать {}", path.display())),
             },
         };
-        Ok(serde_json::from_str(&json).ok())
+        serde_json::from_str(&json)
+            .map(Some)
+            .context("сохранённый токен повреждён, войдите заново")
     }
 
     pub fn save(&self, token: Option<&Token>) -> Result<()> {
@@ -78,11 +80,12 @@ fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
 
     let dir = path.parent().context("у пути нет каталога")?;
     std::fs::create_dir_all(dir)?;
-    let tmp = path.with_extension("tmp");
+    // create_new: старый временный файл с чужими правами не переиспользуем.
+    let tmp = path.with_extension(format!("tmp.{}", std::process::id()));
+    let _ = std::fs::remove_file(&tmp);
     let mut file = std::fs::OpenOptions::new()
         .write(true)
-        .create(true)
-        .truncate(true)
+        .create_new(true)
         .mode(0o600)
         .open(&tmp)?;
     file.write_all(bytes)?;

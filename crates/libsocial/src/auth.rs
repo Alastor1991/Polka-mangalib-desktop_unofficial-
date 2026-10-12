@@ -165,9 +165,7 @@ impl AuthSession {
                 _ => {}
             }
         }
-        if let Some(state) = state
-            && state != self.state
-        {
+        if state.as_deref() != Some(self.state.as_str()) {
             return Err(Error::Auth("адрес от другой попытки входа, начните вход заново".into()));
         }
         code.ok_or_else(|| Error::Auth("в адресе нет кода авторизации".into()))
@@ -195,16 +193,39 @@ impl Client {
         Ok(token)
     }
 
-    /// Обновляет access token по refresh token.
+    /// Обновляет access token по refresh token. Одновременно идёт только одно
+    /// обновление: refresh token одноразовый, второе обновление его бы сожгло.
+    /// При `Error::RefreshRejected` вход окончательно потерян и токен стёрт.
     pub async fn refresh_token(&self, current: &Token) -> Result<Token> {
-        let refresh = current.refresh_token.as_deref().ok_or(Error::Unauthorized)?;
+        let _guard = self.refresh_lock.lock().await;
+        // Пока ждали замок, токен мог обновить кто-то другой.
+        if let Some(fresh) = self.token.read().await.clone()
+            && fresh.access_token != current.access_token
+        {
+            return Ok(fresh);
+        }
+        match self.refresh_unlocked(current).await {
+            Err(Error::RefreshRejected) => {
+                self.drop_token().await;
+                Err(Error::RefreshRejected)
+            }
+            other => other,
+        }
+    }
+
+    /// Обновление без замка. Вызывающий держит `refresh_lock`.
+    pub(crate) async fn refresh_unlocked(&self, current: &Token) -> Result<Token> {
+        let refresh = current.refresh_token.as_deref().ok_or(Error::RefreshRejected)?;
         let body = serde_json::json!({
             "grant_type": "refresh_token",
             "client_id": WEB_CLIENT_ID,
             "refresh_token": refresh,
             "scope": "",
         });
-        let mut token = self.token_request(&body).await?;
+        let mut token = match self.token_request(&body).await {
+            Err(Error::Auth(_)) => return Err(Error::RefreshRejected),
+            other => other?,
+        };
         if token.refresh_token.is_none() {
             token.refresh_token = current.refresh_token.clone();
         }
@@ -213,18 +234,18 @@ impl Client {
         Ok(token)
     }
 
-    /// Поднимает сохранённый токен при запуске: обновляет его, если истёк.
+    /// Поднимает сохранённый токен при запуске и обновляет его, если истёк.
+    /// Токен ставится сразу: без сети клиент остаётся с ним и обновит его позже.
     pub async fn restore_token(&self, token: Token) -> Result<Token> {
+        self.set_token(Some(token.clone())).await;
         if token.is_expired() {
             return self.refresh_token(&token).await;
         }
-        self.set_token(Some(token.clone())).await;
         Ok(token)
     }
 
     pub async fn logout(&self) {
-        self.set_token(None).await;
-        self.notify_token(None);
+        self.drop_token().await;
     }
 
     pub async fn me(&self) -> Result<Me> {
@@ -233,8 +254,10 @@ impl Client {
 
     async fn token_request(&self, body: &serde_json::Value) -> Result<Token> {
         // Без Authorization: старый токен тут не нужен и может мешать.
+        // Отказ (400, 401) превращается в Error::Auth, временные сбои остаются как есть,
+        // чтобы из-за упавшего шлюза не стереть рабочий вход.
         let response = match self
-            .send_api(Auth::None, |http, base| {
+            .send_api(Auth::TokenEndpoint, |http, base| {
                 http.post(join_url(base, "auth/oauth/token"))
                     .headers(Client::site_headers(Site::MangaLib))
                     .json(body)
@@ -242,8 +265,8 @@ impl Client {
             .await
         {
             Ok(r) => r,
-            Err(Error::Http { status, body }) => {
-                return Err(Error::Auth(format!("сервер отказал в токене ({status}): {body}")));
+            Err(Error::Http { status, body }) if status == reqwest::StatusCode::BAD_REQUEST => {
+                return Err(Error::Auth(format!("сервер отказал в токене: {body}")));
             }
             Err(Error::Unauthorized) => return Err(Error::Auth("сервер отказал в токене".into())),
             Err(e) => return Err(e),

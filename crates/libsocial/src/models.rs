@@ -23,6 +23,11 @@ pub struct PageMeta {
 /// Страница каталога.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Paged<T> {
+    /// Элемент, который не удалось разобрать, пропускается, а не ломает всю страницу.
+    #[serde(
+        deserialize_with = "crate::serde_util::lenient_vec",
+        bound(deserialize = "T: serde::de::DeserializeOwned")
+    )]
     pub data: Vec<T>,
     #[serde(default)]
     pub meta: PageMeta,
@@ -52,7 +57,7 @@ impl Cover {
 pub struct Label {
     #[serde(default, deserialize_with = "string_lenient")]
     pub id: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     pub label: String,
 }
 
@@ -60,7 +65,7 @@ pub struct Label {
 pub struct Named {
     #[serde(default, deserialize_with = "u64_lenient")]
     pub id: u64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     pub name: String,
 }
 
@@ -76,7 +81,7 @@ pub struct Rating {
 pub struct Team {
     #[serde(default, deserialize_with = "u64_lenient")]
     pub id: u64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     pub name: String,
     #[serde(default)]
     pub slug_url: Option<String>,
@@ -86,7 +91,7 @@ pub struct Team {
 pub struct UserRef {
     #[serde(default, deserialize_with = "u64_lenient")]
     pub id: u64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     pub username: String,
 }
 
@@ -95,6 +100,7 @@ pub struct UserRef {
 pub struct TitleShort {
     #[serde(deserialize_with = "u64_lenient")]
     pub id: u64,
+    #[serde(default, deserialize_with = "null_default")]
     pub name: String,
     #[serde(default)]
     pub rus_name: Option<String>,
@@ -115,7 +121,7 @@ pub struct TitleShort {
     pub rating: Option<Rating>,
     #[serde(default, rename = "releaseDateString")]
     pub release_date: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     pub is_licensed: bool,
 }
 
@@ -204,7 +210,7 @@ pub fn doc_to_text(node: &Value) -> String {
 /// Ограничение на чтение главы: ранний доступ или платная глава.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RestrictedView {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     pub is_open: bool,
     /// Когда глава откроется бесплатно, если это ранний доступ.
     #[serde(default)]
@@ -339,7 +345,7 @@ pub struct ChapterPages {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MediaServer {
     pub id: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     pub label: String,
     pub url: String,
     #[serde(default, deserialize_with = "null_default")]
@@ -383,7 +389,8 @@ impl Constants {
             .filter(|s| s.site_ids.contains(&site.id()) && !s.url.is_empty() && s.id != "crop")
             .collect();
         servers.sort_by_key(|s| rank(s));
-        servers.dedup_by(|a, b| a.url == b.url);
+        let mut seen = std::collections::HashSet::new();
+        servers.retain(|s| seen.insert(s.url.clone()));
         servers
     }
 }
@@ -524,7 +531,7 @@ pub struct EpisodeDetails {
 pub struct Me {
     #[serde(deserialize_with = "u64_lenient")]
     pub id: u64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     pub username: String,
     #[serde(default)]
     pub avatar: Option<Value>,
