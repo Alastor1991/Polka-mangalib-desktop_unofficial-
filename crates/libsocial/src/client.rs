@@ -555,3 +555,10 @@ pub(crate) async fn status_error(response: Response) -> Error {
         }
     }
 }
+
+impl Client {
+    /// Сырой GET к API для отладки и снятия фикстур.
+    pub async fn raw_get(&self, site: Site, path: &str, query: &[(String, String)]) -> Result<serde_json::Value> {
+        self.get_json(site, path, query).await
+    }
+}

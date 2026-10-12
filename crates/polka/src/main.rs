@@ -1,4 +1,5 @@
 mod config;
+mod doctor;
 mod login_window;
 mod secrets;
 mod session;
@@ -27,6 +28,9 @@ fn main() -> Result<()> {
         }
         Some("logout") => runtime.block_on(session::cli_logout()),
         Some("whoami") => runtime.block_on(session::cli_whoami()),
+        Some("doctor") => runtime.block_on(doctor::run()),
+        // Отладка: сырой ответ API, `polka dev-get animelib episodes/123`.
+        Some("dev-get") => runtime.block_on(doctor::dev_get(&args[1..])),
         Some("-h" | "--help" | "help") => {
             print_help();
             Ok(())
@@ -51,7 +55,8 @@ fn print_help() {
          polka login --mirror 2     то же через запасной сервер авторизации\n\
          polka login --browser      войти через системный браузер\n\
          polka logout               выйти и удалить сохранённый токен\n\
-         polka whoami               показать, под кем выполнен вход\n\n\
+         polka whoami               показать, под кем выполнен вход\n\
+         polka doctor               проверить доступ к API, картинкам и видео\n\n\
          Переменные окружения:\n  \
          POLKA_INTERFACE  сетевой интерфейс для запросов (например enp4s0)\n  \
          POLKA_PROXY      прокси для запросов (socks5h://127.0.0.1:1080)"

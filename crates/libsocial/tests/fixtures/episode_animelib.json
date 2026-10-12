@@ -1,0 +1,1809 @@
+{
+  "data": {
+    "anime_id": 16133,
+    "created_at": "2022-09-19T21:08:47.000000Z",
+    "id": 41924,
+    "model": "episodes",
+    "name": "",
+    "number": "1",
+    "number_secondary": "1",
+    "players": [
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83390,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/723247/9e4a3d44a79eadeb713b61eb615a9d74/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/anilibriatv/cover/1uvIOD0GdE10_250x350.jpg",
+            "filename": "1uvIOD0GdE10",
+            "md": "https://cover.cdnlibs.org/uploads/team/anilibriatv/cover/1uvIOD0GdE10_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/anilibriatv/cover/1uvIOD0GdE10_thumb.jpg"
+          },
+          "id": 32412,
+          "model": "team",
+          "name": "AniLibria.TV",
+          "slug": "anilibriatv",
+          "slug_url": "32412--anilibriatv",
+          "stats": [
+            {
+              "formated": "1 214",
+              "label": "Подписчиков",
+              "short": "1.2 K",
+              "tag": "subscribes",
+              "value": 1214
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2023-01-17T20:33:32.000000Z",
+        "episode_id": 41924,
+        "id": 309079,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Animelib",
+        "subtitles": [],
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/anilibriatv/cover/1uvIOD0GdE10_250x350.jpg",
+            "filename": "1uvIOD0GdE10",
+            "md": "https://cover.cdnlibs.org/uploads/team/anilibriatv/cover/1uvIOD0GdE10_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/anilibriatv/cover/1uvIOD0GdE10_thumb.jpg"
+          },
+          "id": 32412,
+          "model": "team",
+          "name": "AniLibria.TV",
+          "slug": "anilibriatv",
+          "slug_url": "32412--anilibriatv",
+          "stats": [
+            {
+              "formated": "1 214",
+              "label": "Подписчиков",
+              "short": "1.2 K",
+              "tag": "subscribes",
+              "value": 1214
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video": {
+          "id": 129151,
+          "quality": [
+            {
+              "bitrate": 7500,
+              "href": "/uploads/converted_videos/anime/16133/players/129151/6df9f762-f53f-4f5d-a9ae-1305f3671665_2160.mp4",
+              "quality": 2160
+            },
+            {
+              "bitrate": 3000,
+              "href": "/uploads/converted_videos/anime/16133/players/129151/6df9f762-f53f-4f5d-a9ae-1305f3671665_1080.mp4",
+              "quality": 1080
+            },
+            {
+              "bitrate": 1400,
+              "href": "/uploads/converted_videos/anime/16133/players/129151/6df9f762-f53f-4f5d-a9ae-1305f3671665_720.mp4",
+              "quality": 720
+            },
+            {
+              "bitrate": 600,
+              "href": "/uploads/converted_videos/anime/16133/players/129151/6df9f762-f53f-4f5d-a9ae-1305f3671665_360.mp4",
+              "quality": 360
+            }
+          ]
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83546,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/997479/47b5a65409f9cde750d2fc356717a34d/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/studio-band/cover/zNRbrVzDmU6A_250x350.jpg",
+            "filename": "zNRbrVzDmU6A",
+            "md": "https://cover.cdnlibs.org/uploads/team/studio-band/cover/zNRbrVzDmU6A_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/studio-band/cover/zNRbrVzDmU6A_thumb.jpg"
+          },
+          "id": 32435,
+          "model": "team",
+          "name": "Studio Band",
+          "slug": "studio-band",
+          "slug_url": "32435--studio-band",
+          "stats": [
+            {
+              "formated": "893",
+              "label": "Подписчика",
+              "short": "893",
+              "tag": "subscribes",
+              "value": 893
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2024-04-05T14:05:43.000000Z",
+        "episode_id": 41924,
+        "id": 414317,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Animelib",
+        "subtitles": [],
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/studio-band/cover/zNRbrVzDmU6A_250x350.jpg",
+            "filename": "zNRbrVzDmU6A",
+            "md": "https://cover.cdnlibs.org/uploads/team/studio-band/cover/zNRbrVzDmU6A_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/studio-band/cover/zNRbrVzDmU6A_thumb.jpg"
+          },
+          "id": 32435,
+          "model": "team",
+          "name": "Studio Band",
+          "slug": "studio-band",
+          "slug_url": "32435--studio-band",
+          "stats": [
+            {
+              "formated": "893",
+              "label": "Подписчика",
+              "short": "893",
+              "tag": "subscribes",
+              "value": 893
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video": {
+          "id": 104957,
+          "quality": [
+            {
+              "bitrate": 1325,
+              "href": "/uploads/converted_videos/anime/16133/players/104957/0d7ba423-8362-49b5-8a34-51dd5c0d030d_1080.mp4",
+              "quality": 1080
+            },
+            {
+              "bitrate": 1325,
+              "href": "/uploads/converted_videos/anime/16133/players/104957/0d7ba423-8362-49b5-8a34-51dd5c0d030d_720.mp4",
+              "quality": 720
+            },
+            {
+              "bitrate": 600,
+              "href": "/uploads/converted_videos/anime/16133/players/104957/0d7ba423-8362-49b5-8a34-51dd5c0d030d_360.mp4",
+              "quality": 360
+            }
+          ]
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83414,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/722593/a86576bf2c950738e91f4c4aeea61842/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/anidub/cover/LTBrGQxUKaE3_250x350.jpg",
+            "filename": "LTBrGQxUKaE3",
+            "md": "https://cover.cdnlibs.org/uploads/team/anidub/cover/LTBrGQxUKaE3_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/anidub/cover/LTBrGQxUKaE3_thumb.jpg"
+          },
+          "id": 32416,
+          "model": "team",
+          "name": "AniDUB",
+          "slug": "anidub",
+          "slug_url": "32416--anidub",
+          "stats": [
+            {
+              "formated": "259",
+              "label": "Подписчиков",
+              "short": "259",
+              "tag": "subscribes",
+              "value": 259
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83462,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/829002/59ccca5e6d5bcb46e9ebc1676b19fef5/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/33065/cover/313c39d6-4ab1-467f-8726-0455ad6cfd54.jpg",
+            "filename": "313c39d6-4ab1-467f-8726-0455ad6cfd54",
+            "md": "https://cover.cdnlibs.org/uploads/team/33065/cover/313c39d6-4ab1-467f-8726-0455ad6cfd54.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/33065/cover/313c39d6-4ab1-467f-8726-0455ad6cfd54_thumb.jpg"
+          },
+          "id": 33065,
+          "model": "team",
+          "name": "OnWave",
+          "slug": "onwave",
+          "slug_url": "33065--onwave",
+          "stats": [
+            {
+              "formated": "132",
+              "label": "Подписчика",
+              "short": "132",
+              "tag": "subscribes",
+              "value": 132
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83558,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/820356/2a87813b69876a5871c018a2f46ceffb/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/crunchyrollsubtitles/cover/iMDzIVhDpwvy_250x350.jpg",
+            "filename": "iMDzIVhDpwvy",
+            "md": "https://cover.cdnlibs.org/uploads/team/crunchyrollsubtitles/cover/iMDzIVhDpwvy_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/crunchyrollsubtitles/cover/iMDzIVhDpwvy_thumb.jpg"
+          },
+          "id": 32713,
+          "model": "team",
+          "name": "Crunchyroll.Subtitles",
+          "slug": "crunchyrollsubtitles",
+          "slug_url": "32713--crunchyrollsubtitles",
+          "stats": [
+            {
+              "formated": "128",
+              "label": "Подписчиков",
+              "short": "128",
+              "tag": "subscribes",
+              "value": 128
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 1,
+          "label": "Субтитры"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2023-07-31T22:52:13.000000Z",
+        "episode_id": 41924,
+        "id": 361104,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Animelib",
+        "subtitles": [
+          {
+            "filename": "1bd0286c-60f8-4ea9-8f91-0dbc4c1a6a67.ass",
+            "format": "ass",
+            "id": 17885,
+            "name": "1bd0286c-60f8-4ea9-8f91-0dbc4c1a6a67",
+            "src": "https://api.cdnlibs.org/uploads/subtitles/361104/1bd0286c-60f8-4ea9-8f91-0dbc4c1a6a67.ass"
+          },
+          {
+            "filename": "539abc79-222a-49d2-9c3a-030b7847c189.vtt",
+            "format": "vtt",
+            "id": 86019,
+            "name": "539abc79-222a-49d2-9c3a-030b7847c189",
+            "src": "https://api.cdnlibs.org/uploads/subtitles/361104/539abc79-222a-49d2-9c3a-030b7847c189.vtt"
+          }
+        ],
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/crunchyrollsubtitles/cover/iMDzIVhDpwvy_250x350.jpg",
+            "filename": "iMDzIVhDpwvy",
+            "md": "https://cover.cdnlibs.org/uploads/team/crunchyrollsubtitles/cover/iMDzIVhDpwvy_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/crunchyrollsubtitles/cover/iMDzIVhDpwvy_thumb.jpg"
+          },
+          "id": 32713,
+          "model": "team",
+          "name": "Crunchyroll.Subtitles",
+          "slug": "crunchyrollsubtitles",
+          "slug_url": "32713--crunchyrollsubtitles",
+          "stats": [
+            {
+              "formated": "128",
+              "label": "Подписчиков",
+              "short": "128",
+              "tag": "subscribes",
+              "value": 128
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 1,
+          "label": "Субтитры"
+        },
+        "video": {
+          "id": 86900,
+          "quality": [
+            {
+              "bitrate": 7500,
+              "href": "/uploads/converted_videos/anime/16133/players/86900/dca21f01-6411-40f0-b6fe-877294eaf2f5_2160.mp4",
+              "quality": 2160
+            },
+            {
+              "bitrate": 3000,
+              "href": "/uploads/converted_videos/anime/16133/players/86900/dca21f01-6411-40f0-b6fe-877294eaf2f5_1080.mp4",
+              "quality": 1080
+            },
+            {
+              "bitrate": 1400,
+              "href": "/uploads/converted_videos/anime/16133/players/86900/dca21f01-6411-40f0-b6fe-877294eaf2f5_720.mp4",
+              "quality": 720
+            },
+            {
+              "bitrate": 600,
+              "href": "/uploads/converted_videos/anime/16133/players/86900/dca21f01-6411-40f0-b6fe-877294eaf2f5_360.mp4",
+              "quality": 360
+            }
+          ]
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83270,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/723251/12c6cf8f0e20f2343d1e4d1fa1bbf2a5/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/shiza-project/cover/P04dKV9auVUz_250x350.jpg",
+            "filename": "P04dKV9auVUz",
+            "md": "https://cover.cdnlibs.org/uploads/team/shiza-project/cover/P04dKV9auVUz_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/shiza-project/cover/P04dKV9auVUz_thumb.jpg"
+          },
+          "id": 32414,
+          "model": "team",
+          "name": "SHIZA Project",
+          "slug": "shiza-project",
+          "slug_url": "32414--shiza-project",
+          "stats": [
+            {
+              "formated": "89",
+              "label": "Подписчиков",
+              "short": "89",
+              "tag": "subscribes",
+              "value": 89
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83294,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/723187/33f596bd722bc0265349c312fa5e1790/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/jam/cover/Am07UWvVanz2_250x350.jpg",
+            "filename": "Am07UWvVanz2",
+            "md": "https://cover.cdnlibs.org/uploads/team/jam/cover/Am07UWvVanz2_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/jam/cover/Am07UWvVanz2_thumb.jpg"
+          },
+          "id": 32483,
+          "model": "team",
+          "name": "JAM",
+          "slug": "jam",
+          "slug_url": "32483--jam",
+          "stats": [
+            {
+              "formated": "81",
+              "label": "Подписчик",
+              "short": "81",
+              "tag": "subscribes",
+              "value": 81
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2024-02-21T01:49:57.000000Z",
+        "episode_id": 41924,
+        "id": 406248,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Animelib",
+        "subtitles": [],
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/jam/cover/Am07UWvVanz2_250x350.jpg",
+            "filename": "Am07UWvVanz2",
+            "md": "https://cover.cdnlibs.org/uploads/team/jam/cover/Am07UWvVanz2_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/jam/cover/Am07UWvVanz2_thumb.jpg"
+          },
+          "id": 32483,
+          "model": "team",
+          "name": "JAM",
+          "slug": "jam",
+          "slug_url": "32483--jam",
+          "stats": [
+            {
+              "formated": "81",
+              "label": "Подписчик",
+              "short": "81",
+              "tag": "subscribes",
+              "value": 81
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video": {
+          "id": 45782,
+          "quality": [
+            {
+              "bitrate": 3000,
+              "href": "/uploads/converted_videos/anime/16133/players/45782/05f04c83-7675-4544-bafb-7d25fb0ed14e_1080.mp4",
+              "quality": 1080
+            },
+            {
+              "bitrate": 1400,
+              "href": "/uploads/converted_videos/anime/16133/players/45782/05f04c83-7675-4544-bafb-7d25fb0ed14e_720.mp4",
+              "quality": 720
+            },
+            {
+              "bitrate": 600,
+              "href": "/uploads/converted_videos/anime/16133/players/45782/05f04c83-7675-4544-bafb-7d25fb0ed14e_360.mp4",
+              "quality": 360
+            }
+          ]
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83510,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/720278/663015b2ad84109c9fcef91c14b145fd/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/animevost/cover/o5jQ7ZJ5HVcb_250x350.jpg",
+            "filename": "o5jQ7ZJ5HVcb",
+            "md": "https://cover.cdnlibs.org/uploads/team/animevost/cover/o5jQ7ZJ5HVcb_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/animevost/cover/o5jQ7ZJ5HVcb_thumb.jpg"
+          },
+          "id": 32987,
+          "model": "team",
+          "name": "AnimeVost",
+          "slug": "animevost",
+          "slug_url": "32987--animevost",
+          "stats": [
+            {
+              "formated": "65",
+              "label": "Подписчиков",
+              "short": "65",
+              "tag": "subscribes",
+              "value": 65
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2023-11-20T16:36:25.000000Z",
+        "episode_id": 41924,
+        "id": 387615,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Animelib",
+        "subtitles": [],
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/anibaza/cover/H6jT9BGi4K9o_250x350.jpg",
+            "filename": "H6jT9BGi4K9o",
+            "md": "https://cover.cdnlibs.org/uploads/team/anibaza/cover/H6jT9BGi4K9o_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/anibaza/cover/H6jT9BGi4K9o_thumb.jpg"
+          },
+          "id": 45220,
+          "model": "team",
+          "name": "AniBaza",
+          "slug": "anibaza",
+          "slug_url": "45220--anibaza",
+          "stats": [
+            {
+              "formated": "62",
+              "label": "Подписчика",
+              "short": "62",
+              "tag": "subscribes",
+              "value": 62
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video": {
+          "id": 38206,
+          "quality": [
+            {
+              "bitrate": 3000,
+              "href": "/uploads/converted_videos/anime/16133/players/38206/38206_1080.mp4",
+              "quality": 1080
+            },
+            {
+              "bitrate": 1400,
+              "href": "/uploads/converted_videos/anime/16133/players/38206/38206_720.mp4",
+              "quality": 720
+            },
+            {
+              "bitrate": 600,
+              "href": "/uploads/converted_videos/anime/16133/players/38206/38206_360.mp4",
+              "quality": 360
+            }
+          ]
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2024-02-28T13:38:44.000000Z",
+        "episode_id": 41924,
+        "id": 407848,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/723511/f899bad905215fcf37afe24f9549b7f8/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/anibaza/cover/H6jT9BGi4K9o_250x350.jpg",
+            "filename": "H6jT9BGi4K9o",
+            "md": "https://cover.cdnlibs.org/uploads/team/anibaza/cover/H6jT9BGi4K9o_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/anibaza/cover/H6jT9BGi4K9o_thumb.jpg"
+          },
+          "id": 45220,
+          "model": "team",
+          "name": "AniBaza",
+          "slug": "anibaza",
+          "slug_url": "45220--anibaza",
+          "stats": [
+            {
+              "formated": "62",
+              "label": "Подписчика",
+              "short": "62",
+              "tag": "subscribes",
+              "value": 62
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83198,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/733693/cde7031a3c27485d68ce9848d011d300/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/crunchyroll/cover/DNtqFCJRwwCk_250x350.jpg",
+            "filename": "DNtqFCJRwwCk",
+            "md": "https://cover.cdnlibs.org/uploads/team/crunchyroll/cover/DNtqFCJRwwCk_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/crunchyroll/cover/DNtqFCJRwwCk_thumb.jpg"
+          },
+          "id": 33008,
+          "model": "team",
+          "name": "Crunchyroll",
+          "slug": "crunchyroll",
+          "slug_url": "33008--crunchyroll",
+          "stats": [
+            {
+              "formated": "56",
+              "label": "Подписчиков",
+              "short": "56",
+              "tag": "subscribes",
+              "value": 56
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2024-04-03T11:02:11.000000Z",
+        "episode_id": 41924,
+        "id": 413938,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Animelib",
+        "subtitles": [],
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/crunchyroll/cover/DNtqFCJRwwCk_250x350.jpg",
+            "filename": "DNtqFCJRwwCk",
+            "md": "https://cover.cdnlibs.org/uploads/team/crunchyroll/cover/DNtqFCJRwwCk_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/crunchyroll/cover/DNtqFCJRwwCk_thumb.jpg"
+          },
+          "id": 33008,
+          "model": "team",
+          "name": "Crunchyroll",
+          "slug": "crunchyroll",
+          "slug_url": "33008--crunchyroll",
+          "stats": [
+            {
+              "formated": "56",
+              "label": "Подписчиков",
+              "short": "56",
+              "tag": "subscribes",
+              "value": 56
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video": {
+          "id": 48571,
+          "quality": [
+            {
+              "bitrate": 6610,
+              "href": "/uploads/converted_videos/anime/16133/players/48571/53284814-92ca-48d4-b356-6eaa0b46634d_2160.mp4",
+              "quality": 2160
+            },
+            {
+              "bitrate": 3000,
+              "href": "/uploads/converted_videos/anime/16133/players/48571/53284814-92ca-48d4-b356-6eaa0b46634d_1080.mp4",
+              "quality": 1080
+            },
+            {
+              "bitrate": 1400,
+              "href": "/uploads/converted_videos/anime/16133/players/48571/53284814-92ca-48d4-b356-6eaa0b46634d_720.mp4",
+              "quality": 720
+            },
+            {
+              "bitrate": 600,
+              "href": "/uploads/converted_videos/anime/16133/players/48571/53284814-92ca-48d4-b356-6eaa0b46634d_360.mp4",
+              "quality": 360
+            }
+          ]
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83318,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/723510/15e8dec62683c81d99dfc550c254707d/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/aniplague/cover/Z0qXDsBB1iKO_250x350.jpg",
+            "filename": "Z0qXDsBB1iKO",
+            "md": "https://cover.cdnlibs.org/uploads/team/aniplague/cover/Z0qXDsBB1iKO_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/aniplague/cover/Z0qXDsBB1iKO_thumb.jpg"
+          },
+          "id": 1190,
+          "model": "team",
+          "name": "AniPlague",
+          "slug": "aniplague",
+          "slug_url": "1190--aniplague",
+          "stats": [
+            {
+              "formated": "39",
+              "label": "Подписчиков",
+              "short": "39",
+              "tag": "subscribes",
+              "value": 39
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2023-01-20T13:29:36.000000Z",
+        "episode_id": 41924,
+        "id": 309955,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Animelib",
+        "subtitles": [],
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/aniplague/cover/Z0qXDsBB1iKO_250x350.jpg",
+            "filename": "Z0qXDsBB1iKO",
+            "md": "https://cover.cdnlibs.org/uploads/team/aniplague/cover/Z0qXDsBB1iKO_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/aniplague/cover/Z0qXDsBB1iKO_thumb.jpg"
+          },
+          "id": 1190,
+          "model": "team",
+          "name": "AniPlague",
+          "slug": "aniplague",
+          "slug_url": "1190--aniplague",
+          "stats": [
+            {
+              "formated": "39",
+              "label": "Подписчиков",
+              "short": "39",
+              "tag": "subscribes",
+              "value": 39
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video": {
+          "id": 6199,
+          "quality": [
+            {
+              "bitrate": 3000,
+              "href": "/uploads/converted_videos/anime/16133/players/6199/6199_1080.mp4",
+              "quality": 1080
+            },
+            {
+              "bitrate": 1400,
+              "href": "/uploads/converted_videos/anime/16133/players/6199/6199_720.mp4",
+              "quality": 720
+            },
+            {
+              "bitrate": 600,
+              "href": "/uploads/converted_videos/anime/16133/players/6199/6199_360.mp4",
+              "quality": 360
+            }
+          ]
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2023-04-28T22:35:40.000000Z",
+        "episode_id": 41924,
+        "id": 340951,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Animelib",
+        "subtitles": [],
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/dubclub/cover/qUgzn8OZhfwP_250x350.jpg",
+            "filename": "qUgzn8OZhfwP",
+            "md": "https://cover.cdnlibs.org/uploads/team/dubclub/cover/qUgzn8OZhfwP_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/dubclub/cover/qUgzn8OZhfwP_thumb.jpg"
+          },
+          "id": 32482,
+          "model": "team",
+          "name": "DubClub",
+          "slug": "dubclub",
+          "slug_url": "32482--dubclub",
+          "stats": [
+            {
+              "formated": "23",
+              "label": "Подписчика",
+              "short": "23",
+              "tag": "subscribes",
+              "value": 23
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video": {
+          "id": 19732,
+          "quality": [
+            {
+              "bitrate": 3000,
+              "href": "/uploads/converted_videos/anime/16133/players/19732/19732_1080.mp4",
+              "quality": 1080
+            },
+            {
+              "bitrate": 1400,
+              "href": "/uploads/converted_videos/anime/16133/players/19732/19732_720.mp4",
+              "quality": 720
+            },
+            {
+              "bitrate": 600,
+              "href": "/uploads/converted_videos/anime/16133/players/19732/19732_360.mp4",
+              "quality": 360
+            }
+          ]
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2024-02-28T13:38:44.000000Z",
+        "episode_id": 41924,
+        "id": 407872,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/1140530/902a7fb1fa267bddab8af456b7281f62/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/dubclub/cover/qUgzn8OZhfwP_250x350.jpg",
+            "filename": "qUgzn8OZhfwP",
+            "md": "https://cover.cdnlibs.org/uploads/team/dubclub/cover/qUgzn8OZhfwP_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/dubclub/cover/qUgzn8OZhfwP_thumb.jpg"
+          },
+          "id": 32482,
+          "model": "team",
+          "name": "DubClub",
+          "slug": "dubclub",
+          "slug_url": "32482--dubclub",
+          "stats": [
+            {
+              "formated": "23",
+              "label": "Подписчика",
+              "short": "23",
+              "tag": "subscribes",
+              "value": 23
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83486,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/722285/d5d57af5c36c14d7d83abc92acb79475/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/amazing-dubbing/cover/OtasLBYa2wwq_250x350.jpg",
+            "filename": "OtasLBYa2wwq",
+            "md": "https://cover.cdnlibs.org/uploads/team/amazing-dubbing/cover/OtasLBYa2wwq_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/amazing-dubbing/cover/OtasLBYa2wwq_thumb.jpg"
+          },
+          "id": 32411,
+          "model": "team",
+          "name": "Amazing Dubbing",
+          "slug": "amazing-dubbing",
+          "slug_url": "32411--amazing-dubbing",
+          "stats": [
+            {
+              "formated": "22",
+              "label": "Подписчика",
+              "short": "22",
+              "tag": "subscribes",
+              "value": 22
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2023-01-17T14:51:19.000000Z",
+        "episode_id": 41924,
+        "id": 308941,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Animelib",
+        "subtitles": [],
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/amazing-dubbing/cover/OtasLBYa2wwq_250x350.jpg",
+            "filename": "OtasLBYa2wwq",
+            "md": "https://cover.cdnlibs.org/uploads/team/amazing-dubbing/cover/OtasLBYa2wwq_250x350.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/amazing-dubbing/cover/OtasLBYa2wwq_thumb.jpg"
+          },
+          "id": 32411,
+          "model": "team",
+          "name": "Amazing Dubbing",
+          "slug": "amazing-dubbing",
+          "slug_url": "32411--amazing-dubbing",
+          "stats": [
+            {
+              "formated": "22",
+              "label": "Подписчика",
+              "short": "22",
+              "tag": "subscribes",
+              "value": 22
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video": {
+          "id": 5601,
+          "quality": [
+            {
+              "bitrate": 3000,
+              "href": "/uploads/converted_videos/anime/16133/players/5601/5601_1080.mp4",
+              "quality": 1080
+            },
+            {
+              "bitrate": 1400,
+              "href": "/uploads/converted_videos/anime/16133/players/5601/5601_720.mp4",
+              "quality": 720
+            },
+            {
+              "bitrate": 600,
+              "href": "/uploads/converted_videos/anime/16133/players/5601/5601_360.mp4",
+              "quality": 360
+            }
+          ]
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83342,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/722698/7bf41ea2f80d4a30f9d5f107ff877888/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "filename": null,
+            "md": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "thumbnail": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          },
+          "id": 32429,
+          "model": "team",
+          "name": "Animedia",
+          "slug": "animedia",
+          "slug_url": "32429--animedia",
+          "stats": [
+            {
+              "formated": "21",
+              "label": "Подписчик",
+              "short": "21",
+              "tag": "subscribes",
+              "value": 21
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83366,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/722754/3d49966009233c134b85bcd744f1503b/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/32439/cover/643b1c1a-6faa-48e3-a7e2-45464bbc095b.jpg",
+            "filename": "643b1c1a-6faa-48e3-a7e2-45464bbc095b",
+            "md": "https://cover.cdnlibs.org/uploads/team/32439/cover/643b1c1a-6faa-48e3-a7e2-45464bbc095b.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/32439/cover/643b1c1a-6faa-48e3-a7e2-45464bbc095b_thumb.jpg"
+          },
+          "id": 32439,
+          "model": "team",
+          "name": "RISE I voices",
+          "slug": "rise-i-voices",
+          "slug_url": "32439--rise-i-voices",
+          "stats": [
+            {
+              "formated": "16",
+              "label": "Подписчиков",
+              "short": "16",
+              "tag": "subscribes",
+              "value": 16
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83246,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/723143/5ad36ddf75f30e9e0de9bd9e22626bae/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "filename": null,
+            "md": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "thumbnail": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          },
+          "id": 32489,
+          "model": "team",
+          "name": "AniFilm",
+          "slug": "anifilm",
+          "slug_url": "32489--anifilm",
+          "stats": [
+            {
+              "formated": "10",
+              "label": "Подписчиков",
+              "short": "10",
+              "tag": "subscribes",
+              "value": 10
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2024-02-28T13:38:44.000000Z",
+        "episode_id": 41924,
+        "id": 407896,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/980397/dc92f6dd92ff666c1520c43dea4e6147/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "filename": null,
+            "md": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "thumbnail": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          },
+          "id": 32974,
+          "model": "team",
+          "name": "TVShows",
+          "slug": "tvshows",
+          "slug_url": "32974--tvshows",
+          "stats": [
+            {
+              "formated": "8",
+              "label": "Подписчиков",
+              "short": "8",
+              "tag": "subscribes",
+              "value": 8
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2025-04-18T10:04:58.000000Z",
+        "episode_id": 41924,
+        "id": 502136,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Animelib",
+        "subtitles": [],
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/61834/cover/e1126ba8-18e5-474c-8308-33a10da1a500.jpg",
+            "filename": "e1126ba8-18e5-474c-8308-33a10da1a500",
+            "md": "https://cover.cdnlibs.org/uploads/team/61834/cover/e1126ba8-18e5-474c-8308-33a10da1a500.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/61834/cover/e1126ba8-18e5-474c-8308-33a10da1a500_thumb.jpg"
+          },
+          "id": 61834,
+          "model": "team",
+          "name": "Слышь, Переозвуч",
+          "slug": "slys-pereozvuc",
+          "slug_url": "61834--slys-pereozvuc",
+          "stats": [
+            {
+              "formated": "8",
+              "label": "Подписчиков",
+              "short": "8",
+              "tag": "subscribes",
+              "value": 8
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video": {
+          "id": 90367,
+          "quality": [
+            {
+              "bitrate": 3000,
+              "href": "/uploads/converted_videos/anime/16133/players/90367/e77e8b58-2df5-4e5c-96a6-c590529da44a_1080.mp4",
+              "quality": 1080
+            },
+            {
+              "bitrate": 1400,
+              "href": "/uploads/converted_videos/anime/16133/players/90367/e77e8b58-2df5-4e5c-96a6-c590529da44a_720.mp4",
+              "quality": 720
+            },
+            {
+              "bitrate": 600,
+              "href": "/uploads/converted_videos/anime/16133/players/90367/e77e8b58-2df5-4e5c-96a6-c590529da44a_360.mp4",
+              "quality": 360
+            }
+          ]
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2026-03-06T10:57:16.000000Z",
+        "episode_id": 41924,
+        "id": 595409,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Animelib",
+        "subtitles": [],
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/66898/cover/f1f3a9a8-2df7-48ef-af69-d7d8bf1020c4.jpg",
+            "filename": "f1f3a9a8-2df7-48ef-af69-d7d8bf1020c4",
+            "md": "https://cover.cdnlibs.org/uploads/team/66898/cover/f1f3a9a8-2df7-48ef-af69-d7d8bf1020c4.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/66898/cover/f1f3a9a8-2df7-48ef-af69-d7d8bf1020c4_thumb.jpg"
+          },
+          "id": 66898,
+          "model": "team",
+          "name": "BebraDub",
+          "slug": "bebradub",
+          "slug_url": "66898--bebradub",
+          "stats": [
+            {
+              "formated": "8",
+              "label": "Подписчиков",
+              "short": "8",
+              "tag": "subscribes",
+              "value": 8
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video": {
+          "id": 137298,
+          "quality": [
+            {
+              "bitrate": 7500,
+              "href": "/uploads/converted_videos/anime/16133/players/137298/ab3f01c5-566c-4bc4-8cca-65e641496e4e_2160.mp4",
+              "quality": 2160
+            },
+            {
+              "bitrate": 3000,
+              "href": "/uploads/converted_videos/anime/16133/players/137298/ab3f01c5-566c-4bc4-8cca-65e641496e4e_1080.mp4",
+              "quality": 1080
+            },
+            {
+              "bitrate": 1400,
+              "href": "/uploads/converted_videos/anime/16133/players/137298/ab3f01c5-566c-4bc4-8cca-65e641496e4e_720.mp4",
+              "quality": 720
+            },
+            {
+              "bitrate": 600,
+              "href": "/uploads/converted_videos/anime/16133/players/137298/ab3f01c5-566c-4bc4-8cca-65e641496e4e_360.mp4",
+              "quality": 360
+            }
+          ]
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2026-05-10T20:52:16.000000Z",
+        "episode_id": 41924,
+        "id": 613492,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Animelib",
+        "subtitles": [],
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/59270/cover/0700ea99-4e89-4aff-bfa6-dfb4dd1ecf35.jpg",
+            "filename": "0700ea99-4e89-4aff-bfa6-dfb4dd1ecf35",
+            "md": "https://cover.cdnlibs.org/uploads/team/59270/cover/0700ea99-4e89-4aff-bfa6-dfb4dd1ecf35.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/59270/cover/0700ea99-4e89-4aff-bfa6-dfb4dd1ecf35_thumb.jpg"
+          },
+          "id": 59270,
+          "model": "team",
+          "name": "AniLock",
+          "slug": "anilock",
+          "slug_url": "59270--anilock",
+          "stats": [
+            {
+              "formated": "8",
+              "label": "Подписчиков",
+              "short": "8",
+              "tag": "subscribes",
+              "value": 8
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video": {
+          "id": 148641,
+          "quality": [
+            {
+              "bitrate": 1129,
+              "href": "/uploads/converted_videos/anime/16133/players/148641/e4c00094-66c7-4ddf-909d-b301874b8211_720.mp4",
+              "quality": 720
+            },
+            {
+              "bitrate": 600,
+              "href": "/uploads/converted_videos/anime/16133/players/148641/e4c00094-66c7-4ddf-909d-b301874b8211_360.mp4",
+              "quality": 360
+            }
+          ]
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2023-03-03T18:10:57.000000Z",
+        "episode_id": 41924,
+        "id": 324829,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Animelib",
+        "subtitles": [
+          {
+            "filename": "6d0e97b7-1f8e-4108-a185-52beb5731584.ass",
+            "format": "ass",
+            "id": 1167,
+            "name": "6d0e97b7-1f8e-4108-a185-52beb5731584.ass",
+            "src": "https://api.cdnlibs.org/uploads/subtitles/324829/6d0e97b7-1f8e-4108-a185-52beb5731584.ass"
+          },
+          {
+            "filename": "e81cdec5-ccf4-4de6-8709-e6346788736f.vtt",
+            "format": "vtt",
+            "id": 1168,
+            "name": "e81cdec5-ccf4-4de6-8709-e6346788736f.vtt",
+            "src": "https://api.cdnlibs.org/uploads/subtitles/324829/e81cdec5-ccf4-4de6-8709-e6346788736f.vtt"
+          }
+        ],
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "filename": null,
+            "md": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "thumbnail": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          },
+          "id": 43974,
+          "model": "team",
+          "name": "Pegasus sui vsem ken",
+          "slug": "pegasus-sui-vsem-ken",
+          "slug_url": "43974--pegasus-sui-vsem-ken",
+          "stats": [
+            {
+              "formated": "4",
+              "label": "Подписчика",
+              "short": "4",
+              "tag": "subscribes",
+              "value": 4
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 1,
+          "label": "Субтитры"
+        },
+        "video": {
+          "id": 11461,
+          "quality": [
+            {
+              "bitrate": 3000,
+              "href": "/uploads/converted_videos/anime/16133/players/11461/11461_1080.mp4",
+              "quality": 1080
+            },
+            {
+              "bitrate": 1400,
+              "href": "/uploads/converted_videos/anime/16133/players/11461/11461_720.mp4",
+              "quality": 720
+            },
+            {
+              "bitrate": 600,
+              "href": "/uploads/converted_videos/anime/16133/players/11461/11461_360.mp4",
+              "quality": 360
+            }
+          ]
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:48.000000Z",
+        "episode_id": 41924,
+        "id": 83582,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/823464/5ba4bc0d3a2dfdc2b0a47002aeb1dab4/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "filename": null,
+            "md": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "thumbnail": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          },
+          "id": 33181,
+          "model": "team",
+          "name": "MedusaSub.Subtitles",
+          "slug": "medusasubsubtitles",
+          "slug_url": "33181--medusasubsubtitles",
+          "stats": [
+            {
+              "formated": "2",
+              "label": "Подписчика",
+              "short": "2",
+              "tag": "subscribes",
+              "value": 2
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 1,
+          "label": "Субтитры"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2024-02-28T13:38:43.000000Z",
+        "episode_id": 41924,
+        "id": 407823,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/722728/b72991c2e973db6e96fd3820278459ba/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "filename": null,
+            "md": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "thumbnail": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          },
+          "id": 32436,
+          "model": "team",
+          "name": "Jisedai",
+          "slug": "jisedai",
+          "slug_url": "32436--jisedai",
+          "stats": [
+            {
+              "formated": "2",
+              "label": "Подписчика",
+              "short": "2",
+              "tag": "subscribes",
+              "value": 2
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83534,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/722575/1226a05f4e1e3b055a9de3171651c763/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "filename": null,
+            "md": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "thumbnail": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          },
+          "id": 32625,
+          "model": "team",
+          "name": "TAKEOVER Project",
+          "slug": "takeover-project",
+          "slug_url": "32625--takeover-project",
+          "stats": [
+            {
+              "formated": "1",
+              "label": "Подписчик",
+              "short": "1",
+              "tag": "subscribes",
+              "value": 1
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2024-02-28T13:38:43.000000Z",
+        "episode_id": 41924,
+        "id": 407824,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/1065969/7e7ce4efae8b6e9fefbd0a876616a86d/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "filename": null,
+            "md": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "thumbnail": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          },
+          "id": 32980,
+          "model": "team",
+          "name": "HaronMedia",
+          "slug": "haronmedia",
+          "slug_url": "32980--haronmedia",
+          "stats": [
+            {
+              "formated": "1",
+              "label": "Подписчик",
+              "short": "1",
+              "tag": "subscribes",
+              "value": 1
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2026-08-31T19:19:22.000000Z",
+        "episode_id": 41924,
+        "id": 644156,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Animelib",
+        "subtitles": [],
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "filename": null,
+            "md": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "thumbnail": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          },
+          "id": 69991,
+          "model": "team",
+          "name": "debildub",
+          "slug": "debildub",
+          "slug_url": "69991--debildub",
+          "stats": [
+            {
+              "formated": "1",
+              "label": "Подписчик",
+              "short": "1",
+              "tag": "subscribes",
+              "value": 1
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video": {
+          "id": 166656,
+          "quality": [
+            {
+              "bitrate": 3000,
+              "href": "/uploads/converted_videos/anime/16133/players/166656/d0982b76-4e7e-4632-9adc-5d537abfdb76_1080.mp4",
+              "quality": 1080
+            },
+            {
+              "bitrate": 1400,
+              "href": "/uploads/converted_videos/anime/16133/players/166656/d0982b76-4e7e-4632-9adc-5d537abfdb76_720.mp4",
+              "quality": 720
+            },
+            {
+              "bitrate": 600,
+              "href": "/uploads/converted_videos/anime/16133/players/166656/d0982b76-4e7e-4632-9adc-5d537abfdb76_360.mp4",
+              "quality": 360
+            }
+          ]
+        },
+        "video_domain": "main",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83438,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/777737/39115234dddb17e035c658b2839f199f/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "filename": null,
+            "md": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "thumbnail": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          },
+          "id": 32581,
+          "model": "team",
+          "name": "Sergei Vasya",
+          "slug": "sergei-vasya",
+          "slug_url": "32581--sergei-vasya",
+          "stats": [
+            {
+              "formated": "0",
+              "label": "Подписчиков",
+              "short": "0",
+              "tag": "subscribes",
+              "value": 0
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2022-09-19T21:08:47.000000Z",
+        "episode_id": 41924,
+        "id": 83554,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Kodik",
+        "src": "//kodikplayer.com/seria/980397/dc92f6dd92ff666c1520c43dea4e6147/720p",
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "filename": null,
+            "md": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "thumbnail": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          },
+          "id": 33295,
+          "model": "team",
+          "name": "Amaivon",
+          "slug": "amaivon",
+          "slug_url": "33295--amaivon",
+          "stats": [
+            {
+              "formated": "0",
+              "label": "Подписчиков",
+              "short": "0",
+              "tag": "subscribes",
+              "value": 0
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      },
+      {
+        "created_at": "2026-04-10T23:10:30.000000Z",
+        "episode_id": 41924,
+        "id": 604133,
+        "is_viewed": false,
+        "is_viewed_last_at": null,
+        "player": "Animelib",
+        "subtitles": [],
+        "team": {
+          "cover": {
+            "default": "https://cover.cdnlibs.org/uploads/team/68048/cover/b33eb493-1548-4f8b-935d-d37866d60c2f.jpg",
+            "filename": "b33eb493-1548-4f8b-935d-d37866d60c2f",
+            "md": "https://cover.cdnlibs.org/uploads/team/68048/cover/b33eb493-1548-4f8b-935d-d37866d60c2f.jpg",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/68048/cover/b33eb493-1548-4f8b-935d-d37866d60c2f_thumb.jpg"
+          },
+          "id": 68048,
+          "model": "team",
+          "name": "Muffin",
+          "slug": "muffin",
+          "slug_url": "68048--muffin",
+          "stats": [
+            {
+              "formated": "0",
+              "label": "Подписчиков",
+              "short": "0",
+              "tag": "subscribes",
+              "value": 0
+            }
+          ]
+        },
+        "timecode": null,
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "video": {
+          "id": 142435,
+          "quality": [
+            {
+              "bitrate": 3000,
+              "href": "/uploads/converted_videos/anime/16133/players/142435/104b116d-2fdd-457f-ab20-9cd776b5181e_1080.mp4",
+              "quality": 1080
+            },
+            {
+              "bitrate": 1400,
+              "href": "/uploads/converted_videos/anime/16133/players/142435/104b116d-2fdd-457f-ab20-9cd776b5181e_720.mp4",
+              "quality": 720
+            },
+            {
+              "bitrate": 600,
+              "href": "/uploads/converted_videos/anime/16133/players/142435/104b116d-2fdd-457f-ab20-9cd776b5181e_360.mp4",
+              "quality": 360
+            }
+          ]
+        },
+        "video_domain": "secondary_1",
+        "views": 0
+      }
+    ],
+    "season": "1",
+    "status": {
+      "abbr": null,
+      "id": "default",
+      "label": "Полноценный эпизод"
+    },
+    "type": "episodes"
+  }
+}

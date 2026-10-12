@@ -100,3 +100,25 @@ fn video_quality_pick() {
     assert_eq!(v.pick(900).unwrap().quality, 720);
     assert_eq!(v.pick(240).unwrap().quality, 360);
 }
+
+#[test]
+fn animelib_player() {
+    let ep: EpisodeDetails = data("episode_animelib.json");
+    let own: Vec<_> = ep.players.iter().filter(|p| p.kind() == PlayerKind::Animelib).collect();
+    assert!(!own.is_empty());
+    let player = own[0];
+    let video = player.video.as_ref().unwrap();
+    let best = video.pick(1080).unwrap();
+    assert_eq!(best.quality, 1080);
+    assert!(best.href.starts_with("/uploads/"));
+
+    let constants: Constants = data("aconst.json");
+    let server = constants
+        .video_servers
+        .iter()
+        .find(|s| Some(&s.id) == player.video_domain.as_ref())
+        .unwrap();
+    let url = server.join(&best.href);
+    assert!(url.starts_with("https://") && url.ends_with("_1080.mp4"), "{url}");
+    assert!(!url.contains(".аs//"), "{url}");
+}
