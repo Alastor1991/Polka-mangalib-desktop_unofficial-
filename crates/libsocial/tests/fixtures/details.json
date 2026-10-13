@@ -1,1 +1,106 @@
-{"data":{"id":109483,"name":"Berserk Memorial","rus_name":"\u041f\u0430\u043c\u044f\u0442\u043d\u0438\u043a \u0411\u0435\u0440\u0441\u0435\u0440\u043a\u0443","eng_name":"Berserk Memorial","model":"manga","slug":"berserk-memorial","slug_url":"109483--berserk-memorial","cover":{"filename":"QIE4Yo7aJMSX","thumbnail":"https:\/\/cover.cdnlibs.org\/uploads\/cover\/berserk-memorial\/cover\/QIE4Yo7aJMSX_thumb.jpg","default":"https:\/\/cover.cdnlibs.org\/uploads\/cover\/berserk-memorial\/cover\/QIE4Yo7aJMSX_250x350.jpg","md":"https:\/\/cover.cdnlibs.org\/uploads\/cover\/berserk-memorial\/cover\/QIE4Yo7aJMSX_250x350.jpg"},"ageRestriction":{"id":3,"label":"16+"},"site":1,"type":{"id":1,"label":"\u041c\u0430\u043d\u0433\u0430"},"summary":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"\u0412\u0430\u043d\u0448\u043e\u0442 \u0438\u0437 \u043f\u043e\u0441\u043b\u0435\u0434\u043d\u0435\u0439 \u0433\u043b\u0430\u0432\u044b \\\"\u0411\u0435\u0440\u0441\u0435\u0440\u043a\u0430\\\", \u043d\u0430\u043f\u0438\u0441\u0430\u043d\u043d\u044b\u0439 \u0432 \u043f\u0430\u043c\u044f\u0442\u044c \u043e \u041a\u0435\u043d\u0442\u0430\u0440\u043e \u041c\u0438\u0443\u0440\u0435."}]}]},"is_licensed":false,"genres":[{"id":52,"name":"\u041f\u043e\u0432\u0441\u0435\u0434\u043d\u0435\u0432\u043d\u043e\u0441\u0442\u044c","adult":false,"alert":false},{"id":64,"name":"\u0421\u044d\u0439\u043d\u044d\u043d","adult":false,"alert":false},{"id":65,"name":"\u0422\u0440\u0430\u0433\u0435\u0434\u0438\u044f","adult":false,"alert":false}],"authors":[{"id":1229,"slug":"mori-kouji","slug_url":"1229--mori-kouji","model":"people","name":"MORI Kouji","rus_name":null,"alt_name":null,"cover":{"filename":"Blwt9qwH4IcG","thumbnail":"https:\/\/cover.cdnlibs.org\/uploads\/people\/1229\/cover\/Blwt9qwH4IcG_thumb.jpg","default":"https:\/\/cover.cdnlibs.org\/uploads\/people\/1229\/cover\/Blwt9qwH4IcG_250x350.jpg","md":"https:\/\/cover.cdnlibs.org\/uploads\/people\/1229\/cover\/Blwt9qwH4IcG_250x350.jpg"},"subscription":{"is_subscribed":false,"source_type":"people","source_id":1229,"relation":null},"confirmed":false,"user_id":1}],"content_marking":[{"id":2,"label":"\u0421\u043e\u0434\u0435\u0440\u0436\u0438\u0442 \u0443\u043f\u043e\u043c\u0438\u043d\u0430\u043d\u0438\u0435 \u043d\u0430\u0440\u043a\u043e\u0442\u0438\u043a\u043e\u0432","formulation":"\u041d\u0435\u0437\u0430\u043a\u043e\u043d\u043d\u043e\u0435 \u043f\u043e\u0442\u0440\u0435\u0431\u043b\u0435\u043d\u0438\u0435 \u043d\u0430\u0440\u043a\u043e\u0442\u0438\u0447\u0435\u0441\u043a\u0438\u0445 \u0441\u0440\u0435\u0434\u0441\u0442\u0432, \u043f\u0441\u0438\u0445\u043e\u0442\u0440\u043e\u043f\u043d\u044b\u0445 \u0432\u0435\u0449\u0435\u0441\u0442\u0432, \u0438\u0445 \u0430\u043d\u0430\u043b\u043e\u0433\u043e\u0432 \u043f\u0440\u0438\u0447\u0438\u043d\u044f\u0435\u0442 \u0432\u0440\u0435\u0434 \u0437\u0434\u043e\u0440\u043e\u0432\u044c\u044e, \u0438\u0445 \u043d\u0435\u0437\u0430\u043a\u043e\u043d\u043d\u044b\u0439 \u043e\u0431\u043e\u0440\u043e\u0442 \u0437\u0430\u043f\u0440\u0435\u0449\u0435\u043d \u0438 \u0432\u043b\u0435\u0447\u0435\u0442 \u0443\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u043d\u0443\u044e \u0437\u0430\u043a\u043e\u043d\u043e\u0434\u0430\u0442\u0435\u043b\u044c\u0441\u0442\u0432\u043e\u043c \u043e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\u0435\u043d\u043d\u043e\u0441\u0442\u044c"}],"status":{"id":2,"label":"\u0417\u0430\u0432\u0435\u0440\u0448\u0451\u043d"},"items_count":{"uploaded":1,"total":0},"releaseDateString":"2021 \u0433."},"meta":{"country":"RU"},"server":"debian-php4"}
+{
+  "data": {
+    "id": 109483,
+    "name": "Berserk Memorial",
+    "rus_name": "Памятник Берсерку",
+    "eng_name": "Berserk Memorial",
+    "model": "manga",
+    "slug": "berserk-memorial",
+    "slug_url": "109483--berserk-memorial",
+    "cover": {
+      "filename": "QIE4Yo7aJMSX",
+      "thumbnail": "https://cover.cdnlibs.org/uploads/cover/berserk-memorial/cover/QIE4Yo7aJMSX_thumb.jpg",
+      "default": "https://cover.cdnlibs.org/uploads/cover/berserk-memorial/cover/QIE4Yo7aJMSX_250x350.jpg",
+      "md": "https://cover.cdnlibs.org/uploads/cover/berserk-memorial/cover/QIE4Yo7aJMSX_250x350.jpg"
+    },
+    "ageRestriction": {
+      "id": 3,
+      "label": "16+"
+    },
+    "site": 1,
+    "type": {
+      "id": 1,
+      "label": "Манга"
+    },
+    "summary": {
+      "type": "doc",
+      "content": [
+        {
+          "type": "paragraph",
+          "content": [
+            {
+              "type": "text",
+              "text": "Ваншот из последней главы \\\"Берсерка\\\", написанный в память о Кентаро Миуре."
+            }
+          ]
+        }
+      ]
+    },
+    "is_licensed": false,
+    "genres": [
+      {
+        "id": 52,
+        "name": "Повседневность",
+        "adult": false,
+        "alert": false
+      },
+      {
+        "id": 64,
+        "name": "Сэйнэн",
+        "adult": false,
+        "alert": false
+      },
+      {
+        "id": 65,
+        "name": "Трагедия",
+        "adult": false,
+        "alert": false
+      }
+    ],
+    "authors": [
+      {
+        "id": 1229,
+        "slug": "mori-kouji",
+        "slug_url": "1229--mori-kouji",
+        "model": "people",
+        "name": "MORI Kouji",
+        "rus_name": null,
+        "alt_name": null,
+        "cover": {
+          "filename": "Blwt9qwH4IcG",
+          "thumbnail": "https://cover.cdnlibs.org/uploads/people/1229/cover/Blwt9qwH4IcG_thumb.jpg",
+          "default": "https://cover.cdnlibs.org/uploads/people/1229/cover/Blwt9qwH4IcG_250x350.jpg",
+          "md": "https://cover.cdnlibs.org/uploads/people/1229/cover/Blwt9qwH4IcG_250x350.jpg"
+        },
+        "subscription": {
+          "is_subscribed": false,
+          "source_type": "people",
+          "source_id": 1229,
+          "relation": null
+        },
+        "confirmed": false,
+        "user_id": 1
+      }
+    ],
+    "content_marking": [
+      {
+        "id": 2,
+        "label": "Содержит упоминание наркотиков",
+        "formulation": "Незаконное потребление наркотических средств, психотропных веществ, их аналогов причиняет вред здоровью, их незаконный оборот запрещен и влечет установленную законодательством ответственность"
+      }
+    ],
+    "status": {
+      "id": 2,
+      "label": "Завершён"
+    },
+    "items_count": {
+      "uploaded": 1,
+      "total": 0
+    },
+    "releaseDateString": "2021 г."
+  },
+  "meta": {
+    "country": "RU"
+  },
+  "server": "debian-php4"
+}

@@ -1,1 +1,21 @@
-{"data":{"videoServers":[{"id":"main","label":"\u041e\u0441\u043d\u043e\u0432\u043d\u043e\u0439","url":"https:\/\/video1.cdnlibs.org\/.\u0430s\/"},{"id":"secondary_1","label":"\u0420\u0435\u0437\u0435\u0440\u0432\u043d\u044b\u0439 1","url":"https:\/\/video2.anilib.me\/.\u0430s\/"},{"id":"secondary_2","label":"\u0420\u0435\u0437\u0435\u0440\u0432\u043d\u044b\u0439 2","url":"https:\/\/video3.anilib.me\/.\u0430s\/"}]}}
+{
+  "data": {
+    "videoServers": [
+      {
+        "id": "main",
+        "label": "Основной",
+        "url": "https://video1.cdnlibs.org/.аs/"
+      },
+      {
+        "id": "secondary_1",
+        "label": "Резервный 1",
+        "url": "https://video2.anilib.me/.аs/"
+      },
+      {
+        "id": "secondary_2",
+        "label": "Резервный 2",
+        "url": "https://video3.anilib.me/.аs/"
+      }
+    ]
+  }
+}

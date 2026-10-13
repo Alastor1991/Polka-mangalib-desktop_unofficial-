@@ -1,1 +1,92 @@
-{"data":{"id":2117,"model":"episodes","name":"\u0427\u0435\u0440\u043d\u044b\u0439 \u043c\u0435\u0447\u043d\u0438\u043a","number":"1","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:01.000000Z","players":[{"id":5371,"episode_id":2117,"player":"Kodik","translation_type":{"id":2,"label":"\u041e\u0437\u0432\u0443\u0447\u043a\u0430"},"team":{"id":32438,"slug":"mc-entertainment","slug_url":"32438--mc-entertainment","model":"team","name":"MC Entertainment","cover":{"filename":null,"thumbnail":"https:\/\/cover.cdnlibs.org\/static\/images\/placeholders\/user_avatar.png","default":"https:\/\/cover.cdnlibs.org\/static\/images\/placeholders\/user_avatar.png","md":"https:\/\/cover.cdnlibs.org\/static\/images\/placeholders\/user_avatar.png"},"stats":[{"value":34,"formated":"34","short":"34","label":"\u041f\u043e\u0434\u043f\u0438\u0441\u0447\u0438\u043a\u0430","tag":"subscribes"}]},"created_at":"2022-09-15T03:10:01.000000Z","views":345,"src":"\/\/kodikplayer.com\/seria\/214147\/ce64676936692d100fa0402af6b6e05e\/720p","video_domain":"secondary_1","timecode":[]},{"id":5396,"episode_id":2117,"player":"Kodik","translation_type":{"id":2,"label":"\u041e\u0437\u0432\u0443\u0447\u043a\u0430"},"team":{"id":32410,"slug":"serbin","slug_url":"32410--serbin","model":"team","name":"\u0421\u0435\u0440\u0431\u0438\u043d","cover":{"filename":null,"thumbnail":"https:\/\/cover.cdnlibs.org\/static\/images\/placeholders\/user_avatar.png","default":"https:\/\/cover.cdnlibs.org\/static\/images\/placeholders\/user_avatar.png","md":"https:\/\/cover.cdnlibs.org\/static\/images\/placeholders\/user_avatar.png"},"stats":[{"value":1,"formated":"1","short":"1","label":"\u041f\u043e\u0434\u043f\u0438\u0441\u0447\u0438\u043a","tag":"subscribes"}]},"created_at":"2022-09-15T03:10:02.000000Z","views":88,"src":"\/\/kodikplayer.com\/seria\/596511\/0c14ef1a863f9d7c7089b9dc39666ea2\/720p","video_domain":"secondary_1","timecode":[]}],"type":"episodes"}}
+{
+  "data": {
+    "id": 2117,
+    "model": "episodes",
+    "name": "Черный мечник",
+    "number": "1",
+    "number_secondary": "1",
+    "season": "1",
+    "status": {
+      "id": "default",
+      "label": "Полноценный эпизод",
+      "abbr": null
+    },
+    "anime_id": 24,
+    "created_at": "2022-09-15T03:10:01.000000Z",
+    "players": [
+      {
+        "id": 5371,
+        "episode_id": 2117,
+        "player": "Kodik",
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "team": {
+          "id": 32438,
+          "slug": "mc-entertainment",
+          "slug_url": "32438--mc-entertainment",
+          "model": "team",
+          "name": "MC Entertainment",
+          "cover": {
+            "filename": null,
+            "thumbnail": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "default": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "md": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          },
+          "stats": [
+            {
+              "value": 34,
+              "formated": "34",
+              "short": "34",
+              "label": "Подписчика",
+              "tag": "subscribes"
+            }
+          ]
+        },
+        "created_at": "2022-09-15T03:10:01.000000Z",
+        "views": 345,
+        "src": "//kodikplayer.com/seria/214147/ce64676936692d100fa0402af6b6e05e/720p",
+        "video_domain": "secondary_1",
+        "timecode": []
+      },
+      {
+        "id": 5396,
+        "episode_id": 2117,
+        "player": "Kodik",
+        "translation_type": {
+          "id": 2,
+          "label": "Озвучка"
+        },
+        "team": {
+          "id": 32410,
+          "slug": "serbin",
+          "slug_url": "32410--serbin",
+          "model": "team",
+          "name": "Сербин",
+          "cover": {
+            "filename": null,
+            "thumbnail": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "default": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png",
+            "md": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          },
+          "stats": [
+            {
+              "value": 1,
+              "formated": "1",
+              "short": "1",
+              "label": "Подписчик",
+              "tag": "subscribes"
+            }
+          ]
+        },
+        "created_at": "2022-09-15T03:10:02.000000Z",
+        "views": 88,
+        "src": "//kodikplayer.com/seria/596511/0c14ef1a863f9d7c7089b9dc39666ea2/720p",
+        "video_domain": "secondary_1",
+        "timecode": []
+      }
+    ],
+    "type": "episodes"
+  }
+}

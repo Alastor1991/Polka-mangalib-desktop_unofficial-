@@ -1,1 +1,429 @@
-{"data":[{"id":2117,"model":"episodes","name":"\u0427\u0435\u0440\u043d\u044b\u0439 \u043c\u0435\u0447\u043d\u0438\u043a","number":"1","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:01.000000Z","item_number":1,"type":"episodes"},{"id":2118,"model":"episodes","name":"\u041e\u0442\u0440\u044f\u0434 \u0441\u043e\u043a\u043e\u043b\u0430","number":"2","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:01.000000Z","item_number":2,"type":"episodes"},{"id":2119,"model":"episodes","name":"\u041f\u0435\u0440\u0432\u0430\u044f \u0431\u0438\u0442\u0432\u0430","number":"3","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:01.000000Z","item_number":3,"type":"episodes"},{"id":2120,"model":"episodes","name":"\u0414\u043b\u0430\u043d\u044c \u0413\u043e\u0441\u043f\u043e\u0434\u043d\u044f","number":"4","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:01.000000Z","item_number":4,"type":"episodes"},{"id":2121,"model":"episodes","name":"\u0412\u0435\u0442\u0435\u0440 \u043c\u0435\u0447\u0435\u0439","number":"5","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:01.000000Z","item_number":5,"type":"episodes"},{"id":2122,"model":"episodes","name":"\u0411\u0435\u0441\u0441\u043c\u0435\u0440\u0442\u043d\u044b\u0439 \u0417\u043e\u0434\u0434","number":"6","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:01.000000Z","item_number":6,"type":"episodes"},{"id":2123,"model":"episodes","name":"\u0425\u043e\u0437\u044f\u0438\u043d \u043c\u0435\u0447\u0430","number":"7","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":7,"type":"episodes"},{"id":2124,"model":"episodes","name":"\u0417\u0430\u0433\u043e\u0432\u043e\u0440","number":"8","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":8,"type":"episodes"},{"id":2125,"model":"episodes","name":"\u0423\u0431\u0438\u0439\u0441\u0442\u0432\u043e","number":"9","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":9,"type":"episodes"},{"id":2126,"model":"episodes","name":"\u0414\u0432\u043e\u0440\u044f\u043d\u0438\u043d","number":"10","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":10,"type":"episodes"},{"id":2127,"model":"episodes","name":"\u0411\u0438\u0442\u0432\u0430","number":"11","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":11,"type":"episodes"},{"id":2128,"model":"episodes","name":"\u0412\u043c\u0435\u0441\u0442\u0435","number":"12","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":12,"type":"episodes"},{"id":2129,"model":"episodes","name":"\u0413\u043e\u0442\u043e\u0432\u044b \u043a \u0441\u043c\u0435\u0440\u0442\u0438","number":"13","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":13,"type":"episodes"},{"id":2130,"model":"episodes","name":"\u041a\u043e\u0441\u0442\u0435\u0440 \u0433\u0440\u0435\u0437","number":"14","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":14,"type":"episodes"},{"id":2131,"model":"episodes","name":"\u0420\u0435\u0448\u0430\u044e\u0449\u0435\u0435 \u0441\u0440\u0430\u0436\u0435\u043d\u0438\u0435","number":"15","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":15,"type":"episodes"},{"id":2132,"model":"episodes","name":"\u0417\u0430\u0432\u043e\u0435\u0432\u0430\u0442\u0435\u043b\u044c","number":"16","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":16,"type":"episodes"},{"id":2133,"model":"episodes","name":"\u041c\u0433\u043d\u043e\u0432\u0435\u043d\u0438\u0435 \u0441\u043b\u0430\u0432\u044b","number":"17","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":17,"type":"episodes"},{"id":2134,"model":"episodes","name":"\u041e\u0433\u043d\u0435\u043d\u043d\u043e\u0435 \u043d\u0430\u0434\u0433\u0440\u043e\u0431\u044c\u0435","number":"18","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":18,"type":"episodes"},{"id":2135,"model":"episodes","name":"\u0420\u0430\u0441\u0441\u0442\u0430\u0432\u0430\u043d\u0438\u0435","number":"19","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":19,"type":"episodes"},{"id":2136,"model":"episodes","name":"\u0418\u0441\u043a\u0440\u044b","number":"20","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":20,"type":"episodes"},{"id":2137,"model":"episodes","name":"\u041f\u0440\u0438\u0437\u043d\u0430\u043d\u0438\u0435","number":"21","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":21,"type":"episodes"},{"id":2138,"model":"episodes","name":"\u041f\u0440\u043e\u043d\u0438\u043a\u043d\u043e\u0432\u0435\u043d\u0438\u0435","number":"22","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":22,"type":"episodes"},{"id":2139,"model":"episodes","name":"\u041d\u0430\u043a\u0430\u043d\u0443\u043d\u0435 \u043f\u0438\u0440\u0430","number":"23","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":23,"type":"episodes"},{"id":2140,"model":"episodes","name":"\u0412\u0435\u043b\u0438\u043a\u043e\u0435 \u0437\u0430\u0442\u043c\u0435\u043d\u0438\u0435","number":"24","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":24,"type":"episodes"},{"id":2141,"model":"episodes","name":"\u0412\u0440\u0435\u043c\u044f \u0432\u0435\u0447\u043d\u043e\u0441\u0442\u0438","number":"25","number_secondary":"1","season":"1","status":{"id":"default","label":"\u041f\u043e\u043b\u043d\u043e\u0446\u0435\u043d\u043d\u044b\u0439 \u044d\u043f\u0438\u0437\u043e\u0434","abbr":null},"anime_id":24,"created_at":"2022-09-15T03:10:02.000000Z","item_number":25,"type":"episodes"}]}
+{
+  "data": [
+    {
+      "id": 2117,
+      "model": "episodes",
+      "name": "Черный мечник",
+      "number": "1",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:01.000000Z",
+      "item_number": 1,
+      "type": "episodes"
+    },
+    {
+      "id": 2118,
+      "model": "episodes",
+      "name": "Отряд сокола",
+      "number": "2",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:01.000000Z",
+      "item_number": 2,
+      "type": "episodes"
+    },
+    {
+      "id": 2119,
+      "model": "episodes",
+      "name": "Первая битва",
+      "number": "3",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:01.000000Z",
+      "item_number": 3,
+      "type": "episodes"
+    },
+    {
+      "id": 2120,
+      "model": "episodes",
+      "name": "Длань Господня",
+      "number": "4",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:01.000000Z",
+      "item_number": 4,
+      "type": "episodes"
+    },
+    {
+      "id": 2121,
+      "model": "episodes",
+      "name": "Ветер мечей",
+      "number": "5",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:01.000000Z",
+      "item_number": 5,
+      "type": "episodes"
+    },
+    {
+      "id": 2122,
+      "model": "episodes",
+      "name": "Бессмертный Зодд",
+      "number": "6",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:01.000000Z",
+      "item_number": 6,
+      "type": "episodes"
+    },
+    {
+      "id": 2123,
+      "model": "episodes",
+      "name": "Хозяин меча",
+      "number": "7",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 7,
+      "type": "episodes"
+    },
+    {
+      "id": 2124,
+      "model": "episodes",
+      "name": "Заговор",
+      "number": "8",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 8,
+      "type": "episodes"
+    },
+    {
+      "id": 2125,
+      "model": "episodes",
+      "name": "Убийство",
+      "number": "9",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 9,
+      "type": "episodes"
+    },
+    {
+      "id": 2126,
+      "model": "episodes",
+      "name": "Дворянин",
+      "number": "10",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 10,
+      "type": "episodes"
+    },
+    {
+      "id": 2127,
+      "model": "episodes",
+      "name": "Битва",
+      "number": "11",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 11,
+      "type": "episodes"
+    },
+    {
+      "id": 2128,
+      "model": "episodes",
+      "name": "Вместе",
+      "number": "12",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 12,
+      "type": "episodes"
+    },
+    {
+      "id": 2129,
+      "model": "episodes",
+      "name": "Готовы к смерти",
+      "number": "13",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 13,
+      "type": "episodes"
+    },
+    {
+      "id": 2130,
+      "model": "episodes",
+      "name": "Костер грез",
+      "number": "14",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 14,
+      "type": "episodes"
+    },
+    {
+      "id": 2131,
+      "model": "episodes",
+      "name": "Решающее сражение",
+      "number": "15",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 15,
+      "type": "episodes"
+    },
+    {
+      "id": 2132,
+      "model": "episodes",
+      "name": "Завоеватель",
+      "number": "16",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 16,
+      "type": "episodes"
+    },
+    {
+      "id": 2133,
+      "model": "episodes",
+      "name": "Мгновение славы",
+      "number": "17",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 17,
+      "type": "episodes"
+    },
+    {
+      "id": 2134,
+      "model": "episodes",
+      "name": "Огненное надгробье",
+      "number": "18",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 18,
+      "type": "episodes"
+    },
+    {
+      "id": 2135,
+      "model": "episodes",
+      "name": "Расставание",
+      "number": "19",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 19,
+      "type": "episodes"
+    },
+    {
+      "id": 2136,
+      "model": "episodes",
+      "name": "Искры",
+      "number": "20",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 20,
+      "type": "episodes"
+    },
+    {
+      "id": 2137,
+      "model": "episodes",
+      "name": "Признание",
+      "number": "21",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 21,
+      "type": "episodes"
+    },
+    {
+      "id": 2138,
+      "model": "episodes",
+      "name": "Проникновение",
+      "number": "22",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 22,
+      "type": "episodes"
+    },
+    {
+      "id": 2139,
+      "model": "episodes",
+      "name": "Накануне пира",
+      "number": "23",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 23,
+      "type": "episodes"
+    },
+    {
+      "id": 2140,
+      "model": "episodes",
+      "name": "Великое затмение",
+      "number": "24",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 24,
+      "type": "episodes"
+    },
+    {
+      "id": 2141,
+      "model": "episodes",
+      "name": "Время вечности",
+      "number": "25",
+      "number_secondary": "1",
+      "season": "1",
+      "status": {
+        "id": "default",
+        "label": "Полноценный эпизод",
+        "abbr": null
+      },
+      "anime_id": 24,
+      "created_at": "2022-09-15T03:10:02.000000Z",
+      "item_number": 25,
+      "type": "episodes"
+    }
+  ]
+}

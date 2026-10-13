@@ -1,1 +1,56 @@
-{"data":[{"id":4666,"name":"main","notify":false,"teams":[{"id":587,"slug":"japit-comics","slug_url":"587--japit-comics","model":"team","name":"Japit Comics","cover":{"filename":"cover","thumbnail":"https:\/\/cover.cdnlibs.org\/uploads\/team\/japit-comics\/cover\/cover_thumb.jpg","default":"https:\/\/cover.cdnlibs.org\/uploads\/team\/japit-comics\/cover\/cover_250x350.jpg","md":"https:\/\/cover.cdnlibs.org\/uploads\/team\/japit-comics\/cover\/cover_250x350.jpg"},"details":{"branch_id":4666,"is_active":false,"subscriptions_count":null}}],"translation_quality_rating":null},{"id":4667,"name":"\u0430\u043b\u044c\u0442","notify":false,"teams":[{"id":1273,"slug":"nippa","slug_url":"1273--nippa","model":"team","name":"Nippa","cover":{"filename":"5ab2edfb-6944-4cae-b314-c217d2104eb5","thumbnail":"https:\/\/cover.cdnlibs.org\/uploads\/team\/1273\/cover\/5ab2edfb-6944-4cae-b314-c217d2104eb5_thumb.jpg","default":"https:\/\/cover.cdnlibs.org\/uploads\/team\/1273\/cover\/5ab2edfb-6944-4cae-b314-c217d2104eb5.jpg","md":"https:\/\/cover.cdnlibs.org\/uploads\/team\/1273\/cover\/5ab2edfb-6944-4cae-b314-c217d2104eb5.jpg"},"details":{"branch_id":4667,"is_active":false,"subscriptions_count":null}}],"translation_quality_rating":null}]}
+{
+  "data": [
+    {
+      "id": 4666,
+      "name": "main",
+      "notify": false,
+      "teams": [
+        {
+          "id": 587,
+          "slug": "japit-comics",
+          "slug_url": "587--japit-comics",
+          "model": "team",
+          "name": "Japit Comics",
+          "cover": {
+            "filename": "cover",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/japit-comics/cover/cover_thumb.jpg",
+            "default": "https://cover.cdnlibs.org/uploads/team/japit-comics/cover/cover_250x350.jpg",
+            "md": "https://cover.cdnlibs.org/uploads/team/japit-comics/cover/cover_250x350.jpg"
+          },
+          "details": {
+            "branch_id": 4666,
+            "is_active": false,
+            "subscriptions_count": null
+          }
+        }
+      ],
+      "translation_quality_rating": null
+    },
+    {
+      "id": 4667,
+      "name": "альт",
+      "notify": false,
+      "teams": [
+        {
+          "id": 1273,
+          "slug": "nippa",
+          "slug_url": "1273--nippa",
+          "model": "team",
+          "name": "Nippa",
+          "cover": {
+            "filename": "5ab2edfb-6944-4cae-b314-c217d2104eb5",
+            "thumbnail": "https://cover.cdnlibs.org/uploads/team/1273/cover/5ab2edfb-6944-4cae-b314-c217d2104eb5_thumb.jpg",
+            "default": "https://cover.cdnlibs.org/uploads/team/1273/cover/5ab2edfb-6944-4cae-b314-c217d2104eb5.jpg",
+            "md": "https://cover.cdnlibs.org/uploads/team/1273/cover/5ab2edfb-6944-4cae-b314-c217d2104eb5.jpg"
+          },
+          "details": {
+            "branch_id": 4667,
+            "is_active": false,
+            "subscriptions_count": null
+          }
+        }
+      ],
+      "translation_quality_rating": null
+    }
+  ]
+}
