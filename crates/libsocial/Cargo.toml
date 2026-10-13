@@ -10,7 +10,7 @@ description = "Неофициальный клиент API lib.social: MangaLib,
 base64 = "0.23.1"
 bytes = "1.12.1"
 rand = "0.10.3"
-reqwest = { version = "0.13.5", features = ["json", "query", "form", "stream"] }
+reqwest = { version = "0.13.5", features = ["json", "query", "form", "stream", "multipart"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"

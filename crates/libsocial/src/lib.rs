@@ -7,10 +7,12 @@ mod anime;
 pub mod auth;
 pub mod bookmarks;
 mod client;
+pub mod comments;
 mod error;
 mod manga;
 pub mod mirrors;
 pub mod models;
+pub mod rich;
 mod serde_util;
 mod site;
 

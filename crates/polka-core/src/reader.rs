@@ -86,6 +86,30 @@ impl ReaderSession {
         chapter.branch(self.branch()).map_or(chapter.id, |b| b.id)
     }
 
+    /// Комментарии к текущей странице главы, как в читалке сайта.
+    pub fn page_comments(&self) -> libsocial::comments::Target {
+        libsocial::comments::Target::Chapter {
+            chapter_id: self.chapter_id(),
+            page: Some(self.page_number()),
+        }
+    }
+
+    /// Комментарии ко всей главе.
+    pub fn chapter_comments(&self) -> libsocial::comments::Target {
+        libsocial::comments::Target::Chapter {
+            chapter_id: self.chapter_id(),
+            page: None,
+        }
+    }
+
+    /// Номер текущей страницы для сайта, с единицы.
+    pub fn page_number(&self) -> u64 {
+        match self.pages.get(self.page) {
+            Some(PageSrc::Remote(p)) if p.slug > 0 => p.slug,
+            _ => self.page as u64 + 1,
+        }
+    }
+
     pub fn has_prev(&self) -> bool {
         self.index > 0
     }

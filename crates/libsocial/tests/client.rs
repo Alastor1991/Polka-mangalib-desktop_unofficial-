@@ -471,3 +471,80 @@ async fn bookmarks_page_and_writes() {
     c.mark_chapter_viewed(Site::MangaLib, 7965, 229662).await.unwrap();
     c.mark_episode_viewed(16133, 309079).await.unwrap();
 }
+
+#[tokio::test]
+async fn comment_writes() {
+    use libsocial::comments::{Comment, NewComment, Target, Vote};
+    use libsocial::rich::Doc;
+
+    let s = MockServer::start().await;
+    let saved = || {
+        ResponseTemplate::new(201).set_body_json(json!({"data": {
+            "id": 9, "comment": "<p>ответ</p>", "relation_type": "chapter", "relation_id": 50,
+            "parent_comment": 7, "root_id": 6, "comment_level": 2, "post_page": 3
+        }}))
+    };
+    // Ответ на ответ: корень и уровень берутся от родителя, страница главы тоже.
+    Mock::given(method("POST"))
+        .and(path("/api/comments"))
+        .and(body_partial_json(json!({
+            "post_type": "chapter", "post_id": 50, "post_page": 3,
+            "parent_comment": 7, "root_id": 6, "comment_level": 2,
+            "comment": {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "ответ"}]}]}
+        })))
+        .respond_with(saved())
+        .expect(1)
+        .mount(&s)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/comments/7/vote"))
+        .and(body_partial_json(json!({"vote": 0})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {}})))
+        .expect(1)
+        .mount(&s)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path("/api/comments/9"))
+        .respond_with(saved())
+        .expect(1)
+        .mount(&s)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path("/api/comments/9"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {}})))
+        .expect(1)
+        .mount(&s)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/comments/7/report"))
+        .and(body_partial_json(
+            json!({"reason": "3", "reportable_type": "comment", "reportable_id": 7}),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {}})))
+        .expect(1)
+        .mount(&s)
+        .await;
+
+    let c = client(&[&s]);
+    let parent: Comment = serde_json::from_value(json!({
+        "id": 7, "root_id": 6, "parent_comment": 6, "comment_level": 1, "post_page": 3,
+        "relation_type": "chapter", "relation_id": 50, "comment": "<p>родитель</p>"
+    }))
+    .unwrap();
+    let new = NewComment {
+        target: Target::Chapter {
+            chapter_id: 50,
+            page: Some(1),
+        },
+        text: Doc::from_plain("ответ"),
+        reply_to: Some(parent),
+        images: Vec::new(),
+        sticker: None,
+    };
+    let posted = c.post_comment(&new).await.unwrap();
+    assert_eq!(posted.id, 9);
+    c.vote_comment(7, Vote::Down).await.unwrap();
+    c.edit_comment(9, &Doc::from_plain("правка"), &[]).await.unwrap();
+    c.delete_comment(9).await.unwrap();
+    c.report_comment(7, "3", "").await.unwrap();
+}

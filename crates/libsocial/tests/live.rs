@@ -90,3 +90,41 @@ async fn mirror_failover() {
     println!("рабочее зеркало: {}", c.api_base());
     assert_ne!(c.api_base(), "https://api.invalid/api");
 }
+
+#[tokio::test]
+#[ignore]
+async fn comments_flow() {
+    use libsocial::comments::{CommentSort, Target};
+
+    let c = client();
+    let page = c.comments(Target::Manga(7965), CommentSort::Popular, 1).await.unwrap();
+    assert!(!page.roots.is_empty());
+    assert!(page.roots.iter().all(|r| r.is_root()));
+    assert!(page.roots.iter().any(|r| !r.text().plain_text().is_empty()));
+    assert!(page.replies.iter().all(|r| r.parent_comment.is_some()));
+
+    // Комментарии к первой странице первой главы: с ответами.
+    let chapter = Target::Chapter {
+        chapter_id: 223269,
+        page: Some(1),
+    };
+    let on_page = c.comments(chapter, CommentSort::Newest, 1).await.unwrap();
+    assert!(on_page.roots.iter().all(|r| r.post_page == Some(1)));
+
+    let root = &page.roots[0];
+    let thread = c
+        .comment_thread(Target::Manga(7965), root.id, CommentSort::Newest)
+        .await
+        .unwrap();
+    assert_eq!(thread.roots[0].id, root.id);
+
+    let sticky = c.sticky_comments(Target::Manga(7965)).await.unwrap();
+    let _ = sticky;
+    let reasons = c.report_types().await.unwrap();
+    assert!(reasons.iter().any(|r| !r.label.is_empty()));
+    // Стикеры сервер отдаёт только вошедшему.
+    match c.sticker_packs().await {
+        Ok(packs) => assert!(packs.iter().any(|p| !p.stickers.is_empty())),
+        Err(e) => assert!(matches!(e, libsocial::Error::Unauthorized), "{e}"),
+    }
+}

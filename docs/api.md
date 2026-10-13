@@ -246,6 +246,33 @@ DELETE /api/bookmarks/{id закладки}?media_type={manga|anime}
 - У аниме в `meta` ещё `player` (`Animelib`, `Kodik`), `team` и `translation_type`. Если эти поля есть, они не могут быть `null`: ответ 422.
 - Ответ – закладка с полем `item`, где лежит сама глава или серия. В `updated_at` время последнего изменения, по нему Полка не откатывает закладку, которую позже двигали на другом устройстве.
 
+## Комментарии
+
+Код: `crates/libsocial/src/comments.rs`, дерево и голоса в `crates/polka-core/src/comments.rs`. Комментарии не зависят от `Site-Id`: id объектов во всей сети общие.
+
+```http
+GET /api/comments?post_type=chapter&post_id=223269&post_page=1&sort_by=id&sort_type=desc&page=1
+GET /api/comments/{id}?post_type=…&post_id=…        ветка по id любого её комментария
+GET /api/comments/sticky?post_type=…&post_id=…      закреплённые
+POST /api/comments                                   написать
+PUT /api/comments/{id}                               править (сайт разрешает два дня)
+DELETE /api/comments/{id}
+POST /api/comments/{id}/vote      {"vote": 1}        плюс; 0 – минус, тот же голос повторно снимает
+POST /api/comments/{id}/report    {"reason": "3", "metadata": {"comment": ""}, "reportable_id": …, "reportable_type": "comment", "namespaces": "social_comments"}
+GET /api/reports/types?namespaces[]=social_comments  причины жалоб, голый массив без data
+GET /api/sticker-packs                               стикеры, только с входом
+POST /api/upload/image/comment                       картинки, multipart, поле content[]
+GET /api/user/{id}/comments                          что написал пользователь, по 20
+```
+
+- `post_type`: `manga` (и для ранобэ), `anime`, `chapter`, `episodes`, `chapter_player`, `review`, `collection`, `post` (новость), `discussion`, `card`. Для главы `post_id` – id перевода в ветке.
+- Комментарии к странице главы: `post_type=chapter` и `post_page` – номер страницы с единицы. Без `post_page` приходят корни со всех страниц и без ответов. Счётчика комментариев на странице в API нет, сайт его не показывает.
+- Ответ: `{"data": {"root": [...], "replies": [...]}, "meta": {"has_next_page": …}}`. Страницы по 25 корней. `replies` – плоский список ответов всех уровней, дерево собирается по `parent_comment`. В нём бывают повторы и ответы к корням с других страниц.
+- Текст приходит HTML-строкой (`<p>`, `<blockquote>`, спойлеры нескольких видов, картинки с `data-original-src`), а уходит документом ProseMirror. Оба формата разбирает `libsocial::rich::Doc`.
+- `sort_by` принимает только `id` и `votes_up`. Свой голос приходит в `votes.user`: `1`, `0` или `null`.
+- В новом комментарии ответ задают `parent_comment`, `root_id` (корень родителя или сам родитель) и `comment_level` (уровень родителя плюс один).
+- Картинки и стикеры в комментариях доступны только с премиумом.
+
 ## Ограничения
 
 Сервис не публикует лимиты. Полка держится в таких рамках:

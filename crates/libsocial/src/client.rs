@@ -309,6 +309,30 @@ impl Client {
         Ok(body.data)
     }
 
+    /// Запрос к API, ответ которого не нужен: важно только, что он успешен.
+    pub(crate) async fn send_ok<B>(
+        &self,
+        site: Site,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&B>,
+    ) -> Result<()>
+    where
+        B: Serialize + ?Sized,
+    {
+        self.send_api(Auth::User, |http, base| {
+            let request = http
+                .request(method.clone(), join_url(base, path))
+                .headers(Self::site_headers(site));
+            match body {
+                Some(body) => request.json(body),
+                None => request,
+            }
+        })
+        .await
+        .map(drop)
+    }
+
     /// Отправляет запрос к API: очередь, зеркала, токен, повторы, одно обновление
     /// токена при 401. `build` получает адрес текущего зеркала API.
     ///
