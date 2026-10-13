@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Полка
+GenericName=Читалка манги
+Comment=Неофициальный клиент MangaLib и AnimeLib
+Exec=polka
+Icon=polka
+Terminal=false
+Categories=Graphics;Viewer;
+Keywords=manga;mangalib;anime;манга;аниме;
+StartupWMClass=polka
