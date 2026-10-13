@@ -6,7 +6,7 @@ use std::time::Duration;
 use libsocial::auth::now_secs as now;
 use libsocial::{Client, ClientConfig, Error, Site, Token};
 use serde_json::json;
-use wiremock::matchers::{header, method, path};
+use wiremock::matchers::{body_partial_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn client(mirrors: &[&MockServer]) -> Client {
@@ -24,6 +24,7 @@ fn token(access: &str) -> Token {
         refresh_token: Some("refresh-1".into()),
         token_type: "Bearer".into(),
         expires_at: now() + 3600,
+        client_id: "1".into(),
     }
 }
 
@@ -98,6 +99,82 @@ async fn all_mirrors_blocked_keeps_original() {
     let c = client(&[&a, &b]);
     assert!(matches!(c.me().await, Err(Error::Forbidden)));
     assert_eq!(c.api_base(), format!("{}/api", a.uri()));
+}
+
+#[tokio::test]
+async fn gateway_down_everywhere_is_service_down() {
+    let a = MockServer::start().await;
+    let b = MockServer::start().await;
+    // Retry-After: 0, чтобы повторы не ждали 2, 4 и 8 секунд.
+    let bad_gateway = || {
+        ResponseTemplate::new(502)
+            .insert_header("Retry-After", "0")
+            .set_body_raw("<html>502 Bad Gateway</html>", "text/html")
+    };
+    // Первый запрос и три повтора на исходном зеркале, один запрос на втором.
+    Mock::given(path("/api/auth/me"))
+        .respond_with(bad_gateway())
+        .expect(4)
+        .mount(&a)
+        .await;
+    Mock::given(path("/api/auth/me"))
+        .respond_with(bad_gateway())
+        .expect(1)
+        .mount(&b)
+        .await;
+
+    let c = client(&[&a, &b]);
+    let err = c.me().await.unwrap_err();
+    assert!(matches!(err, Error::ServiceDown { .. }), "{err:?}");
+    assert_eq!(c.api_base(), format!("{}/api", a.uri()));
+}
+
+#[tokio::test]
+async fn gateway_recovers_after_retry() {
+    let s = MockServer::start().await;
+    Mock::given(path("/api/auth/me"))
+        .respond_with(ResponseTemplate::new(503).insert_header("Retry-After", "0"))
+        .up_to_n_times(1)
+        .mount(&s)
+        .await;
+    Mock::given(path("/api/auth/me")).respond_with(me_ok()).mount(&s).await;
+
+    let c = client(&[&s]);
+    assert_eq!(c.me().await.unwrap().id, 7);
+}
+
+#[tokio::test]
+async fn long_retry_after_stops_api_calls() {
+    let s = MockServer::start().await;
+    Mock::given(path("/api/auth/me"))
+        .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "600"))
+        .expect(1)
+        .mount(&s)
+        .await;
+
+    let c = client(&[&s]);
+    match c.me().await {
+        Err(Error::RateLimited { retry_after }) => assert_eq!(retry_after, Duration::from_secs(600)),
+        other => panic!("ждали RateLimited, пришло {other:?}"),
+    }
+    // До конца паузы клиент к серверу не ходит: expect(1) это проверит.
+    assert!(matches!(c.me().await, Err(Error::RateLimited { .. })));
+    let left = c.cooldown_remaining().unwrap();
+    assert!(left > Duration::from_secs(590) && left <= Duration::from_secs(600));
+}
+
+#[tokio::test]
+async fn long_retry_after_on_image_server() {
+    let s = MockServer::start().await;
+    Mock::given(path("/x.jpg"))
+        .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "300"))
+        .expect(1)
+        .mount(&s)
+        .await;
+
+    let c = client(&[&s]);
+    let err = c.fetch_bytes(Site::MangaLib, &format!("{}/x.jpg", s.uri())).await;
+    assert!(matches!(err, Err(Error::RateLimited { .. })), "{err:?}");
 }
 
 #[tokio::test]
@@ -236,4 +313,83 @@ async fn page_falls_back_to_other_server() {
     // Второй раз упавший сервер идёт последним, а справочник берётся из кэша.
     let bytes = c.fetch_page(Site::MangaLib, &page, "compress").await.unwrap();
     assert_eq!(bytes.len(), 4096);
+}
+
+#[tokio::test]
+async fn own_oauth_client_used_for_login_and_refresh() {
+    let s = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/auth/oauth/token"))
+        .and(body_partial_json(
+            json!({"grant_type": "authorization_code", "client_id": "7"}),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "expires_in": 3600, "access_token": "a1", "refresh_token": "r1"
+        })))
+        .expect(1)
+        .mount(&s)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/auth/oauth/token"))
+        .and(body_partial_json(
+            json!({"grant_type": "refresh_token", "client_id": "7"}),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "expires_in": 3600, "access_token": "a2", "refresh_token": "r2"
+        })))
+        .expect(1)
+        .mount(&s)
+        .await;
+
+    let config = ClientConfig {
+        api_mirrors: vec![format!("{}/api", s.uri())],
+        api_interval: Duration::ZERO,
+        oauth_client_id: Some("7".into()),
+        oauth_redirect_uri: Some("http://127.0.0.1:8765/callback".into()),
+        ..Default::default()
+    };
+    let c = Client::new(config).unwrap();
+    let session = c.begin_login();
+    assert!(session.authorize_urls[0].contains("client_id=7"));
+    assert_eq!(session.redirect_uri(), "http://127.0.0.1:8765/callback");
+
+    let token = c.exchange_code(&session, "code").await.unwrap();
+    assert_eq!(token.client_id, "7");
+    let fresh = c.refresh_token(&token).await.unwrap();
+    assert_eq!(fresh.access_token, "a2");
+    assert_eq!(fresh.client_id, "7");
+}
+
+#[tokio::test]
+async fn page_reports_rate_limit_over_other_errors() {
+    use libsocial::models::PageImage;
+
+    let api = MockServer::start().await;
+    let limited = MockServer::start().await;
+    let missing = MockServer::start().await;
+    Mock::given(path("/api/constants"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {
+            "imageServers": [
+                {"id": "compress", "label": "", "url": limited.uri(), "site_ids": [1]},
+                {"id": "main", "label": "", "url": missing.uri(), "site_ids": [1]}
+            ],
+            "videoServers": []
+        }})))
+        .mount(&api)
+        .await;
+    // Сервер, который попросил паузу, во втором круге не трогаем.
+    Mock::given(path("/manga/x/1.jpg"))
+        .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "600"))
+        .expect(1)
+        .mount(&limited)
+        .await;
+    Mock::given(path("/manga/x/1.jpg"))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&missing)
+        .await;
+
+    let c = client(&[&api]);
+    let page: PageImage = serde_json::from_value(json!({"slug": 1, "url": "//manga/x/1.jpg"})).unwrap();
+    let err = c.fetch_page(Site::MangaLib, &page, "compress").await;
+    assert!(matches!(err, Err(Error::RateLimited { .. })), "{err:?}");
 }

@@ -1,8 +1,8 @@
 //! Вход через OAuth2 с PKCE тем же способом, что и сайт.
 //!
-//! Пользователь открывает адрес авторизации в браузере, входит, сайт перекидывает его на
-//! свою страницу callback. Адрес этой страницы пользователь вставляет в приложение,
-//! из него берётся код и меняется на токены.
+//! Пользователь открывает адрес авторизации, входит, сервер перекидывает его на адрес
+//! возврата. Из этого адреса берётся код и меняется на токены. Клиент OAuth и адрес
+//! возврата задаются в `ClientConfig`, по умолчанию это веб-клиент сайта.
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -35,10 +35,18 @@ pub struct Token {
     pub token_type: String,
     /// Unix-время истечения access token, секунды.
     pub expires_at: u64,
+    /// OAuth-клиент, которому выдан токен. Обновлять токен можно только им же.
+    /// У токенов, сохранённых до появления поля, это веб-клиент.
+    #[serde(default = "default_client_id")]
+    pub client_id: String,
 }
 
 fn default_token_type() -> String {
     "Bearer".into()
+}
+
+fn default_client_id() -> String {
+    WEB_CLIENT_ID.into()
 }
 
 impl Token {
@@ -56,6 +64,7 @@ impl std::fmt::Debug for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Token")
             .field("expires_at", &self.expires_at)
+            .field("client_id", &self.client_id)
             .finish_non_exhaustive()
     }
 }
@@ -71,14 +80,15 @@ struct TokenResponse {
     expires_in: u64,
 }
 
-impl From<TokenResponse> for Token {
-    fn from(r: TokenResponse) -> Token {
-        let lifetime = if r.expires_in == 0 { 3600 } else { r.expires_in };
+impl TokenResponse {
+    fn into_token(self, client_id: &str) -> Token {
+        let lifetime = if self.expires_in == 0 { 3600 } else { self.expires_in };
         Token {
-            access_token: r.access_token,
-            refresh_token: r.refresh_token,
-            token_type: r.token_type,
+            access_token: self.access_token,
+            refresh_token: self.refresh_token,
+            token_type: self.token_type,
             expires_at: now_secs() + lifetime,
+            client_id: client_id.into(),
         }
     }
 }
@@ -173,9 +183,15 @@ impl AuthSession {
 }
 
 impl Client {
-    /// Новая попытка входа веб-клиентом через зеркала из настроек клиента.
+    /// Новая попытка входа через зеркала из настроек клиента. Клиент OAuth и адрес
+    /// возврата тоже из настроек, без них вход идёт веб-клиентом сайта.
     pub fn begin_login(&self) -> AuthSession {
-        AuthSession::new(self.auth_mirrors(), mirrors::web(Site::MangaLib)[0])
+        let client_id = self.config.oauth_client_id.as_deref().unwrap_or(WEB_CLIENT_ID);
+        let redirect = match &self.config.oauth_redirect_uri {
+            Some(uri) => uri.clone(),
+            None => format!("{}{CALLBACK_PATH}", mirrors::web(Site::MangaLib)[0]),
+        };
+        AuthSession::with_client(self.auth_mirrors(), client_id, &redirect)
     }
 
     /// Меняет код из callback на токены и запоминает их.
@@ -187,7 +203,7 @@ impl Client {
             "code_verifier": session.verifier,
             "code": code,
         });
-        let token = self.token_request(&body).await?;
+        let token = self.token_request(&body, &session.client_id).await?;
         self.set_token(Some(token.clone())).await;
         self.notify_token(Some(&token));
         Ok(token)
@@ -218,11 +234,11 @@ impl Client {
         let refresh = current.refresh_token.as_deref().ok_or(Error::RefreshRejected)?;
         let body = serde_json::json!({
             "grant_type": "refresh_token",
-            "client_id": WEB_CLIENT_ID,
+            "client_id": current.client_id,
             "refresh_token": refresh,
             "scope": "",
         });
-        let mut token = match self.token_request(&body).await {
+        let mut token = match self.token_request(&body, &current.client_id).await {
             Err(Error::Auth(_)) => return Err(Error::RefreshRejected),
             other => other?,
         };
@@ -252,7 +268,7 @@ impl Client {
         self.get_data(Site::MangaLib, "/auth/me", &()).await
     }
 
-    async fn token_request(&self, body: &serde_json::Value) -> Result<Token> {
+    async fn token_request(&self, body: &serde_json::Value, client_id: &str) -> Result<Token> {
         // Без Authorization: старый токен тут не нужен и может мешать.
         // Отказ (400, 401) превращается в Error::Auth, временные сбои остаются как есть,
         // чтобы из-за упавшего шлюза не стереть рабочий вход.
@@ -281,7 +297,7 @@ impl Client {
                 context: "токен".into(),
                 source,
             })?;
-        Ok(parsed.into())
+        Ok(parsed.into_token(client_id))
     }
 }
 
@@ -339,12 +355,19 @@ mod tests {
     }
 
     #[test]
+    fn old_saved_token_belongs_to_web_client() {
+        let t: Token = serde_json::from_str(r#"{"access_token": "a", "expires_at": 1}"#).unwrap();
+        assert_eq!(t.client_id, WEB_CLIENT_ID);
+    }
+
+    #[test]
     fn expiry() {
         let t = Token {
             access_token: "a".into(),
             refresh_token: None,
             token_type: "Bearer".into(),
             expires_at: now_secs() + 10,
+            client_id: WEB_CLIENT_ID.into(),
         };
         assert!(t.is_expired());
         let t = Token {

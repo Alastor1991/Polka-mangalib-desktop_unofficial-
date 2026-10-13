@@ -54,6 +54,11 @@ pub struct Config {
     pub download_concurrency: usize,
     /// Предел дискового кэша обложек и страниц, мегабайты.
     pub cache_limit_mb: u64,
+    /// Свой клиент OAuth, если его выдали разработчики сервиса. Без него вход идёт
+    /// веб-клиентом сайта.
+    pub oauth_client_id: Option<String>,
+    /// Адрес возврата для своего клиента OAuth.
+    pub oauth_redirect_uri: Option<String>,
 }
 
 impl Default for Config {
@@ -68,6 +73,8 @@ impl Default for Config {
             max_quality: 1080,
             download_concurrency: 4,
             cache_limit_mb: 1024,
+            oauth_client_id: None,
+            oauth_redirect_uri: None,
         }
     }
 }
@@ -135,6 +142,8 @@ impl Config {
             proxy: self.proxy.clone(),
             api_mirrors: self.api_mirrors.clone(),
             auth_mirrors: self.auth_mirrors.clone(),
+            oauth_client_id: self.oauth_client_id.clone().filter(|s| !s.trim().is_empty()),
+            oauth_redirect_uri: self.oauth_redirect_uri.clone().filter(|s| !s.trim().is_empty()),
             ..Default::default()
         }
     }

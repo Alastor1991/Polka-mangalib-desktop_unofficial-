@@ -339,18 +339,18 @@ impl Downloader {
             // Задание выполняется в своей задаче: паника из-за странных данных
             // сервера не должна убить весь загрузчик.
             let worker = self.clone();
-            let state = match tokio::spawn(async move { worker.process(row).await }).await {
-                Ok(state) => state,
+            let verdict = match tokio::spawn(async move { worker.process(row).await }).await {
+                Ok(verdict) => verdict,
                 Err(e) => {
                     *self.running.lock().expect("running отравлен") = None;
                     let msg = format!("внутренняя ошибка загрузчика: {e}");
                     let _ = self.db.set_state(site, &slug, &item, DownloadState::Failed, Some(&msg));
                     self.emit_row(site, &slug, &item, false);
-                    Some(DownloadState::Failed)
+                    Verdict::Finished(DownloadState::Failed)
                 }
             };
-            match state {
-                Some(DownloadState::Failed) => {
+            match verdict {
+                Verdict::Finished(DownloadState::Failed) => {
                     failures += 1;
                     // Сервер лежит или нас не пускают: не долбим его следующими заданиями.
                     if failures >= 2 {
@@ -358,16 +358,18 @@ impl Downloader {
                         let _ = tokio::time::timeout(pause, self.wake.notified()).await;
                     }
                 }
-                Some(DownloadState::Done) => failures = 0,
+                Verdict::Finished(DownloadState::Done) => failures = 0,
+                // Сервис попросил паузу. Новые задания её не отменяют, поэтому
+                // сигнал очереди здесь не слушаем.
+                Verdict::Wait(wait) => tokio::time::sleep(wait).await,
                 _ => {}
             }
             tokio::time::sleep(BETWEEN_JOBS).await;
         }
     }
 
-    /// Выполняет задание. Возвращает итоговое состояние, `None` если задание не
-    /// досталось этому процессу или удалено.
-    async fn process(&self, row: DownloadRow) -> Option<DownloadState> {
+    /// Выполняет задание и говорит рабочему циклу, чем оно кончилось.
+    async fn process(&self, row: DownloadRow) -> Verdict {
         let stop = Arc::new(AtomicBool::new(false));
         let remove = Arc::new(AtomicBool::new(false));
         {
@@ -375,7 +377,7 @@ impl Downloader {
             // Захват под замком: пауза или удаление между чтением очереди и захватом
             // либо уже изменили строку, либо увидят задание выполняющимся.
             if !self.db.claim(row.site, &row.slug, &row.item).unwrap_or(false) {
-                return None;
+                return Verdict::Skipped;
             }
             *running = Some(Running {
                 site: row.site,
@@ -403,19 +405,29 @@ impl Downloader {
             if let Err(e) = self.remove_now(row.site, &row.slug, &row.item) {
                 eprintln!("не удалось удалить загрузку: {e:#}");
             }
-            return None;
+            return Verdict::Skipped;
         }
-        let (state, error) = match result {
-            Ok(Outcome::Done) => (DownloadState::Done, None),
-            Ok(Outcome::Stopped) => (DownloadState::Paused, None),
-            Err(e) => (DownloadState::Failed, Some(format!("{e:#}"))),
+        let (state, error, wait) = match result {
+            Ok(Outcome::Done) => (DownloadState::Done, None, None),
+            Ok(Outcome::Stopped) => (DownloadState::Paused, None, None),
+            // Пользователь нажал паузу, а задание упало раньше, чем заметило флажок:
+            // пауза важнее ошибки, иначе задание само вернулось бы в работу.
+            Err(_) if stop.load(Ordering::SeqCst) => (DownloadState::Paused, None, None),
+            Err(e) => match rate_limit(&e) {
+                // Задание не провалено: оно подождёт в очереди, сколько просил сервис.
+                Some(wait) => (DownloadState::Queued, Some(format!("{e:#}")), Some(wait)),
+                None => (DownloadState::Failed, Some(format!("{e:#}")), None),
+            },
         };
         let _ = self
             .db
             .set_state(row.site, &row.slug, &row.item, state, error.as_deref());
         drop(running);
         self.emit_row(row.site, &row.slug, &row.item, false);
-        Some(state)
+        match wait {
+            Some(wait) => Verdict::Wait(wait),
+            None => Verdict::Finished(state),
+        }
     }
 
     fn report(&self, row: &DownloadRow, done: u64, total: u64) {
@@ -667,6 +679,24 @@ impl Downloader {
 enum Outcome {
     Done,
     Stopped,
+}
+
+/// Чем кончилось задание для рабочего цикла.
+enum Verdict {
+    /// Задание досталось другому процессу или удалено.
+    Skipped,
+    Finished(DownloadState),
+    /// Сервис попросил паузу, задание вернулось в очередь.
+    Wait(Duration),
+}
+
+/// Сколько ждать, если сервис попросил паузу. Ищет по всей цепочке причин ошибки.
+fn rate_limit(e: &anyhow::Error) -> Option<Duration> {
+    e.chain()
+        .find_map(|cause| match cause.downcast_ref::<libsocial::Error>() {
+            Some(libsocial::Error::RateLimited { retry_after }) => Some(*retry_after),
+            _ => None,
+        })
 }
 
 /// Что именно лежит в `.part`: путь файла на сервере и качество.
@@ -1000,6 +1030,34 @@ mod job_tests {
             .map(|r| r.headers.get("range").map(|v| v.to_str().unwrap().to_string()))
             .filter(|r| r.as_deref() != Some("bytes=0-0"))
             .collect()
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn rate_limit_keeps_job_queued() {
+        let e = env("rate-limit").await;
+        Mock::given(path(format!("/api/manga/{MANGA}/chapter")))
+            .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "600"))
+            .expect(1)
+            .mount(&e.server)
+            .await;
+        let job = chapter_job();
+        e.downloader
+            .enqueue(&title(Site::MangaLib, MANGA), "Глава 1", job.clone())
+            .unwrap();
+        let item = job.item_key();
+        // Задание вернулось в очередь с объяснением, а не провалилось.
+        wait_for(&e.db, Site::MangaLib, MANGA, &item, |r| {
+            r.is_some_and(|r| r.state == DownloadState::Queued && r.error.is_some())
+        })
+        .await;
+        let row = e.db.download(Site::MangaLib, MANGA, &item).unwrap().unwrap();
+        assert!(row.error.unwrap().contains("подождать"));
+        // Пока идёт пауза, загрузчик к серверу не возвращается: expect(1) это проверит.
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        assert_eq!(
+            e.db.download(Site::MangaLib, MANGA, &item).unwrap().unwrap().state,
+            DownloadState::Queued
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]

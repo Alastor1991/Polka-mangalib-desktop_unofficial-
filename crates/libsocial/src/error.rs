@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use reqwest::StatusCode;
 
 #[derive(Debug, thiserror::Error)]
@@ -28,6 +30,16 @@ pub enum Error {
 
     #[error("не найдено")]
     NotFound,
+
+    /// Сервис попросил подождать дольше, чем разумно ждать внутри одного запроса.
+    /// До конца паузы клиент к API не ходит.
+    #[error("сервис просит подождать {} мин.", .retry_after.as_secs().div_ceil(60).max(1))]
+    RateLimited { retry_after: Duration },
+
+    /// Шлюз перед сервисом отвечает ошибкой (502–504, 52x), причём на всех зеркалах
+    /// сразу: лежит сам сервис, а не одно зеркало.
+    #[error("сервис lib.social временно не отвечает ({status}), попробуйте позже")]
+    ServiceDown { status: StatusCode },
 
     #[error("не удалось разобрать ответ {context}: {source}")]
     Decode {

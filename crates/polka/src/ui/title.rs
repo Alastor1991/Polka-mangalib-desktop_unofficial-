@@ -83,6 +83,8 @@ pub enum Msg {
     DownloadEpisode(usize),
     Kodik(usize),
     Launched(Result<String, String>),
+    /// Плеер закрыт, позиция просмотра записана в базу.
+    PlaybackEnded,
 }
 
 pub enum Effect {
@@ -341,6 +343,10 @@ impl TitleView {
                     Ok(text) | Err(text) => Effect::Toast(text),
                 }
             }
+            Msg::PlaybackEnded => {
+                self.refresh_local(ctx);
+                Effect::Task(Task::none())
+            }
         }
     }
 
@@ -498,11 +504,12 @@ impl TitleView {
             && row.state == DownloadState::Done
         {
             let path = PathBuf::from(&row.path);
-            let start = self.progress.get(&episode_key(episode.id)).map(|p| p.position);
+            let start = self.resume_at(episode.id);
             self.mark_started(ctx, episode.id);
-            return Effect::Task(Task::perform(
+            let track = self.track(ctx, episode.id);
+            return Effect::Task(watch_player(
                 crate::player::play_file(path, start, episode.title()),
-                Msg::Launched,
+                track,
             ));
         }
         match self.episodes.get(&episode.id).cloned() {
@@ -604,9 +611,9 @@ impl TitleView {
                         "Видео AnimeLib доступно после входа (Настройки → Войти).".into()
                     });
                 };
-                let key = episode_key(episode.id);
-                let start = self.progress.get(&key).map(|p| p.position);
+                let start = self.resume_at(episode.id);
                 self.mark_started(ctx, episode.id);
+                let track = self.track(ctx, episode.id);
                 self.busy = Some("Запускаю плеер…".into());
                 let client = ctx.client.clone();
                 let quality = ctx.config.max_quality;
@@ -615,7 +622,7 @@ impl TitleView {
                     self.data.as_ref().map(|d| d.details.short.display_name()).unwrap_or(""),
                     episode.title()
                 );
-                Effect::Task(Task::perform(
+                Effect::Task(watch_player(
                     async move {
                         let video = client
                             .resolve_video(&player, quality, None, true)
@@ -623,7 +630,7 @@ impl TitleView {
                             .map_err(|e| human_error(&e))?;
                         crate::player::play_stream(video, start, title).await
                     },
-                    Msg::Launched,
+                    track,
                 ))
             }
             EpisodeAction::Download => {
@@ -650,6 +657,23 @@ impl TitleView {
     }
 
     // --- Помощники ---
+
+    /// С какой секунды продолжить серию. Досмотренную открываем с начала.
+    fn resume_at(&self, episode_id: u64) -> Option<u64> {
+        self.progress
+            .get(&episode_key(episode_id))
+            .filter(|p| !p.finished)
+            .map(|p| p.position)
+    }
+
+    fn track(&self, ctx: &Ctx, episode_id: u64) -> crate::player::Track {
+        crate::player::Track {
+            db: ctx.db.clone(),
+            site: self.site,
+            slug: self.slug.clone(),
+            key: episode_key(episode_id),
+        }
+    }
 
     /// Отмечает серию начатой, не затирая уже записанный прогресс.
     fn mark_started(&mut self, ctx: &Ctx, episode_id: u64) {
@@ -935,6 +959,8 @@ impl TitleView {
             if let Some(p) = self.progress.get(&key) {
                 status.push(if p.finished {
                     "✓ просмотрено".to_string()
+                } else if p.position > 0 {
+                    format!("остановились на {}", clock(p.position))
                 } else {
                     "начато".to_string()
                 });
@@ -981,6 +1007,38 @@ fn download_label(row: &DownloadRow) -> String {
         DownloadState::Running if row.total > 0 => format!("⬇ {}/{}", row.done, row.total),
         DownloadState::Running => "⬇ …".into(),
     }
+}
+
+/// Секунды как `12:34` или `1:02:03`.
+fn clock(secs: u64) -> String {
+    let (h, m, s) = (secs / 3600, secs / 60 % 60, secs % 60);
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m}:{s:02}")
+    }
+}
+
+/// Запускает плеер и следит за ним в фоне: сначала сообщает о запуске, а после
+/// закрытия плеера просит перечитать прогресс.
+fn watch_player(
+    launch: impl Future<Output = Result<crate::player::Playback, String>> + Send + 'static,
+    track: crate::player::Track,
+) -> Task<Msg> {
+    let (tx, rx) = futures::channel::mpsc::unbounded();
+    tokio::spawn(async move {
+        match launch.await {
+            Ok(playback) => {
+                let _ = tx.unbounded_send(Msg::Launched(Ok(playback.message.clone())));
+                playback.track(track).await;
+                let _ = tx.unbounded_send(Msg::PlaybackEnded);
+            }
+            Err(e) => {
+                let _ = tx.unbounded_send(Msg::Launched(Err(e)));
+            }
+        }
+    });
+    Task::run(rx, |msg| msg)
 }
 
 fn has_multi(chapters: &[Chapter]) -> bool {
@@ -1049,11 +1107,14 @@ async fn load_title(ctx: Ctx, site: Site, slug: String) -> Result<TitleData, Str
     };
     match online.await {
         Ok(data) => Ok(data),
-        // Скачанное показываем только когда до сервера не достучаться. На 404 или
-        // испорченный ответ честно показываем ошибку.
-        Err(e @ (libsocial::Error::Network(_) | libsocial::Error::Forbidden)) => {
-            offline_title(&ctx, site, &slug).ok_or_else(|| human_error(&e))
-        }
+        // Скачанное показываем только когда до сервера не достучаться, он лежит или
+        // просит подождать. На 404 или испорченный ответ честно показываем ошибку.
+        Err(
+            e @ (libsocial::Error::Network(_)
+            | libsocial::Error::Forbidden
+            | libsocial::Error::ServiceDown { .. }
+            | libsocial::Error::RateLimited { .. }),
+        ) => offline_title(&ctx, site, &slug).ok_or_else(|| human_error(&e)),
         Err(e) => Err(human_error(&e)),
     }
 }

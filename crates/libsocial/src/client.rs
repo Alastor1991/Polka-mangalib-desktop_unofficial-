@@ -22,6 +22,11 @@ const RETRIES: u32 = 3;
 const BAD_HOST_TTL: Duration = Duration::from_secs(5 * 60);
 /// Сколько не ходить за справочником после неудачи.
 const CONSTANTS_RETRY_AFTER: Duration = Duration::from_secs(30);
+/// Дольше этого запрос внутри себя не ждёт. Если сервис просит паузу длиннее,
+/// клиент сразу отвечает `Error::RateLimited` и не ходит к API до её конца.
+const MAX_INLINE_WAIT: Duration = Duration::from_secs(60);
+/// Верхняя граница `Retry-After` на случай мусора в заголовке.
+const MAX_COOLDOWN: Duration = Duration::from_secs(60 * 60);
 
 #[derive(Clone)]
 pub struct ClientConfig {
@@ -37,6 +42,10 @@ pub struct ClientConfig {
     pub proxy: Option<String>,
     /// Пауза между запросами к API.
     pub api_interval: Duration,
+    /// OAuth-клиент для входа. Без него используется веб-клиент сайта.
+    pub oauth_client_id: Option<String>,
+    /// Адрес возврата после входа. Без него страница callback сайта MangaLib.
+    pub oauth_redirect_uri: Option<String>,
 }
 
 /// Прокси может содержать логин и пароль, в логи он не попадает.
@@ -47,6 +56,8 @@ impl std::fmt::Debug for ClientConfig {
             .field("auth_mirrors", &self.auth_mirrors)
             .field("interface", &self.interface)
             .field("proxy", &self.proxy.as_ref().map(|_| "<задан>"))
+            .field("oauth_client_id", &self.oauth_client_id)
+            .field("oauth_redirect_uri", &self.oauth_redirect_uri)
             .finish_non_exhaustive()
     }
 }
@@ -64,6 +75,8 @@ impl Default for ClientConfig {
             interface: None,
             proxy: None,
             api_interval: Duration::from_millis(500),
+            oauth_client_id: None,
+            oauth_redirect_uri: None,
         }
     }
 }
@@ -93,6 +106,8 @@ pub struct Client {
     constants: Arc<Mutex<ConstantsCache>>,
     /// Хосты картинок и видео, которые недавно не ответили. Их пробуем последними.
     bad_hosts: Arc<std::sync::Mutex<HashMap<String, Instant>>>,
+    /// До этого момента сервис просил не присылать запросы к API.
+    cooldown: Arc<std::sync::Mutex<Option<Instant>>>,
 }
 
 impl std::fmt::Debug for Client {
@@ -138,6 +153,7 @@ impl Client {
             listener: None,
             constants: Arc::new(Mutex::new(ConstantsCache::default())),
             bad_hosts: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            cooldown: Arc::new(std::sync::Mutex::new(None)),
         })
     }
 
@@ -195,6 +211,19 @@ impl Client {
             slot
         };
         tokio::time::sleep_until(wait_until).await;
+    }
+
+    /// Сколько ещё сервис просил не присылать запросы к API. `None`, если паузы нет.
+    pub fn cooldown_remaining(&self) -> Option<Duration> {
+        let until = (*self.cooldown.lock().expect("cooldown отравлен"))?;
+        let left = until.saturating_duration_since(Instant::now());
+        (!left.is_zero()).then_some(left)
+    }
+
+    fn start_cooldown(&self, delay: Duration) {
+        let until = Instant::now() + delay;
+        let mut cooldown = self.cooldown.lock().expect("cooldown отравлен");
+        *cooldown = Some(cooldown.map_or(until, |current| current.max(until)));
     }
 
     /// Сервер попросил притормозить: сдвигаем очередь для всех запросов сразу.
@@ -261,6 +290,9 @@ impl Client {
         let mut attempt = 0;
         let mut mirrors_tried = 1;
         loop {
+            if let Some(left) = self.cooldown_remaining() {
+                return Err(Error::RateLimited { retry_after: left });
+            }
             self.throttle().await;
             let idx = self.active_api.load(Ordering::Relaxed) % mirrors;
             let base = &self.api_mirrors[idx];
@@ -310,8 +342,13 @@ impl Client {
                 return Ok(response);
             }
             if mirror_down {
+                // Зеркала кончились: остаёмся на исходном, последнее рабочим не считаем.
                 self.active_api.store(start, Ordering::Relaxed);
-                return Err(Error::Forbidden);
+                if !is_gateway(status) {
+                    return Err(Error::Forbidden);
+                }
+                // Шлюз упал на всех зеркалах сразу, значит, лежит сам сервис. Дальше
+                // это обычный 5xx: повторы с паузами, а не мгновенный отказ.
             }
             if status == StatusCode::UNAUTHORIZED && auth == Auth::User && token.is_some() && !refreshed {
                 refreshed = true;
@@ -319,10 +356,20 @@ impl Client {
                 Box::pin(self.refresh_after_401(token.as_ref())).await?;
                 continue;
             }
+            if status == StatusCode::TOO_MANY_REQUESTS
+                && let Some(delay) = retry_after(&response).filter(|d| *d > MAX_INLINE_WAIT)
+            {
+                // Ждать столько внутри запроса нельзя: интерфейс висел бы минутами.
+                // Отказываем сразу и молчим до конца паузы, как просил сервис.
+                self.start_cooldown(delay);
+                return Err(Error::RateLimited { retry_after: delay });
+            }
             let retryable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
             if retryable && auth == Auth::User && attempt < RETRIES {
                 attempt += 1;
-                let delay = retry_after(&response).unwrap_or_else(|| backoff_delay(attempt));
+                let delay = retry_after(&response)
+                    .unwrap_or_else(|| backoff_delay(attempt))
+                    .min(MAX_INLINE_WAIT);
                 if status == StatusCode::TOO_MANY_REQUESTS {
                     self.penalize(delay).await;
                 } else {
@@ -411,6 +458,7 @@ impl Client {
                 .header(REFERER, format!("{}/", site.origin()))
                 .send()
                 .await;
+            let mut wait = None;
             let error = match result {
                 Ok(r) if r.status().is_success() => match r.bytes().await {
                     Ok(bytes) => {
@@ -420,6 +468,13 @@ impl Client {
                     Err(e) => Error::Network(e),
                 },
                 Ok(r) => {
+                    if r.status() == StatusCode::TOO_MANY_REQUESTS {
+                        wait = retry_after(&r);
+                        if let Some(delay) = wait.filter(|d| *d > MAX_INLINE_WAIT) {
+                            // Сервер жив, просто просит паузу: в журнал плохих не пишем.
+                            return Err(Error::RateLimited { retry_after: delay });
+                        }
+                    }
                     let transient = r.status() == StatusCode::TOO_MANY_REQUESTS || r.status().is_server_error();
                     let error = status_error(r).await;
                     if !transient {
@@ -435,7 +490,7 @@ impl Client {
                 return Err(error);
             }
             attempt += 1;
-            backoff(attempt).await;
+            tokio::time::sleep(wait.unwrap_or_else(|| backoff_delay(attempt))).await;
         }
     }
 
@@ -520,10 +575,13 @@ fn is_mirror_block(response: &Response) -> bool {
     let status = response.status();
     match status.as_u16() {
         200 | 403 | 404 => html,
-        // Шлюз перед зеркалом лежит. 52x отдают Cloudflare и DDoS-Guard.
-        502..=504 | 520..=530 => true,
-        _ => false,
+        _ => is_gateway(status),
     }
+}
+
+/// Шлюз перед API лежит или не достучался до сервиса. 52x отдают Cloudflare и DDoS-Guard.
+fn is_gateway(status: StatusCode) -> bool {
+    matches!(status.as_u16(), 502..=504 | 520..=530)
 }
 
 pub(crate) fn join_url(base: &str, path: &str) -> String {
@@ -546,7 +604,7 @@ fn retry_after(response: &Response) -> Option<Duration> {
         .ok()?
         .parse()
         .ok()?;
-    Some(Duration::from_secs(secs.min(60)))
+    Some(Duration::from_secs(secs).min(MAX_COOLDOWN))
 }
 
 pub(crate) async fn status_error(response: Response) -> Error {
@@ -554,6 +612,8 @@ pub(crate) async fn status_error(response: Response) -> Error {
         StatusCode::UNAUTHORIZED => Error::Unauthorized,
         StatusCode::FORBIDDEN => Error::Forbidden,
         StatusCode::NOT_FOUND => Error::NotFound,
+        // Тело упавшего шлюза – HTML-страница, пользователю в ней читать нечего.
+        status if is_gateway(status) => Error::ServiceDown { status },
         status => {
             let mut body = response.text().await.unwrap_or_default();
             if let Some((cut, _)) = body.char_indices().nth(300) {

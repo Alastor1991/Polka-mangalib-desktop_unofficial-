@@ -196,14 +196,25 @@ impl Client {
 
     /// Скачивает страницу, перебирая серверы, пока один не ответит.
     pub async fn fetch_page(&self, site: Site, page: &PageImage, preferred_server: &str) -> Result<bytes::Bytes> {
-        let urls = self.order_by_health(self.page_urls(site, page, preferred_server).await?);
+        let mut urls = self.order_by_health(self.page_urls(site, page, preferred_server).await?);
         let mut last = None;
+        let mut limited = None;
         let mut tiny = None;
         // Сначала по одной попытке на каждый сервер, потом ещё круг с повтором,
         // чтобы упавший CDN не множил запросы.
         for retries in [0, 1] {
-            for url in &urls {
-                match self.fetch_bytes_tries(site, url, retries).await {
+            let mut i = 0;
+            while i < urls.len() {
+                let url = urls[i].clone();
+                i += 1;
+                match self.fetch_bytes_tries(site, &url, retries).await {
+                    // Сервер просит паузу: во втором круге к нему не идём, а если
+                    // никто не отдаст страницу, вызывающий узнает, сколько ждать.
+                    Err(e @ Error::RateLimited { .. }) => {
+                        limited = Some(e);
+                        i -= 1;
+                        urls.remove(i);
+                    }
                     // Страница блокировки или капча приходит со статусом 200: не картинка.
                     Ok(bytes) if image_format(&bytes).is_none() => {
                         last = Some(Error::Other(format!("сервер вернул не картинку: {url}")));
@@ -219,7 +230,7 @@ impl Client {
                 return Ok(bytes);
             }
         }
-        Err(last.unwrap_or(Error::NotFound))
+        Err(limited.or(last).unwrap_or(Error::NotFound))
     }
 }
 

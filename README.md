@@ -74,6 +74,10 @@ cache_limit_mb = 1024
 # interface = "enp4s0"                  # пустить запросы через этот интерфейс
 # proxy = "socks5h://127.0.0.1:1080"    # или через прокси
 # api_mirrors = ["https://api.cdnlibs.org/api"]   # свои зеркала вместо встроенных
+
+# Свой клиент OAuth, если его выдали разработчики lib.social:
+# oauth_client_id = "…"
+# oauth_redirect_uri = "…"
 ```
 
 ## Как устроено
