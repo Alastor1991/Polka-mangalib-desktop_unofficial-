@@ -201,6 +201,10 @@ impl App {
                 }
             }
             Message::Catalog(msg) => {
+                // Каталог загрузился: зеркало API рабочее, начнём с него в следующий раз.
+                if matches!(msg, catalog::Msg::Loaded(_, Ok(_))) {
+                    crate::session::remember_mirror(&self.ctx.config, &self.ctx.client);
+                }
                 let (task, open) = self.catalog.update(msg, &self.ctx, &mut self.images);
                 let task = task.map(Message::Catalog);
                 match open {
