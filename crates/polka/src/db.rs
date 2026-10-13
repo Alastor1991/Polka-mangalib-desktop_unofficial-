@@ -12,7 +12,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 
 /// Схема по версиям. Новая версия дописывается в конец, старые не меняются.
-const MIGRATIONS: &[&str] = &[r#"
+const MIGRATIONS: &[&str] = &[
+    r#"
     CREATE TABLE titles (
         site        TEXT    NOT NULL,
         slug        TEXT    NOT NULL,
@@ -53,7 +54,19 @@ const MIGRATIONS: &[&str] = &[r#"
         PRIMARY KEY (site, slug, item)
     );
     CREATE INDEX progress_recent ON progress (updated_at);
-"#];
+"#,
+    r#"
+    -- Отметки для сервиса, которые ещё не отправлены: прочитанные главы,
+    -- просмотренные серии, место в закладке. Одна строка на ключ, новая отметка
+    -- с тем же ключом заменяет старую.
+    CREATE TABLE outbox (
+        key         TEXT    PRIMARY KEY,
+        mark        TEXT    NOT NULL,
+        created_at  INTEGER NOT NULL,
+        attempts    INTEGER NOT NULL DEFAULT 0
+    );
+"#,
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -409,6 +422,54 @@ impl Db {
         })
     }
 
+    // --- Отметки для сервиса ---
+
+    /// Ставит отметку в очередь на отправку, заменяя прежнюю с тем же ключом.
+    pub fn push_mark(&self, key: &str, mark: &str) -> Result<()> {
+        self.with(|c| {
+            c.execute(
+                "INSERT INTO outbox (key, mark, created_at) VALUES (?1, ?2, ?3)
+                 ON CONFLICT (key) DO UPDATE SET
+                    mark = excluded.mark, created_at = excluded.created_at, attempts = 0",
+                params![key, mark, now()],
+            )
+            .map(|_| ())
+        })
+    }
+
+    /// Отметки в порядке появления, неудачные в конце: ключ, отметка, когда поставлена.
+    pub fn pending_marks(&self, limit: usize) -> Result<Vec<(String, String, u64)>> {
+        self.with(|c| {
+            let mut st =
+                c.prepare("SELECT key, mark, created_at FROM outbox ORDER BY attempts, created_at, key LIMIT ?1")?;
+            st.query_map([limit as i64], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get::<_, i64>(2)? as u64))
+            })?
+            .collect()
+        })
+    }
+
+    /// Отметка не ушла: счётчик попыток растёт. Возвращает новое значение.
+    pub fn mark_failed(&self, key: &str, mark: &str) -> Result<u32> {
+        self.with(|c| {
+            c.execute(
+                "UPDATE outbox SET attempts = attempts + 1 WHERE key = ?1 AND mark = ?2",
+                params![key, mark],
+            )?;
+            c.query_row("SELECT attempts FROM outbox WHERE key = ?1", [key], |r| r.get(0))
+                .optional()
+                .map(Option::unwrap_or_default)
+        })
+    }
+
+    /// Убирает отправленную отметку. Если её успели заменить новой, новая остаётся.
+    pub fn drop_mark(&self, key: &str, mark: &str) -> Result<()> {
+        self.with(|c| {
+            c.execute("DELETE FROM outbox WHERE key = ?1 AND mark = ?2", params![key, mark])
+                .map(|_| ())
+        })
+    }
+
     // --- Прогресс ---
 
     pub fn save_progress(&self, site: Site, slug: &str, item: &str, p: Progress) -> Result<()> {
@@ -595,6 +656,22 @@ mod tests {
             .unwrap();
         assert!(db.enqueue(&download("c1")).unwrap());
         assert!(db.downloads().unwrap()[0].error.is_none());
+    }
+
+    #[test]
+    fn outbox_keeps_newest_mark() {
+        let db = Db::in_memory().unwrap();
+        db.push_mark("place:a", "old").unwrap();
+        db.push_mark("view:1", "v").unwrap();
+        db.push_mark("place:a", "new").unwrap();
+        let marks = db.pending_marks(10).unwrap();
+        assert_eq!(marks.len(), 2);
+        // Отправили старую, а её уже заменили: новая не теряется.
+        db.drop_mark("place:a", "old").unwrap();
+        assert!(db.pending_marks(10).unwrap().iter().any(|(_, m, _)| m == "new"));
+        db.drop_mark("place:a", "new").unwrap();
+        db.drop_mark("view:1", "v").unwrap();
+        assert!(db.pending_marks(10).unwrap().is_empty());
     }
 
     #[test]

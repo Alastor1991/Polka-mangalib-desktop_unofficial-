@@ -1,0 +1,19 @@
+{"data": [
+ {"id": 1000001, "type": "manga_bookmark", "media_id": null, "item_id": 1292692, "progress": "20", "status": 1,
+  "created_at": "2024-09-08 15:46:01", "updated_at": "2024-09-10T05:00:52.000000Z",
+  "meta": {"item_number": 2, "rewatches": 0, "rewatches_history": [], "comment": null, "notes": 0},
+  "media": {"id": 7965, "name": "Chainsaw Man", "rus_name": "Человек-бензопила", "eng_name": "Chainsaw Man",
+   "model": "manga", "slug": "chainsaw-man", "slug_url": "7965--chainsaw-man", "site": 1,
+   "cover": {"filename": "x", "thumbnail": "https://cover.cdnlibs.org/x_thumb.jpg", "default": "https://cover.cdnlibs.org/x.jpg", "md": "https://cover.cdnlibs.org/x.jpg"},
+   "type": {"id": 1, "label": "Манга"}, "status": {"id": 1, "label": "Онгоинг"}, "items_count": {"uploaded": 200, "total": 0}},
+  "item": {"id": 1292692, "model": "chapter", "volume": "1", "number": "2", "number_secondary": "1", "name": null, "slug": 1292692, "branch_id": null, "manga_id": 7965, "type": "chapter"},
+  "rating": null},
+ {"id": 1000002, "type": "manga_bookmark", "media_id": null, "item_id": null, "progress": null, "status": 1,
+  "created_at": "2024-09-08 15:46:01", "updated_at": "2024-09-08 15:46:01",
+  "meta": {"item_number": null, "rewatches": 0, "rewatches_history": [], "comment": null, "notes": 0},
+  "media": {"id": 1, "name": "Test", "rus_name": "Тест", "model": "manga", "slug": "test", "slug_url": "1--test", "site": 1, "cover": null},
+  "item": null, "rating": null},
+ {"id": "broken"}
+],
+"links": {"first": "http://api.cdnlibs.org/api/bookmarks?page=1", "last": null, "prev": null, "next": "http://api.cdnlibs.org/api/bookmarks?page=2"},
+"meta": {"current_page": 1, "from": 1, "path": "http://api.cdnlibs.org/api/bookmarks", "per_page": [24, 24], "to": 3, "page": 1, "next_page_url": false}}

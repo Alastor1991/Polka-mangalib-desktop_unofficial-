@@ -14,6 +14,7 @@ use super::images::{ImageReq, Images, Loaded};
 use super::{Ctx, human_error, style};
 use crate::db::Progress;
 use crate::library::{self, chapter_key};
+use crate::sync::Mark;
 
 const SCROLL_ID: &str = "reader-scroll";
 /// Сколько страниц вперёд грузить заранее.
@@ -24,6 +25,8 @@ const AHEAD: usize = 6;
 pub struct ReaderStart {
     pub site: Site,
     pub slug: String,
+    /// Числовой id тайтла: с ним сайт принимает отметки о прочтении.
+    pub title_id: u64,
     pub title: String,
     pub chapters: Vec<Chapter>,
     pub branches: HashMap<u64, Option<u64>>,
@@ -190,22 +193,62 @@ impl Reader {
         Task::batch(tasks)
     }
 
+    /// Id перевода текущей главы в выбранной ветке: его ждёт сайт.
+    fn chapter_id(&self) -> u64 {
+        let chapter = self.chapter();
+        let branch = self.start.branches.get(&chapter.id).copied().flatten();
+        chapter.branch(branch).map_or(chapter.id, |b| b.id)
+    }
+
     fn save(&self, ctx: &Ctx) {
         if self.pages.is_empty() {
             return;
         }
         let total = self.pages.len() as u64;
         let finished = self.page + 1 >= self.pages.len();
+        let (site, slug, key) = (self.start.site, &self.start.slug, self.key());
+        let was_finished = ctx
+            .db
+            .progress(site, slug, &key)
+            .ok()
+            .flatten()
+            .is_some_and(|p| p.finished);
         let _ = ctx.db.save_progress(
-            self.start.site,
-            &self.start.slug,
-            &self.key(),
+            site,
+            slug,
+            &key,
             Progress {
                 position: self.page as u64,
                 total,
                 finished,
             },
         );
+        // На сайт отмечаем один раз, когда глава дочитана впервые.
+        if finished && !was_finished {
+            ctx.sync.push(Mark::ChapterViewed {
+                site,
+                title_id: self.start.title_id,
+                chapter_id: self.chapter_id(),
+            });
+        }
+    }
+
+    /// Запоминает место в закладке на сайте: при смене главы и при закрытии,
+    /// а не на каждой странице.
+    fn save_place(&self, ctx: &Ctx) {
+        if self.pages.is_empty() {
+            return;
+        }
+        ctx.sync.push(Mark::Place {
+            site: self.start.site,
+            slug: self.start.slug.clone(),
+            place: libsocial::Place {
+                item_id: self.chapter_id(),
+                item_number: self.chapter().item_number,
+                progress: (self.page + 1).to_string(),
+                player: None,
+            },
+        });
     }
 
     fn go_chapter(&mut self, delta: isize, ctx: &Ctx, images: &mut Images) -> Task<Msg> {
@@ -214,6 +257,7 @@ impl Reader {
             return Task::none();
         }
         self.save(ctx);
+        self.save_place(ctx);
         self.index = next as usize;
         self.load_chapter(ctx, images)
     }
@@ -299,6 +343,7 @@ impl Reader {
             }
             Msg::Close => {
                 self.save(ctx);
+                self.save_place(ctx);
                 return Effect::Close;
             }
             Msg::Retry => {

@@ -14,7 +14,7 @@ use std::sync::OnceLock;
 use iced::widget::{button, column, container, row, text};
 use iced::{Element, Fill, Subscription, Task, Theme};
 use libsocial::models::Me;
-use libsocial::{Client, Site};
+use libsocial::{BookmarkFolder, Client, Site};
 use tokio::sync::broadcast;
 
 use crate::config::Config;
@@ -22,6 +22,7 @@ use crate::db::Db;
 use crate::downloads::{DownloadEvent, Downloader};
 use crate::library::Library;
 use crate::secrets::TokenStore;
+use crate::sync::Sync;
 
 /// Всё, что нужно экранам для работы. Клонируется дёшево.
 #[derive(Clone)]
@@ -30,8 +31,20 @@ pub struct Ctx {
     pub db: Db,
     pub library: Library,
     pub downloader: Downloader,
+    pub sync: Sync,
     pub config: Config,
     pub store: TokenStore,
+    /// Вошедший пользователь. `None` у гостя и пока ответ сервера не пришёл.
+    pub user_id: Option<u64>,
+    /// Папки закладок пользователя. Пусто у гостя и без сети.
+    pub folders: Vec<BookmarkFolder>,
+}
+
+impl Ctx {
+    /// Папки закладок для сайта в порядке сервера.
+    pub fn folders_for(&self, site: Site) -> Vec<&BookmarkFolder> {
+        self.folders.iter().filter(|f| f.is_for(site)).collect()
+    }
 }
 
 /// Канал событий загрузчика для подписки. Подписке в iced нельзя передать замыкание
@@ -77,6 +90,7 @@ pub enum Message {
     /// События загрузчика потерялись: перечитать состояние из базы.
     DownloadsRefresh,
     Me(Option<Me>),
+    Folders(Result<Vec<BookmarkFolder>, String>),
     DismissToast(u64),
 }
 
@@ -258,7 +272,7 @@ impl App {
                     }
                 }
             }
-            Message::Library(msg) => match self.library.update(msg, &mut self.images) {
+            Message::Library(msg) => match self.library.update(msg, &self.ctx, &mut self.images) {
                 (task, Some((site, slug))) => Task::batch([task, self.open_title(site, slug)]),
                 (task, None) => task,
             },
@@ -288,8 +302,31 @@ impl App {
                 Task::none()
             }
             Message::Me(me) => {
+                self.ctx.user_id = me.as_ref().map(|m| m.id);
                 self.me = me;
                 self.settings.me = self.me.clone();
+                let Some(user_id) = self.ctx.user_id else {
+                    self.ctx.folders.clear();
+                    if self.tab == Tab::Library && self.title.is_none() {
+                        return self.library.reload(&self.ctx, &mut self.images);
+                    }
+                    return Task::none();
+                };
+                let client = self.ctx.client.clone();
+                Task::perform(
+                    async move { client.bookmark_folders(user_id).await.map_err(|e| human_error(&e)) },
+                    Message::Folders,
+                )
+            }
+            Message::Folders(Err(e)) => self.toast(format!("Папки закладок не загрузились: {e}")),
+            Message::Folders(Ok(folders)) => {
+                self.ctx.folders = folders;
+                if let Some(view) = &self.title {
+                    return view.on_account(&self.ctx).map(Message::Title);
+                }
+                if self.tab == Tab::Library {
+                    return self.library.reload(&self.ctx, &mut self.images);
+                }
                 Task::none()
             }
             Message::DismissToast(id) => {
@@ -358,7 +395,7 @@ impl App {
         } else {
             match self.tab {
                 Tab::Catalog => self.catalog.view(&self.images).map(Message::Catalog),
-                Tab::Library => self.library.view(&self.images).map(Message::Library),
+                Tab::Library => self.library.view(&self.ctx, &self.images).map(Message::Library),
                 Tab::Downloads => self.downloads.view().map(Message::Downloads),
                 Tab::Settings => self.settings.view(&self.ctx).map(Message::Settings),
             }

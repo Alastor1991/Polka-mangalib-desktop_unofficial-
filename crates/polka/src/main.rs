@@ -8,6 +8,7 @@ mod login_window;
 mod player;
 mod secrets;
 mod session;
+mod sync;
 mod ui;
 
 use anyhow::Result;
@@ -84,13 +85,17 @@ fn gui(runtime: tokio::runtime::Runtime) -> Result<()> {
         config.image_server.clone(),
         &config.lock_path(),
     );
+    let sync = sync::Sync::start(client.clone(), db.clone());
     let ctx = ui::Ctx {
         client,
         db,
         library,
         downloader,
+        sync,
         config,
         store,
+        user_id: None,
+        folders: Vec::new(),
     };
     ui::run(ctx).map_err(|e| anyhow::anyhow!("интерфейс: {e}"))
 }

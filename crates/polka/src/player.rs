@@ -12,6 +12,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 use tokio::process::{Child, Command};
 
 use crate::db::{Db, Progress};
+use crate::sync::{Mark, Sync};
 
 /// Серия считается просмотренной, когда позади девять десятых: эндинг и превью
 /// следующей серии досматривают не все.
@@ -21,12 +22,39 @@ const SAVE_EVERY: Duration = Duration::from_secs(10);
 /// Сколько ждать, пока mpv откроет свой сокет.
 const SOCKET_WAIT: Duration = Duration::from_secs(15);
 
-/// Куда записывать позицию просмотра.
+/// Куда записывать позицию просмотра и что отправить на сайт.
 pub struct Track {
     pub db: Db,
+    pub sync: Sync,
     pub site: Site,
     pub slug: String,
     pub key: String,
+    pub anime_id: u64,
+    pub episode_id: u64,
+    pub item_number: Option<u64>,
+    /// Плеер, в котором смотрят: ему сайт ставит отметку «просмотрено».
+    pub player_id: Option<u64>,
+    /// Плеер, команда и перевод для закладки. Без них сайт место не примет.
+    pub choice: Option<libsocial::PlayerChoice>,
+}
+
+impl Track {
+    /// Плеер закрыт: место, где остановились, уходит в закладку на сайте.
+    fn finish(&self) {
+        let Ok(Some(progress)) = self.db.progress(self.site, &self.slug, &self.key) else {
+            return;
+        };
+        self.sync.push(Mark::Place {
+            site: self.site,
+            slug: self.slug.clone(),
+            place: libsocial::Place {
+                item_id: self.episode_id,
+                item_number: self.item_number,
+                progress: libsocial::bookmarks::format_timecode(progress.position),
+                player: self.choice.clone(),
+            },
+        });
+    }
 }
 
 /// Запущенный плеер.
@@ -45,6 +73,7 @@ impl Playback {
         };
         if let Some(stream) = connect(&socket, &mut child).await {
             watch(stream, |pos, duration| save(&track, pos, duration)).await;
+            track.finish();
         }
         let _ = child.wait().await;
         let _ = std::fs::remove_file(&socket);
@@ -211,8 +240,24 @@ fn save(track: &Track, pos: f64, duration: f64) {
         total: duration as u64,
         finished: duration > 0.0 && pos >= duration * WATCHED_SHARE,
     };
+    let was_finished = track
+        .db
+        .progress(track.site, &track.slug, &track.key)
+        .ok()
+        .flatten()
+        .is_some_and(|p| p.finished);
     if let Err(e) = track.db.save_progress(track.site, &track.slug, &track.key, progress) {
         eprintln!("не удалось записать позицию просмотра: {e:#}");
+    }
+    // На сайт отмечаем один раз, когда серия досмотрена впервые.
+    if progress.finished
+        && !was_finished
+        && let Some(player_id) = track.player_id
+    {
+        track.sync.push(Mark::EpisodeViewed {
+            anime_id: track.anime_id,
+            player_id,
+        });
     }
 }
 
@@ -265,14 +310,32 @@ mod tests {
         let db = Db::in_memory().unwrap();
         let track = Track {
             db: db.clone(),
+            sync: Sync::detached(db.clone()),
             site: Site::AnimeLib,
             slug: "1--x".into(),
             key: "e1".into(),
+            anime_id: 1,
+            episode_id: 41,
+            item_number: Some(1),
+            player_id: Some(5),
+            choice: None,
         };
         save(&track, 700.0, 1440.0);
         let p = db.progress(Site::AnimeLib, "1--x", "e1").unwrap().unwrap();
         assert_eq!((p.position, p.total, p.finished), (700, 1440, false));
+        assert!(db.pending_marks(10).unwrap().is_empty());
         save(&track, 1350.0, 1440.0);
         assert!(db.progress(Site::AnimeLib, "1--x", "e1").unwrap().unwrap().finished);
+        // Отметка уходит один раз, повторный конец серии её не множит.
+        save(&track, 1400.0, 1440.0);
+        track.finish();
+        let marks: Vec<String> = db.pending_marks(10).unwrap().into_iter().map(|(_, m, _)| m).collect();
+        assert_eq!(marks.len(), 2, "{marks:?}");
+        assert!(
+            marks
+                .iter()
+                .any(|m| m.contains("episode_viewed") && m.contains("\"player_id\":5"))
+        );
+        assert!(marks.iter().any(|m| m.contains("\"place\"") && m.contains("23:20")));
     }
 }

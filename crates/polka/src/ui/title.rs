@@ -5,8 +5,9 @@ use std::path::PathBuf;
 
 use iced::widget::{button, column, pick_list, row, scrollable, text};
 use iced::{Alignment, Element, Fill, Task};
-use libsocial::models::{Branch, Chapter, Episode, EpisodeDetails, PlayerKind, TitleDetails};
-use libsocial::{Site, mirrors};
+use libsocial::bookmarks::{format_timecode, parse_timecode};
+use libsocial::models::{Branch, Chapter, Episode, EpisodeDetails, Player, PlayerKind, TitleDetails};
+use libsocial::{Bookmark, Site, mirrors};
 
 use super::catalog::cover;
 use super::images::{ImageReq, Images, Loaded};
@@ -16,6 +17,7 @@ use crate::cli::{pick_branch, title_row};
 use crate::db::{DownloadRow, DownloadState, Progress};
 use crate::downloads::DownloadEvent;
 use crate::library::{self, ExportChapter, Job, chapter_key, episode_key};
+use crate::sync::Mark;
 
 #[derive(Debug, Clone)]
 pub struct TitleData {
@@ -54,6 +56,10 @@ pub struct TitleView {
     team: Option<u64>,
     episodes: HashMap<u64, EpisodeDetails>,
     busy: Option<String>,
+    /// Закладка на сайте. `None` – тайтла нет в закладках или закладка ещё не пришла.
+    bookmark: Option<Bookmark>,
+    /// Ответ о закладке получен: до этого выбор папки не показываем.
+    bookmark_known: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +70,14 @@ pub enum Msg {
     Retry,
     Back,
     ToggleLibrary,
+    /// Ответ о закладке, вместе с адресом тайтла, как у `Loaded`.
+    BookmarkLoaded(Site, String, Result<Option<Box<Bookmark>>, String>),
+    /// Закладку поменяли с этой страницы.
+    BookmarkSaved(Site, String, Result<Option<Box<Bookmark>>, String>),
+    /// Выбрана папка закладок. `id: None` – убрать из закладок.
+    Folder(Choice),
+    /// Продолжить с места, записанного в закладке на сайте.
+    Resume,
     OpenSite,
     Branch(Choice),
     Order,
@@ -94,6 +108,17 @@ pub enum Effect {
     Toast(String),
 }
 
+/// Куда ведёт «Продолжить» у манги.
+struct MangaResume {
+    /// Id главы в списке (`Chapter::id`).
+    chapter_id: u64,
+    branch: Option<u64>,
+    /// Страница с единицы. `None` – с начала главы.
+    page: Option<u64>,
+    /// Страница взята из закладки: своего места на этом устройстве нет.
+    from_bookmark: bool,
+}
+
 /// Что делать с эпизодом, когда подгрузятся его плееры.
 #[derive(Debug, Clone, Copy)]
 pub enum EpisodeAction {
@@ -101,6 +126,8 @@ pub enum EpisodeAction {
     Watch,
     Download,
     Kodik,
+    /// Отметить на сайте просмотренной: для этого нужен id плеера.
+    MarkViewed,
 }
 
 impl TitleView {
@@ -119,6 +146,8 @@ impl TitleView {
             team: None,
             episodes: HashMap::new(),
             busy: None,
+            bookmark: None,
+            bookmark_known: false,
         };
         view.refresh_local(ctx);
         let cover = local_cover(ctx, site, &slug).map(|p| images.request(ImageReq::File(p), Msg::Image));
@@ -197,6 +226,7 @@ impl TitleView {
                 }
                 if !data.offline {
                     let _ = ctx.db.upsert_title(&title_row(self.site, &data.details));
+                    tasks.push(self.load_bookmark(ctx));
                 }
                 // Для аниме команды берём из первой серии: у какой есть свой плеер.
                 if self.site.is_anime()
@@ -229,6 +259,34 @@ impl TitleView {
                 }
                 Effect::Task(Task::none())
             }
+            Msg::BookmarkLoaded(site, slug, _) | Msg::BookmarkSaved(site, slug, _)
+                if site != self.site || slug != self.slug =>
+            {
+                Effect::Task(Task::none())
+            }
+            Msg::BookmarkLoaded(_, _, Ok(bookmark)) => {
+                // Тайтл в закладках – значит, и в библиотеке на устройстве, чтобы
+                // открываться без сети. Флаг, поставленный без входа, не снимаем.
+                if bookmark.is_some() {
+                    self.set_local_library(ctx, true);
+                }
+                self.bookmark = bookmark.map(|b| *b);
+                self.bookmark_known = true;
+                Effect::Task(Task::none())
+            }
+            Msg::BookmarkSaved(_, _, Ok(bookmark)) => {
+                self.busy = None;
+                self.set_local_library(ctx, bookmark.is_some());
+                self.bookmark = bookmark.map(|b| *b);
+                Effect::Task(Task::none())
+            }
+            Msg::BookmarkLoaded(_, _, Err(e)) => Effect::Toast(format!("Закладка не загрузилась: {e}")),
+            Msg::BookmarkSaved(_, _, Err(e)) => {
+                self.busy = None;
+                Effect::Toast(format!("Закладка не сохранилась: {e}"))
+            }
+            Msg::Folder(choice) => self.set_folder(ctx, choice.id),
+            Msg::Resume => self.resume(ctx),
             Msg::OpenSite => {
                 let _ = open::that_detached(self.site.title_url(&self.slug));
                 Effect::Task(Task::none())
@@ -294,12 +352,25 @@ impl TitleView {
                         finished,
                     };
                     // Снять отметку можно только перезаписью: MAX в базе её бережёт.
+                    // На сайте отметку снять нельзя, поэтому туда уходит только «прочитано».
+                    let mut task = Task::none();
                     if finished {
                         let _ = ctx.db.save_progress(self.site, &self.slug, &key, p);
+                        match self.view_mark(index) {
+                            Some(mark) => ctx.sync.push(mark),
+                            // Плееры серии ещё не загружены: без них сайт отметку не примет.
+                            None if self.site.is_anime() && self.data.as_ref().is_some_and(|d| !d.offline) => {
+                                if let Some(id) = self.episode_at(index).map(|e| e.id) {
+                                    task = self.load_episode(ctx, id, EpisodeAction::MarkViewed);
+                                }
+                            }
+                            None => {}
+                        }
                     } else {
                         let _ = ctx.db.clear_progress(self.site, &self.slug, &key);
                     }
                     self.refresh_local(ctx);
+                    return Effect::Task(task);
                 }
                 Effect::Task(Task::none())
             }
@@ -375,6 +446,7 @@ impl TitleView {
         Effect::Read(ReaderStart {
             site: self.site,
             slug: self.slug.clone(),
+            title_id: data.details.short.id,
             title: data.details.short.display_name().to_string(),
             chapters,
             branches,
@@ -504,9 +576,20 @@ impl TitleView {
             && row.state == DownloadState::Done
         {
             let path = PathBuf::from(&row.path);
+            let player_id = match serde_json::from_str::<Job>(&row.job) {
+                Ok(Job::Episode { player_id, .. }) => Some(player_id),
+                _ => None,
+            };
+            let player = player_id.and_then(|id| {
+                self.episodes
+                    .get(&episode.id)
+                    .and_then(|d| d.players.iter().find(|p| p.id == id))
+                    .cloned()
+            });
             let start = self.resume_at(episode.id);
             self.mark_started(ctx, episode.id);
-            let track = self.track(ctx, episode.id);
+            let mut track = self.track(ctx, &episode, player.as_ref());
+            track.player_id = track.player_id.or(player_id);
             return Effect::Task(watch_player(
                 crate::player::play_file(path, start, episode.title()),
                 track,
@@ -588,6 +671,20 @@ impl TitleView {
             .copied();
         match action {
             EpisodeAction::Teams => Effect::Task(Task::none()),
+            EpisodeAction::MarkViewed => {
+                let any = details
+                    .players
+                    .iter()
+                    .find(|p| p.team.as_ref().map(|t| t.id) == self.team)
+                    .or_else(|| details.players.first());
+                if let (Some(player), Some(data)) = (player.or(any), &self.data) {
+                    ctx.sync.push(Mark::EpisodeViewed {
+                        anime_id: data.details.short.id,
+                        player_id: player.id,
+                    });
+                }
+                Effect::Task(Task::none())
+            }
             EpisodeAction::Kodik => {
                 let kodik = details
                     .players
@@ -613,7 +710,7 @@ impl TitleView {
                 };
                 let start = self.resume_at(episode.id);
                 self.mark_started(ctx, episode.id);
-                let track = self.track(ctx, episode.id);
+                let track = self.track(ctx, episode, Some(&player));
                 self.busy = Some("Запускаю плеер…".into());
                 let client = ctx.client.clone();
                 let quality = ctx.config.max_quality;
@@ -666,13 +763,245 @@ impl TitleView {
             .map(|p| p.position)
     }
 
-    fn track(&self, ctx: &Ctx, episode_id: u64) -> crate::player::Track {
+    fn track(&self, ctx: &Ctx, episode: &Episode, player: Option<&Player>) -> crate::player::Track {
         crate::player::Track {
             db: ctx.db.clone(),
+            sync: ctx.sync.clone(),
             site: self.site,
             slug: self.slug.clone(),
-            key: episode_key(episode_id),
+            key: episode_key(episode.id),
+            anime_id: self.data.as_ref().map_or(0, |d| d.details.short.id),
+            episode_id: episode.id,
+            item_number: episode.item_number,
+            player_id: player.map(|p| p.id),
+            choice: player.and_then(Player::choice),
         }
+    }
+
+    /// Пришли данные аккаунта: если страницу открыли раньше, догружаем закладку.
+    pub fn on_account(&self, ctx: &Ctx) -> Task<Msg> {
+        match &self.data {
+            Some(data) if !data.offline && !self.bookmark_known => self.load_bookmark(ctx),
+            _ => Task::none(),
+        }
+    }
+
+    fn load_bookmark(&self, ctx: &Ctx) -> Task<Msg> {
+        if ctx.user_id.is_none() {
+            return Task::none();
+        }
+        let (site, slug, client) = (self.site, self.slug.clone(), ctx.client.clone());
+        Task::perform(
+            {
+                let slug = slug.clone();
+                async move {
+                    client
+                        .bookmark(site, &slug)
+                        .await
+                        .map(|b| b.map(Box::new))
+                        .map_err(|e| human_error(&e))
+                }
+            },
+            move |r| Msg::BookmarkLoaded(site, slug.clone(), r),
+        )
+    }
+
+    /// Кладёт тайтл в папку на сайте или убирает из закладок.
+    fn set_folder(&mut self, ctx: &Ctx, folder: Option<u64>) -> Effect {
+        if self.busy.is_some() {
+            return Effect::Task(Task::none());
+        }
+        let (site, slug, client) = (self.site, self.slug.clone(), ctx.client.clone());
+        let current = self.bookmark.as_ref().map(|b| b.id);
+        if let Some(data) = &self.data {
+            let _ = ctx.db.upsert_title(&title_row(site, &data.details));
+        }
+        self.busy = Some("Сохраняю закладку…".into());
+        Effect::Task(Task::perform(
+            {
+                let slug = slug.clone();
+                async move {
+                    let result = match (folder, current) {
+                        (Some(folder), _) => client.set_bookmark(site, &slug, folder, None).await.map(Some),
+                        (None, Some(id)) => client.delete_bookmark(site, id).await.map(|()| None),
+                        (None, None) => Ok(None),
+                    };
+                    result.map(|b| b.map(Box::new)).map_err(|e| human_error(&e))
+                }
+            },
+            move |r| Msg::BookmarkSaved(site, slug.clone(), r),
+        ))
+    }
+
+    fn set_local_library(&mut self, ctx: &Ctx, value: bool) {
+        if ctx.db.set_in_library(self.site, &self.slug, value).is_ok() {
+            self.in_library = value;
+        }
+    }
+
+    /// Подпись кнопки «Продолжить» по закладке, если в ней записано место.
+    fn resume_label(&self) -> Option<String> {
+        let bookmark = self.bookmark.as_ref()?;
+        let item_id = bookmark.item_id?;
+        let progress = bookmark.progress.as_deref().unwrap_or_default();
+        if self.site.is_anime() {
+            let episode = self.data.as_ref()?.episodes.iter().find(|e| e.id == item_id)?;
+            Some(match parse_timecode(progress).filter(|s| *s > 0) {
+                Some(secs) => format!("Продолжить: {}, {}", episode.title(), format_timecode(secs)),
+                None => format!("Продолжить: {}", episode.title()),
+            })
+        } else {
+            let target = self.manga_resume()?;
+            let chapter = self
+                .data
+                .as_ref()?
+                .chapters
+                .iter()
+                .find(|c| c.id == target.chapter_id)?;
+            Some(match target.page {
+                Some(page) => format!(
+                    "Продолжить: том {} глава {}, стр. {page}",
+                    chapter.volume, chapter.number
+                ),
+                None => format!("Продолжить: том {} глава {}", chapter.volume, chapter.number),
+            })
+        }
+    }
+
+    /// Куда ведёт «Продолжить» у манги. Место из закладки уточняется своим: если
+    /// главу здесь уже дочитали, открывается следующая, а начатая продолжается со
+    /// своей страницы. Подпись кнопки и сам переход считаются здесь же, чтобы
+    /// кнопка не обещала одно, а открывала другое.
+    fn manga_resume(&self) -> Option<MangaResume> {
+        let bookmark = self.bookmark.as_ref()?;
+        let (chapter, bookmark_branch) = self.find_chapter(bookmark.item_id?)?;
+        // Ветку закладки берём, только если у тайтла выбор веток, как в списке глав.
+        let branch = if self.branch.is_some() && bookmark_branch.is_some() {
+            bookmark_branch
+        } else {
+            self.branch_of(chapter)
+        };
+        let resume = |chapter_id, page| MangaResume {
+            chapter_id,
+            branch,
+            page,
+            from_bookmark: false,
+        };
+        match self.progress.get(&chapter_key(chapter.id, branch)) {
+            Some(p) if p.finished => {
+                let list = self.visible_chapters_asc();
+                let at = list.iter().position(|c| c.id == chapter.id)?;
+                let next = list[at + 1..]
+                    .iter()
+                    .find(|c| c.branch(self.branch_of(c)).is_some_and(|b| b.is_open()))?;
+                Some(resume(next.id, None))
+            }
+            Some(p) if p.position > 0 => Some(resume(chapter.id, Some(p.position + 1))),
+            _ => {
+                let page = bookmark.progress.as_deref().and_then(|p| p.parse::<u64>().ok());
+                Some(MangaResume {
+                    from_bookmark: true,
+                    ..resume(chapter.id, page.filter(|p| *p > 1))
+                })
+            }
+        }
+    }
+
+    /// Глава по id перевода из закладки и ветка этого перевода.
+    fn find_chapter(&self, item_id: u64) -> Option<(&Chapter, Option<u64>)> {
+        let data = self.data.as_ref()?;
+        data.chapters
+            .iter()
+            .find_map(|c| match c.branches.iter().find(|b| b.id == item_id) {
+                Some(b) => Some((c, b.branch_id)),
+                None => (c.id == item_id).then_some((c, None)),
+            })
+    }
+
+    /// Открывает главу или серию из закладки с записанного места. Своё место на
+    /// этом устройстве важнее: его не перетираем.
+    fn resume(&mut self, ctx: &Ctx) -> Effect {
+        let Some(bookmark) = self.bookmark.clone() else {
+            return Effect::Task(Task::none());
+        };
+        let Some(item_id) = bookmark.item_id else {
+            return Effect::Task(Task::none());
+        };
+        let progress = bookmark.progress.as_deref().unwrap_or_default();
+        if self.site.is_anime() {
+            let Some(index) = self.episodes_shown().iter().position(|e| e.id == item_id) else {
+                return Effect::Task(Task::none());
+            };
+            if let Some(team) = bookmark.meta.team
+                && self.teams.iter().any(|c| c.id == Some(team))
+            {
+                self.team = Some(team);
+            }
+            let key = episode_key(item_id);
+            if let Some(secs) = parse_timecode(progress)
+                && !self.progress.contains_key(&key)
+            {
+                let p = Progress {
+                    position: secs,
+                    total: 0,
+                    finished: false,
+                };
+                let _ = ctx.db.save_progress(self.site, &self.slug, &key, p);
+                self.progress.insert(key, p);
+            }
+            return self.episode_action(ctx, index, EpisodeAction::Watch);
+        }
+        let Some(target) = self.manga_resume() else {
+            return Effect::Task(Task::none());
+        };
+        // Глава из другой ветки перевода: переключаемся на неё, как сайт.
+        if target.branch.is_some() && self.branch.is_some() && self.branch != target.branch {
+            self.branch = target.branch;
+        }
+        let shown = self.visible_chapters();
+        let Some(index) = shown.iter().position(|c| c.id == target.chapter_id) else {
+            return Effect::Task(Task::none());
+        };
+        // Страницу из закладки читалка возьмёт из базы, как своё место.
+        if target.from_bookmark
+            && let Some(page) = target.page
+        {
+            let key = chapter_key(target.chapter_id, self.branch_of(shown[index]));
+            let p = Progress {
+                position: page - 1,
+                total: 0,
+                finished: false,
+            };
+            let _ = ctx.db.save_progress(self.site, &self.slug, &key, p);
+            self.progress.insert(key, p);
+        }
+        self.read(ctx, index)
+    }
+
+    /// Отметка «прочитано» или «просмотрено» для сайта по строке списка.
+    fn view_mark(&self, index: usize) -> Option<Mark> {
+        let data = self.data.as_ref()?;
+        if self.site.is_anime() {
+            let episode = self.episode_at(index)?;
+            let details = self.episodes.get(&episode.id)?;
+            let player = details
+                .players
+                .iter()
+                .filter(|p| p.kind() == PlayerKind::Animelib)
+                .find(|p| p.team.as_ref().map(|t| t.id) == self.team)
+                .or_else(|| details.players.first())?;
+            return Some(Mark::EpisodeViewed {
+                anime_id: data.details.short.id,
+                player_id: player.id,
+            });
+        }
+        let chapter = *self.visible_chapters().get(index)?;
+        let chapter_id = chapter.branch(self.branch_of(chapter)).map_or(chapter.id, |b| b.id);
+        Some(Mark::ChapterViewed {
+            site: self.site,
+            title_id: data.details.short.id,
+            chapter_id,
+        })
     }
 
     /// Отмечает серию начатой, не затирая уже записанный прогресс.
@@ -776,8 +1105,31 @@ impl TitleView {
         }
         let genres: Vec<&str> = d.genres.iter().map(|g| g.name.as_str()).collect();
 
-        let mut actions = row![
-            back,
+        let folders = ctx.folders_for(self.site);
+        let library: Element<'a, Msg> = if self.bookmark_known && !folders.is_empty() && !data.offline {
+            // С входом библиотека – это закладки сайта с его папками.
+            let mut choices: Vec<Choice> = folders
+                .iter()
+                .map(|f| Choice {
+                    id: Some(f.id),
+                    label: f.name.clone(),
+                })
+                .collect();
+            let selected = self
+                .bookmark
+                .as_ref()
+                .and_then(|b| choices.iter().find(|c| c.id == Some(b.status)))
+                .cloned();
+            if self.bookmark.is_some() {
+                choices.push(Choice {
+                    id: None,
+                    label: "Убрать из закладок".into(),
+                });
+            }
+            pick_list(choices, selected, Msg::Folder)
+                .placeholder("+ В закладки")
+                .into()
+        } else {
             button(if self.in_library {
                 "✓ В библиотеке"
             } else {
@@ -788,16 +1140,27 @@ impl TitleView {
             } else {
                 button::primary
             })
-            .on_press(Msg::ToggleLibrary),
+            .on_press(Msg::ToggleLibrary)
+            .into()
+        };
+        let mut actions = row![
+            back,
+            library,
             button("Открыть на сайте")
                 .style(button::secondary)
                 .on_press(Msg::OpenSite),
         ]
         .spacing(8)
         .align_y(Alignment::Center);
+        let resume = self.resume_label();
+        if let Some(label) = &resume {
+            actions = actions.push(button(text(label.clone())).on_press(Msg::Resume));
+        }
         if !self.site.is_anime() {
+            if resume.is_none() {
+                actions = actions.push(button("Читать").on_press(Msg::Continue));
+            }
             actions = actions
-                .push(button("Читать").on_press(Msg::Continue))
                 .push(
                     button("Скачать все")
                         .style(button::secondary)

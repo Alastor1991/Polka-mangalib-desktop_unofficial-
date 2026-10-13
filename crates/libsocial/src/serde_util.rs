@@ -28,6 +28,24 @@ pub fn string_lenient<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Erro
     })
 }
 
+/// Число, строка с числом или `null`. Пустая или нечисловая строка – `None`.
+pub fn opt_u64_lenient<'de, D: Deserializer<'de>>(d: D) -> Result<Option<u64>, D::Error> {
+    Ok(match Value::deserialize(d)? {
+        Value::Number(n) => n.as_u64(),
+        Value::String(s) => s.trim().parse().ok(),
+        _ => None,
+    })
+}
+
+/// Строка, число или `null`.
+pub fn opt_string_lenient<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+    Ok(match Value::deserialize(d)? {
+        Value::String(s) => Some(s),
+        Value::Number(n) => Some(n.to_string()),
+        _ => None,
+    })
+}
+
 /// `null` превращается в значение по умолчанию.
 pub fn null_default<'de, D, T>(d: D) -> Result<T, D::Error>
 where

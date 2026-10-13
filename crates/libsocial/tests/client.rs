@@ -393,3 +393,81 @@ async fn page_reports_rate_limit_over_other_errors() {
     let err = c.fetch_page(Site::MangaLib, &page, "compress").await;
     assert!(matches!(err, Err(Error::RateLimited { .. })), "{err:?}");
 }
+
+#[tokio::test]
+async fn bookmarks_page_and_writes() {
+    use wiremock::matchers::query_param;
+
+    let s = MockServer::start().await;
+    let fixture =
+        std::fs::read_to_string(format!("{}/tests/fixtures/bookmarks.json", env!("CARGO_MANIFEST_DIR"))).unwrap();
+    Mock::given(method("GET"))
+        .and(path("/api/bookmarks"))
+        .and(query_param("user_id", "7"))
+        .and(query_param("status", "1"))
+        .and(header("Site-Id", "2"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(fixture, "application/json"))
+        .mount(&s)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/bookmarks"))
+        .and(body_partial_json(json!({
+            "media_type": "anime",
+            "media_slug": "1--x",
+            "bookmark": {"status": 21, "item_id": 5, "progress": "12:34"},
+            "meta": {"item_number": 3, "player": "Animelib", "team": 9, "translation_type": 2}
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({"data": {
+            "id": 77, "status": 21, "item_id": 5, "progress": "12:34", "meta": {"item_number": 3}
+        }})))
+        .expect(1)
+        .mount(&s)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path("/api/bookmarks/77"))
+        .and(query_param("media_type", "anime"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {"message": null}})))
+        .expect(1)
+        .mount(&s)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/manga/7965/chapters/229662/view"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {"message": null}})))
+        .expect(1)
+        .mount(&s)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/anime/16133/players/309079/view"))
+        .and(header("Site-Id", "5"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {"message": null}})))
+        .expect(1)
+        .mount(&s)
+        .await;
+    Mock::given(path("/api/anime/1--x/bookmark"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": null})))
+        .mount(&s)
+        .await;
+
+    let c = client(&[&s]);
+    // Битый элемент выбрасывается, следующая страница видна по ссылке.
+    let page = c.bookmarks(Site::SlashLib, 7, 1, 1).await.unwrap();
+    assert_eq!(page.bookmarks.len(), 2);
+    assert!(page.has_next);
+
+    assert!(c.bookmark(Site::AnimeLib, "1--x").await.unwrap().is_none());
+    let place = libsocial::Place {
+        item_id: 5,
+        item_number: Some(3),
+        progress: "12:34".into(),
+        player: Some(libsocial::PlayerChoice {
+            player: "Animelib".into(),
+            team: 9,
+            translation_type: 2,
+        }),
+    };
+    let b = c.set_bookmark(Site::AnimeLib, "1--x", 21, Some(&place)).await.unwrap();
+    assert_eq!(b.id, 77);
+    c.delete_bookmark(Site::AnimeLib, 77).await.unwrap();
+    c.mark_chapter_viewed(Site::MangaLib, 7965, 229662).await.unwrap();
+    c.mark_episode_viewed(16133, 309079).await.unwrap();
+}

@@ -275,6 +275,40 @@ impl Client {
         })
     }
 
+    /// Запрос к API с телом в JSON и разбором `{"data": T}`.
+    pub(crate) async fn send_data<T, Q, B>(
+        &self,
+        site: Site,
+        method: reqwest::Method,
+        path: &str,
+        query: &Q,
+        body: Option<&B>,
+    ) -> Result<T>
+    where
+        T: DeserializeOwned,
+        Q: Serialize + ?Sized,
+        B: Serialize + ?Sized,
+    {
+        let response = self
+            .send_api(Auth::User, |http, base| {
+                let request = http
+                    .request(method.clone(), join_url(base, path))
+                    .headers(Self::site_headers(site))
+                    .query(query);
+                match body {
+                    Some(body) => request.json(body),
+                    None => request,
+                }
+            })
+            .await?;
+        let bytes = response.bytes().await?;
+        let body: Data<T> = serde_json::from_slice(&bytes).map_err(|source| Error::Decode {
+            context: path.to_string(),
+            source,
+        })?;
+        Ok(body.data)
+    }
+
     /// Отправляет запрос к API: очередь, зеркала, токен, повторы, одно обновление
     /// токена при 401. `build` получает адрес текущего зеркала API.
     ///

@@ -5,6 +5,7 @@
 
 mod anime;
 pub mod auth;
+pub mod bookmarks;
 mod client;
 mod error;
 mod manga;
@@ -15,6 +16,7 @@ mod site;
 
 pub use anime::{ResolvedSubtitle, ResolvedVideo};
 pub use auth::{AuthSession, Token};
+pub use bookmarks::{Bookmark, BookmarkFolder, BookmarkPage, Place, PlayerChoice};
 pub use client::{Client, ClientConfig, TokenListener};
 pub use error::{Error, Result};
 pub use manga::{CatalogQuery, Sort};

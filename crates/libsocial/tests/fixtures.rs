@@ -122,3 +122,55 @@ fn animelib_player() {
     assert!(url.starts_with("https://") && url.ends_with("_1080.mp4"), "{url}");
     assert!(!url.contains(".аs//"), "{url}");
 }
+
+/// Закладки: синтетические ответы с устройством настоящих, без данных аккаунта.
+#[test]
+fn bookmarks() {
+    use libsocial::{Bookmark, BookmarkFolder};
+
+    let folders: Vec<BookmarkFolder> = data("bookmark_folders.json");
+    assert!(
+        folders
+            .iter()
+            .any(|f| f.id == 1 && f.is_for(Site::MangaLib) && f.is_for(Site::HentaiLib))
+    );
+    assert!(
+        folders
+            .iter()
+            .any(|f| f.id == 21 && f.is_for(Site::AnimeLib) && !f.is_for(Site::MangaLib))
+    );
+
+    let one: Bookmark = data("bookmark.json");
+    assert_eq!((one.status, one.item_id), (21, Some(41924)));
+    assert_eq!(one.progress.as_deref(), Some("12:34"));
+    let player = one.player().unwrap();
+    assert_eq!(
+        (player.player.as_str(), player.team, player.translation_type),
+        ("Animelib", 32412, 2)
+    );
+
+    let list = fixture("bookmarks.json")["data"].clone();
+    let first: Bookmark = serde_json::from_value(list[0].clone()).unwrap();
+    assert_eq!(first.media.as_ref().unwrap().slug_url, "7965--chainsaw-man");
+    assert_eq!(first.item.as_ref().unwrap().number, "2");
+    assert_eq!(first.meta.item_number, Some(2));
+    assert_eq!(first.updated_secs(), Some(1_725_944_452));
+    assert!(first.player().is_none());
+    let empty: Bookmark = serde_json::from_value(list[1].clone()).unwrap();
+    assert_eq!((empty.item_id, empty.progress), (None, None));
+}
+
+#[test]
+fn view_marks() {
+    let pages: ChapterPages = data("pages.json");
+    assert_eq!(pages.manga_id, Some(109483));
+    assert!(!pages.is_viewed);
+    let episode: EpisodeDetails = data("episode_animelib.json");
+    assert!(episode.players.iter().all(|p| !p.is_viewed));
+    let animelib = episode
+        .players
+        .iter()
+        .find(|p| p.kind() == PlayerKind::Animelib)
+        .unwrap();
+    assert!(animelib.choice().is_some());
+}

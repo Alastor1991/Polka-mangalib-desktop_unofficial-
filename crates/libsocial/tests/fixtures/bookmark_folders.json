@@ -1,0 +1,7 @@
+{"data": [
+ {"id": 1, "name": "Читаю", "public": true, "notify": true, "color": "#ff9b40", "textColor": "#000", "order": 0, "count": 3, "site_ids": [0, 1, 2, 3, 4]},
+ {"id": 2, "name": "В планах", "public": true, "notify": false, "color": "#2196f3", "textColor": "#fff", "order": 0, "count": 0, "site_ids": [0, 1, 2, 3, 4]},
+ {"id": 4, "name": "Прочитано", "public": true, "notify": false, "color": "#3cce7b", "textColor": "#000", "order": 0, "count": 1, "site_ids": [0, 1, 2, 3, 4]},
+ {"id": 21, "name": "Смотрю", "public": true, "notify": false, "color": "#ff9b40", "textColor": "#000", "order": 0, "count": 0, "site_ids": [5]},
+ {"id": 24, "name": "Просмотрено", "public": true, "notify": false, "color": "#3cce7b", "textColor": "#000", "order": 0, "count": 0, "site_ids": [5]}
+]}

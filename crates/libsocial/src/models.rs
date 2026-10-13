@@ -265,6 +265,9 @@ pub struct Chapter {
     pub branches_count: u32,
     #[serde(default, deserialize_with = "null_default")]
     pub branches: Vec<ChapterBranch>,
+    /// Порядковый номер главы в тайтле, с единицы. Его пишут в закладку.
+    #[serde(default, deserialize_with = "crate::serde_util::opt_u64_lenient")]
+    pub item_number: Option<u64>,
 }
 
 impl Chapter {
@@ -340,6 +343,11 @@ pub struct ChapterPages {
     pub name: Option<String>,
     #[serde(default, deserialize_with = "null_default")]
     pub pages: Vec<PageImage>,
+    #[serde(default, deserialize_with = "crate::serde_util::opt_u64_lenient")]
+    pub manga_id: Option<u64>,
+    /// Глава отмечена прочитанной. Приходит только вошедшему пользователю.
+    #[serde(default, deserialize_with = "null_default")]
+    pub is_viewed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -488,9 +496,21 @@ pub struct Player {
     pub video_domain: Option<String>,
     #[serde(default, deserialize_with = "null_default")]
     pub subtitles: Vec<Subtitle>,
+    /// Серия отмечена просмотренной в этом плеере. Только для вошедшего.
+    #[serde(default, deserialize_with = "null_default")]
+    pub is_viewed: bool,
 }
 
 impl Player {
+    /// Плеер, команда и тип перевода для закладки. `None`, если чего-то нет.
+    pub fn choice(&self) -> Option<crate::bookmarks::PlayerChoice> {
+        Some(crate::bookmarks::PlayerChoice {
+            player: self.player.clone(),
+            team: self.team.as_ref()?.id,
+            translation_type: self.translation_type.as_ref()?.id.parse().ok()?,
+        })
+    }
+
     pub fn kind(&self) -> PlayerKind {
         match self.player.to_lowercase().as_str() {
             "animelib" => PlayerKind::Animelib,
@@ -518,6 +538,8 @@ impl Player {
 pub struct EpisodeDetails {
     #[serde(deserialize_with = "u64_lenient")]
     pub id: u64,
+    #[serde(default, deserialize_with = "crate::serde_util::opt_u64_lenient")]
+    pub anime_id: Option<u64>,
     #[serde(default)]
     pub name: Option<String>,
     #[serde(default, deserialize_with = "string_lenient")]
