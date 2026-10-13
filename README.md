@@ -25,6 +25,8 @@ sudo pacman -S rust webkit2gtk-4.1 gtk3
 # Debian, Ubuntu
 sudo apt install cargo libwebkit2gtk-4.1-dev libgtk-3-dev libxkbcommon-dev libwayland-dev
 
+git clone https://github.com/Alastor1991/Polka-mangalib-desktop_unofficial-.git polka
+cd polka
 cargo build --release
 ./target/release/polka
 ```
@@ -90,4 +92,6 @@ cargo test -p libsocial --test live -- --ignored --test-threads=1   # живые
 
 ## Лицензия
 
-MIT, см. [LICENSE](LICENSE).
+[GNU AGPL-3.0](LICENSE) или любая более поздняя версия.
+
+Код можно читать, менять и распространять, но любая производная работа тоже должна выходить под AGPL с открытым кодом. Это касается и сервисов: если кто-то запустит изменённую Полку или её части у себя на сервере и даст к ней доступ через сеть, он обязан открыть свой код пользователям этого сервера.

@@ -3,6 +3,7 @@ name = "polka"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Полка: неофициальный десктопный клиент MangaLib и AnimeLib"
 
 [dependencies]

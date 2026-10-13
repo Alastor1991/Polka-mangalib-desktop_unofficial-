@@ -3,6 +3,7 @@ name = "libsocial"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Неофициальный клиент API lib.social: MangaLib, SlashLib, HentaiLib, AnimeLib"
 
 [dependencies]

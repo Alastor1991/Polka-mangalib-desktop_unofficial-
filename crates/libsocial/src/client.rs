@@ -56,7 +56,11 @@ impl Default for ClientConfig {
         ClientConfig {
             api_mirrors: Vec::new(),
             auth_mirrors: Vec::new(),
-            user_agent: format!("Polka/{} (unofficial lib.social client)", env!("CARGO_PKG_VERSION")),
+            user_agent: format!(
+                "Polka/{} (unofficial lib.social client; +{})",
+                env!("CARGO_PKG_VERSION"),
+                env!("CARGO_PKG_REPOSITORY")
+            ),
             interface: None,
             proxy: None,
             api_interval: Duration::from_millis(500),
