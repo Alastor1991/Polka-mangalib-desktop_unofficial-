@@ -4,7 +4,7 @@ use crate::models::{Branch, Chapter, ChapterPages, MediaServer, PageImage, Paged
 use crate::site::Site;
 
 /// Поля полной карточки, которые сервер отдаёт только по запросу.
-const DETAIL_FIELDS: &[&str] = &[
+const MANGA_FIELDS: &[&str] = &[
     "summary",
     "otherNames",
     "genres",
@@ -17,6 +17,21 @@ const DETAIL_FIELDS: &[&str] = &[
     "releaseDate",
     "status_id",
     "manga_status_id",
+];
+
+/// У аниме свой набор: `artists`, `format`, `status_id` сервер для него отвергает.
+const ANIME_FIELDS: &[&str] = &[
+    "summary",
+    "otherNames",
+    "genres",
+    "tags",
+    "authors",
+    "teams",
+    "rate",
+    "releaseDate",
+    "anime_status_id",
+    "episodes_count",
+    "publisher",
 ];
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -116,7 +131,8 @@ impl Client {
 
     /// Полная карточка тайтла по `slug_url` (`7965--chainsaw-man`).
     pub async fn title(&self, site: Site, slug_url: &str) -> Result<TitleDetails> {
-        let fields: Vec<(&str, &str)> = DETAIL_FIELDS.iter().map(|f| ("fields[]", *f)).collect();
+        let list = if site.is_anime() { ANIME_FIELDS } else { MANGA_FIELDS };
+        let fields: Vec<(&str, &str)> = list.iter().map(|f| ("fields[]", *f)).collect();
         self.get_data(site, &format!("{}/{}", site.catalog_path(), slug_url), &fields)
             .await
     }
@@ -139,7 +155,20 @@ impl Client {
         chapter: &Chapter,
         branch_id: Option<u64>,
     ) -> Result<ChapterPages> {
-        let mut query = vec![("volume", chapter.volume.clone()), ("number", chapter.number.clone())];
+        self.chapter_pages_by(site, slug_url, &chapter.volume, &chapter.number, branch_id)
+            .await
+    }
+
+    /// То же по тому и номеру главы, когда полной структуры главы под рукой нет.
+    pub async fn chapter_pages_by(
+        &self,
+        site: Site,
+        slug_url: &str,
+        volume: &str,
+        number: &str,
+        branch_id: Option<u64>,
+    ) -> Result<ChapterPages> {
+        let mut query = vec![("volume", volume.to_string()), ("number", number.to_string())];
         if let Some(branch) = branch_id {
             query.push(("branch_id", branch.to_string()));
         }

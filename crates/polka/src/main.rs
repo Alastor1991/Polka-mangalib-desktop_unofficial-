@@ -1,6 +1,8 @@
+mod cli;
 mod config;
 mod db;
 mod doctor;
+mod downloads;
 mod library;
 mod login_window;
 mod secrets;
@@ -31,6 +33,7 @@ fn main() -> Result<()> {
         Some("logout") => runtime.block_on(session::cli_logout()),
         Some("whoami") => runtime.block_on(session::cli_whoami()),
         Some("doctor") => runtime.block_on(doctor::run()),
+        Some("download") => runtime.block_on(cli::download(&args[1..])),
         // Отладка: сырой ответ API, `polka dev-get animelib episodes/123`.
         Some("dev-get") => runtime.block_on(doctor::dev_get(&args[1..])),
         Some("-h" | "--help" | "help") => {
@@ -58,7 +61,8 @@ fn print_help() {
          polka login --browser      войти через системный браузер\n\
          polka logout               выйти и удалить сохранённый токен\n\
          polka whoami               показать, под кем выполнен вход\n\
-         polka doctor               проверить доступ к API, картинкам и видео\n\n\
+         polka doctor               проверить доступ к API, картинкам и видео\n\
+         polka download <сайт> <slug> [от-до]  скачать главы или серии\n\n\
          Переменные окружения:\n  \
          POLKA_INTERFACE  сетевой интерфейс для запросов (например enp4s0)\n  \
          POLKA_PROXY      прокси для запросов (socks5h://127.0.0.1:1080)"

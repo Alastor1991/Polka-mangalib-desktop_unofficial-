@@ -63,6 +63,8 @@ async fn other_sites_catalog() {
 #[ignore]
 async fn anime_flow() {
     let c = client();
+    let title = c.title(Site::AnimeLib, "24--kenpuu-denki-berserk-anime").await.unwrap();
+    assert!(!title.summary_text().is_empty());
     let episodes = c.episodes("24--kenpuu-denki-berserk-anime").await.unwrap();
     assert!(!episodes.is_empty());
     let ep = c.episode(episodes[0].id).await.unwrap();
