@@ -14,6 +14,9 @@ fn has_mpv() -> bool {
 
 /// Играет видео из сети. Серверу нужен Referer сайта, поэтому без mpv не обойтись.
 pub async fn play_stream(video: ResolvedVideo, start: Option<u64>, title: String) -> Result<String, String> {
+    if !video.url.starts_with("https://") && !video.url.starts_with("http://") {
+        return Err("сервер прислал странный адрес видео, не открываю".into());
+    }
     if !has_mpv() {
         return Err("Для просмотра нужен mpv: sudo pacman -S mpv. Пока можно скачать серию или открыть Kodik.".into());
     }
@@ -28,7 +31,8 @@ pub async fn play_stream(video: ResolvedVideo, start: Option<u64>, title: String
     if let Some(sec) = start.filter(|s| *s > 0) {
         cmd.arg(format!("--start={sec}"));
     }
-    cmd.arg(&video.url);
+    // `--` до адреса: адрес из ответа сервера не должен стать опцией mpv.
+    cmd.arg("--").arg(&video.url);
     spawn(cmd)?;
     Ok(format!("Открываю в mpv, качество {}p", video.quality))
 }
@@ -52,7 +56,7 @@ pub async fn play_file(path: PathBuf, start: Option<u64>, title: String) -> Resu
             }
         }
     }
-    cmd.arg(&path);
+    cmd.arg("--").arg(&path);
     spawn(cmd)?;
     Ok("Открываю в mpv".into())
 }

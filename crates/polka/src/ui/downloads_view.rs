@@ -14,6 +14,8 @@ pub struct DownloadsView {
     /// Названия тайтлов по (сайт, slug).
     names: std::collections::HashMap<(Site, String), String>,
     show_done: bool,
+    /// Очередь сейчас выполняет другой процесс Полки.
+    elsewhere: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -28,6 +30,7 @@ pub enum Msg {
 impl DownloadsView {
     pub fn reload(&mut self, ctx: &Ctx) {
         self.rows = ctx.db.downloads().unwrap_or_default();
+        self.elsewhere = !ctx.downloader.is_active();
         for r in &self.rows {
             let key = (r.site, r.slug.clone());
             if !self.names.contains_key(&key)
@@ -105,6 +108,14 @@ impl DownloadsView {
             .filter(|r| self.show_done || r.state != DownloadState::Done)
             .map(|r| self.row_view(r));
         let list = column(rows).spacing(6);
+        let mut header = column![header];
+        if self.elsewhere {
+            header = header.push(
+                text("Загрузки сейчас ведёт другой запуск Полки (например, polka download). Когда он закончит, очередь продолжится здесь.")
+                    .size(13)
+                    .style(text::secondary),
+            );
+        }
         let body: Element<'_, Msg> = if self.rows.is_empty() {
             text("Очередь пуста. Главы и серии ставятся в очередь со страницы тайтла.")
                 .style(text::secondary)

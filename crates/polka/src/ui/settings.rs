@@ -83,7 +83,12 @@ impl Settings {
             Msg::Quality(v) => self.touch(|s| s.quality = v),
             Msg::Concurrency(v) => self.touch(|s| s.concurrency = v),
             Msg::Save => {
-                let mut config = ctx.config.clone();
+                // Сохраняем поверх файла, а не рабочих настроек: в рабочих могут быть
+                // значения из POLKA_INTERFACE и POLKA_PROXY, им в файле не место.
+                let mut config = match Config::load_file() {
+                    Ok(c) => c,
+                    Err(e) => return (Task::none(), Some(format!("Не сохранилось: {e:#}"))),
+                };
                 config.interface = Some(self.interface.trim().to_string()).filter(|s| !s.is_empty());
                 config.proxy = Some(self.proxy.trim().to_string()).filter(|s| !s.is_empty());
                 config.image_server = self.server.clone();
@@ -92,7 +97,9 @@ impl Settings {
                 match config.save() {
                     Ok(()) => {
                         let network = config.interface != ctx.config.interface || config.proxy != ctx.config.proxy;
-                        ctx.config = config;
+                        ctx.config.image_server = config.image_server;
+                        ctx.config.max_quality = config.max_quality;
+                        ctx.config.download_concurrency = config.download_concurrency;
                         self.dirty = false;
                         let text = if network {
                             "Сохранено. Сетевые настройки заработают после перезапуска."
@@ -195,12 +202,17 @@ fn server_static(s: &str) -> &'static str {
 /// Вход в отдельном процессе: окну WebKitGTK нужен главный поток, а он занят iced.
 /// Новый токен процесс кладёт в хранилище, отсюда его остаётся прочитать.
 async fn login(client: libsocial::Client, store: crate::secrets::TokenStore) -> Result<Option<Me>, String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let status = tokio::process::Command::new(exe)
+    let exe = own_exe().ok_or("не удалось найти программу polka")?;
+    let child = tokio::process::Command::new(exe)
         .arg("login")
         .stdin(std::process::Stdio::null())
-        .status()
+        .kill_on_drop(true)
+        .status();
+    // Окно входа живёт сколько угодно, но не вечно: зависший процесс не должен
+    // навсегда заблокировать кнопку.
+    let status = tokio::time::timeout(std::time::Duration::from_secs(15 * 60), child)
         .await
+        .map_err(|_| "окно входа не ответило за 15 минут".to_string())?
         .map_err(|e| e.to_string())?;
     if !status.success() {
         return Err("окно входа завершилось с ошибкой".into());
@@ -209,4 +221,19 @@ async fn login(client: libsocial::Client, store: crate::secrets::TokenStore) -> 
     let Some(token) = token else { return Ok(None) };
     client.restore_token(token).await.map_err(|e| e.to_string())?;
     client.me().await.map(Some).map_err(|e| e.to_string())
+}
+
+/// Путь к своей программе. После обновления пакета `current_exe` указывает на
+/// удалённый файл с пометкой « (deleted)», тогда берём путь из аргументов.
+fn own_exe() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    if exe.is_file() {
+        return Some(exe);
+    }
+    let cleaned = exe.to_string_lossy().trim_end_matches(" (deleted)").to_string();
+    let cleaned = std::path::PathBuf::from(cleaned);
+    if cleaned.is_file() {
+        return Some(cleaned);
+    }
+    std::env::args_os().next().map(std::path::PathBuf::from)
 }

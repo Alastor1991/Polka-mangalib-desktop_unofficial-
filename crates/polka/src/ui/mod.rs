@@ -58,6 +58,8 @@ pub struct App {
     images: images::Images,
     me: Option<Me>,
     toast: Option<String>,
+    /// Номер тоста: таймер скрывает только тот тост, для которого заведён.
+    toast_id: u64,
     /// Отладка: открыть главу с этим номером в списке, как только тайтл загрузится.
     dev_read: Option<usize>,
 }
@@ -72,8 +74,10 @@ pub enum Message {
     Downloads(downloads_view::Msg),
     Settings(settings::Msg),
     DownloadEvent(DownloadEvent),
+    /// События загрузчика потерялись: перечитать состояние из базы.
+    DownloadsRefresh,
     Me(Option<Me>),
-    DismissToast,
+    DismissToast(u64),
 }
 
 pub fn run(ctx: Ctx) -> iced::Result {
@@ -87,7 +91,14 @@ pub fn run(ctx: Ctx) -> iced::Result {
         .title("Полка")
         .theme(App::theme)
         .subscription(App::subscription)
-        .window_size((1180.0, 820.0))
+        .window(iced::window::Settings {
+            size: iced::Size::new(1180.0, 820.0),
+            platform_specific: iced::window::settings::PlatformSpecific {
+                application_id: "polka".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
         .run()
 }
 
@@ -99,7 +110,7 @@ impl App {
             ctx.config.download_concurrency,
         );
         let mut app = App {
-            settings: settings::Settings::new(&ctx.config),
+            settings: settings::Settings::new(&Config::load_file().unwrap_or_default()),
             catalog: catalog::Catalog::new(),
             library: library_view::LibraryView::default(),
             downloads: downloads_view::DownloadsView::default(),
@@ -108,6 +119,7 @@ impl App {
             images,
             me: None,
             toast: None,
+            toast_id: 0,
             dev_read: None,
             tab: Tab::Catalog,
             ctx,
@@ -133,7 +145,7 @@ impl App {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        let downloads = Subscription::run(download_events).map(Message::DownloadEvent);
+        let downloads = Subscription::run(download_events).map(download_message);
         let mut subs = vec![downloads];
         if self.reader.is_some() {
             subs.push(reader::keys().map(Message::Reader));
@@ -142,11 +154,43 @@ impl App {
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
+        // Картинки общие для всех экранов: результат загрузки принимаем, даже если
+        // экран, который её просил, уже закрыт. Иначе ключ навсегда остался бы
+        // «в ожидании» и картинка больше не загрузилась бы.
+        let message = match message {
+            Message::Catalog(catalog::Msg::Image(key, loaded)) => {
+                return self.images.finish(key, loaded, catalog_image);
+            }
+            Message::Title(title::Msg::Image(key, loaded)) => {
+                return self.images.finish(key, loaded, title_image);
+            }
+            Message::Library(library_view::Msg::Image(key, loaded)) => {
+                return self.images.finish(key, loaded, library_image);
+            }
+            Message::Reader(reader::Msg::Image(key, loaded)) => {
+                let task = self.images.finish(key, loaded, reader_image);
+                let more = match self.reader.as_mut() {
+                    Some(reader) => reader.ensure_window(&mut self.images).map(Message::Reader),
+                    None => Task::none(),
+                };
+                return Task::batch([task, more]);
+            }
+            // Итог запуска плеера показываем, даже если со страницы тайтла ушли.
+            Message::Title(title::Msg::Launched(result)) => {
+                if let Some(view) = self.title.as_mut() {
+                    view.launched();
+                }
+                let (Ok(text) | Err(text)) = result;
+                return self.toast(text);
+            }
+            other => other,
+        };
         match message {
             Message::Tab(tab) => {
                 self.tab = tab;
                 self.title = None;
                 self.close_reader();
+                self.images.forget_failed();
                 match tab {
                     Tab::Library => self.library.reload(&self.ctx, &mut self.images),
                     Tab::Downloads => {
@@ -165,7 +209,7 @@ impl App {
                 }
             }
             Message::Title(msg) => {
-                let loaded = matches!(msg, title::Msg::Loaded(Ok(_)));
+                let loaded = matches!(msg, title::Msg::Loaded(_, _, Ok(_)));
                 let Some(view) = self.title.as_mut() else {
                     return Task::none();
                 };
@@ -192,10 +236,7 @@ impl App {
                         self.reader = Some(reader);
                         task.map(Message::Reader)
                     }
-                    title::Effect::Toast(text) => {
-                        self.toast = Some(text);
-                        Task::none()
-                    }
+                    title::Effect::Toast(text) => self.toast(text),
                 }
             }
             Message::Reader(msg) => {
@@ -217,18 +258,16 @@ impl App {
                 (task, Some((site, slug))) => Task::batch([task, self.open_title(site, slug)]),
                 (task, None) => task,
             },
-            Message::Downloads(msg) => {
-                if let Some(text) = self.downloads.update(msg, &self.ctx) {
-                    self.toast = Some(text);
-                }
-                Task::none()
-            }
+            Message::Downloads(msg) => match self.downloads.update(msg, &self.ctx) {
+                Some(text) => self.toast(text),
+                None => Task::none(),
+            },
             Message::Settings(msg) => {
                 let (task, toast) = self.settings.update(msg, &mut self.ctx);
-                if let Some(text) = toast {
-                    self.toast = Some(text);
+                match toast {
+                    Some(text) => Task::batch([task, self.toast(text)]),
+                    None => task,
                 }
-                task
             }
             Message::DownloadEvent(event) => {
                 self.downloads.on_event(&event, &self.ctx);
@@ -237,16 +276,35 @@ impl App {
                 }
                 Task::none()
             }
+            Message::DownloadsRefresh => {
+                self.downloads.reload(&self.ctx);
+                if let Some(view) = self.title.as_mut() {
+                    view.refresh_local(&self.ctx);
+                }
+                Task::none()
+            }
             Message::Me(me) => {
                 self.me = me;
                 self.settings.me = self.me.clone();
                 Task::none()
             }
-            Message::DismissToast => {
-                self.toast = None;
+            Message::DismissToast(id) => {
+                if id == self.toast_id {
+                    self.toast = None;
+                }
                 Task::none()
             }
         }
+    }
+
+    /// Показывает сообщение внизу окна и прячет его через несколько секунд.
+    fn toast(&mut self, text: String) -> Task<Message> {
+        self.toast_id += 1;
+        let id = self.toast_id;
+        self.toast = Some(text);
+        Task::perform(tokio::time::sleep(std::time::Duration::from_secs(7)), move |_| {
+            Message::DismissToast(id)
+        })
     }
 
     /// Отладочный старт для проверки экранов без мыши:
@@ -296,7 +354,7 @@ impl App {
         } else {
             match self.tab {
                 Tab::Catalog => self.catalog.view(&self.images).map(Message::Catalog),
-                Tab::Library => self.library.view(&self.ctx, &self.images).map(Message::Library),
+                Tab::Library => self.library.view(&self.images).map(Message::Library),
                 Tab::Downloads => self.downloads.view().map(Message::Downloads),
                 Tab::Settings => self.settings.view(&self.ctx).map(Message::Settings),
             }
@@ -307,7 +365,9 @@ impl App {
                 container(
                     row![
                         text(toast.as_str()).width(Fill),
-                        button("Закрыть").on_press(Message::DismissToast).style(button::text)
+                        button("Закрыть")
+                            .on_press(Message::DismissToast(self.toast_id))
+                            .style(button::text)
                     ]
                     .spacing(12)
                     .align_y(iced::Alignment::Center),
@@ -353,18 +413,39 @@ impl App {
     }
 }
 
-/// Поток событий загрузчика для подписки.
-fn download_events() -> impl futures::Stream<Item = DownloadEvent> {
+fn catalog_image(key: String, loaded: images::Loaded) -> Message {
+    Message::Catalog(catalog::Msg::Image(key, loaded))
+}
+
+fn title_image(key: String, loaded: images::Loaded) -> Message {
+    Message::Title(title::Msg::Image(key, loaded))
+}
+
+fn library_image(key: String, loaded: images::Loaded) -> Message {
+    Message::Library(library_view::Msg::Image(key, loaded))
+}
+
+fn reader_image(key: String, loaded: images::Loaded) -> Message {
+    Message::Reader(reader::Msg::Image(key, loaded))
+}
+
+fn download_message(event: Option<DownloadEvent>) -> Message {
+    match event {
+        Some(event) => Message::DownloadEvent(event),
+        None => Message::DownloadsRefresh,
+    }
+}
+
+/// Поток событий загрузчика для подписки. `None` значит «часть событий потеряна,
+/// перечитайте базу»: так строка загрузки не застрянет на старом проценте.
+fn download_events() -> impl futures::Stream<Item = Option<DownloadEvent>> {
     let receiver = DOWNLOAD_EVENTS.get().map(|s| s.subscribe());
     futures::stream::unfold(receiver, |receiver| async move {
         let mut receiver = receiver?;
-        loop {
-            match receiver.recv().await {
-                Ok(event) => return Some((event, Some(receiver))),
-                // Отстали от потока: пропускаем потерянное, интерфейс перечитает базу.
-                Err(broadcast::error::RecvError::Lagged(_)) => continue,
-                Err(broadcast::error::RecvError::Closed) => return None,
-            }
+        match receiver.recv().await {
+            Ok(event) => Some((Some(event), Some(receiver))),
+            Err(broadcast::error::RecvError::Lagged(_)) => Some((None, Some(receiver))),
+            Err(broadcast::error::RecvError::Closed) => None,
         }
     })
 }

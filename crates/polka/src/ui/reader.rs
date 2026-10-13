@@ -170,7 +170,7 @@ impl Reader {
 
     fn req(&self, i: usize) -> Option<ImageReq> {
         Some(match self.pages.get(i)? {
-            PageSrc::Local(path) => ImageReq::File(path.clone()),
+            PageSrc::Local(path) => ImageReq::LocalPage(path.clone()),
             PageSrc::Remote(page) => ImageReq::Page {
                 site: self.start.site,
                 page: page.clone(),
@@ -180,7 +180,7 @@ impl Reader {
     }
 
     /// Запрашивает страницы вокруг текущей.
-    fn ensure_window(&mut self, images: &mut Images) -> Task<Msg> {
+    pub fn ensure_window(&mut self, images: &mut Images) -> Task<Msg> {
         let from = self.page.saturating_sub(1);
         let to = (self.page + AHEAD).min(self.pages.len());
         let tasks: Vec<_> = (from..to)
@@ -313,10 +313,8 @@ impl Reader {
                     Task::batch(tasks)
                 }
             }
-            Msg::Image(key, loaded) => {
-                let allocate = images.finish(key, loaded, Msg::Image);
-                Task::batch([allocate, self.ensure_window(images)])
-            }
+            // Результаты картинок принимает приложение целиком, см. App::update.
+            Msg::Image(..) => Task::none(),
         };
         Effect::Task(task)
     }

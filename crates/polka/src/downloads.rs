@@ -71,7 +71,7 @@ pub struct Downloader {
     /// Тайтлы, обложку которых уже не удалось скачать в этом запуске.
     cover_failed: Arc<Mutex<HashSet<(Site, String)>>>,
     /// Блокировка «качаю я». Пока файл открыт, второй процесс не качает.
-    _lock: Option<Arc<std::fs::File>>,
+    lock: Arc<Mutex<Option<std::fs::File>>>,
 }
 
 impl Downloader {
@@ -86,7 +86,6 @@ impl Downloader {
         lock_path: &Path,
     ) -> Downloader {
         let (events, _) = broadcast::channel(256);
-        let lock = take_lock(lock_path);
         let downloader = Downloader {
             client,
             db,
@@ -97,21 +96,48 @@ impl Downloader {
             running: Arc::new(Mutex::new(None)),
             events,
             cover_failed: Arc::new(Mutex::new(HashSet::new())),
-            _lock: lock.map(Arc::new),
+            lock: Arc::new(Mutex::new(None)),
         };
-        if downloader.is_active() {
-            if let Err(e) = downloader.db.requeue_interrupted() {
-                eprintln!("не удалось вернуть прерванные загрузки в очередь: {e:#}");
-            }
-            let worker = downloader.clone();
-            tokio::spawn(async move { worker.run().await });
+        if downloader.try_activate(lock_path) {
+            downloader.spawn_worker();
+        } else {
+            // Качает другой процесс. Когда он закончит, очередь возьмём мы.
+            let waiter = downloader.clone();
+            let path = lock_path.to_path_buf();
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(POLL).await;
+                    if waiter.try_activate(&path) {
+                        waiter.spawn_worker();
+                        return;
+                    }
+                }
+            });
         }
         downloader
     }
 
+    fn try_activate(&self, lock_path: &Path) -> bool {
+        match take_lock(lock_path) {
+            Some(file) => {
+                *self.lock.lock().expect("lock отравлен") = Some(file);
+                true
+            }
+            None => false,
+        }
+    }
+
+    fn spawn_worker(&self) {
+        if let Err(e) = self.db.requeue_interrupted() {
+            eprintln!("не удалось вернуть прерванные загрузки в очередь: {e:#}");
+        }
+        let worker = self.clone();
+        tokio::spawn(async move { worker.run().await });
+    }
+
     /// Этот процесс качает сам. Иначе задания выполнит процесс, держащий блокировку.
     pub fn is_active(&self) -> bool {
-        self._lock.is_some()
+        self.lock.lock().expect("lock отравлен").is_some()
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<DownloadEvent> {
@@ -160,6 +186,57 @@ impl Downloader {
         let added = self.db.enqueue(&row)?;
         if added {
             self.emit_row(row.site, &row.slug, &row.item, false);
+            self.wake.notify_one();
+        }
+        Ok(added)
+    }
+
+    /// Ставит пачку заданий одного тайтла одной транзакцией. Возвращает, сколько
+    /// добавлено. Вызывать вне потока интерфейса: запись идёт синхронно.
+    pub fn enqueue_many(&self, title: &TitleRow, jobs: Vec<(String, Job)>) -> Result<usize> {
+        self.db.upsert_title(title)?;
+        let meta = self.library.title_dir(title.site, &title.slug).join("title.json");
+        if !meta.is_file()
+            && let Some(details) = &title.details
+            && let Ok(value) = serde_json::from_str::<serde_json::Value>(details)
+        {
+            self.library.write_title_meta(title.site, &title.slug, &value)?;
+        }
+        let rows: Vec<DownloadRow> = jobs
+            .into_iter()
+            .map(|(label, job)| {
+                Ok(DownloadRow {
+                    site: title.site,
+                    slug: title.slug.clone(),
+                    item: job.item_key(),
+                    label,
+                    sort: job.sort(),
+                    state: DownloadState::Queued,
+                    done: 0,
+                    total: 0,
+                    error: None,
+                    path: self
+                        .library
+                        .job_path(title.site, &title.slug, &job)
+                        .to_string_lossy()
+                        .into_owned(),
+                    job: serde_json::to_string(&job)?,
+                })
+            })
+            .collect::<Result<_>>()?;
+        let added = self.db.enqueue_many(&rows)?;
+        if added > 0 {
+            // Одним сигналом: интерфейс перечитает очередь сам.
+            let _ = self.events.send(DownloadEvent {
+                site: title.site,
+                slug: title.slug.clone(),
+                item: String::new(),
+                state: DownloadState::Queued,
+                done: 0,
+                total: 0,
+                error: None,
+                removed: false,
+            });
             self.wake.notify_one();
         }
         Ok(added)

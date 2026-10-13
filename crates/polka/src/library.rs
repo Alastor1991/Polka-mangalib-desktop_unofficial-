@@ -108,14 +108,16 @@ impl Library {
     pub fn job_path(&self, site: Site, slug: &str, job: &Job) -> PathBuf {
         let dir = self.title_dir(site, slug);
         match job {
+            // В имени и номер главы для человека, и её id: на сайте бывают две
+            // разные главы с одинаковыми томом и номером.
             Job::Chapter {
+                chapter_id,
                 volume,
                 number,
                 branch_id,
-                ..
             } => {
                 let branch = branch_id.map(|b| format!("-b{b}")).unwrap_or_default();
-                dir.join(safe(&format!("v{volume}-c{number}{branch}")))
+                dir.join(safe(&format!("v{volume}-c{number}{branch}-{chapter_id}")))
             }
             Job::Episode {
                 season,
@@ -307,7 +309,7 @@ mod tests {
         };
         assert_eq!(
             lib.job_path(Site::MangaLib, "1--x", &job),
-            PathBuf::from("/lib/mangalib/1--x/v1-c12.5-b3")
+            PathBuf::from("/lib/mangalib/1--x/v1-c12.5-b3-10")
         );
         assert_eq!(job.item_key(), "c10-b3");
         assert!(job.sort() > 10_012.0 && job.sort() < 10_013.0);

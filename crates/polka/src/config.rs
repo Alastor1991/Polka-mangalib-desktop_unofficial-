@@ -79,18 +79,25 @@ impl Config {
 
     /// Читает настройки. Переменные `POLKA_INTERFACE` и `POLKA_PROXY` перекрывают файл.
     pub fn load() -> Result<Config> {
-        let path = Self::path();
-        let mut config = match std::fs::read_to_string(&path) {
-            Ok(text) => toml::from_str(&text).with_context(|| format!("не разобрать {}", path.display()))?,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Config::default(),
-            Err(e) => return Err(e).with_context(|| format!("не прочитать {}", path.display())),
-        };
+        let mut config = Self::load_file()?;
         if let Ok(iface) = std::env::var("POLKA_INTERFACE") {
             config.interface = Some(iface).filter(|s| !s.is_empty());
         }
         if let Ok(proxy) = std::env::var("POLKA_PROXY") {
             config.proxy = Some(proxy).filter(|s| !s.is_empty());
         }
+        Ok(config)
+    }
+
+    /// Только файл настроек, без переменных окружения. Его и надо сохранять,
+    /// иначе прокси с паролем из окружения навсегда осел бы в файле.
+    pub fn load_file() -> Result<Config> {
+        let path = Self::path();
+        let mut config: Config = match std::fs::read_to_string(&path) {
+            Ok(text) => toml::from_str(&text).with_context(|| format!("не разобрать {}", path.display()))?,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Config::default(),
+            Err(e) => return Err(e).with_context(|| format!("не прочитать {}", path.display())),
+        };
         config.download_concurrency = config.download_concurrency.clamp(1, 8);
         Ok(config)
     }

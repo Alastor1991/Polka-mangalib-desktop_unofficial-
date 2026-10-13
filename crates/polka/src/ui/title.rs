@@ -58,7 +58,10 @@ pub struct TitleView {
 
 #[derive(Debug, Clone)]
 pub enum Msg {
-    Loaded(Result<Box<TitleData>, String>),
+    /// Ответ приходит с адресом тайтла: устаревший ответ от предыдущего тайтла
+    /// отбрасывается.
+    Loaded(Site, String, Result<Box<TitleData>, String>),
+    Retry,
     Back,
     ToggleLibrary,
     OpenSite,
@@ -72,9 +75,10 @@ pub enum Msg {
     MarkRead(usize, bool),
     Export,
     Exported(Result<PathBuf, String>),
+    Enqueued(Result<usize, String>, usize),
     Image(String, Loaded),
     Team(Choice),
-    EpisodeLoaded(u64, Result<EpisodeDetails, String>),
+    EpisodeLoaded(u64, EpisodeAction, Result<EpisodeDetails, String>),
     Watch(usize),
     DownloadEpisode(usize),
     Kodik(usize),
@@ -90,7 +94,7 @@ pub enum Effect {
 
 /// Что делать с эпизодом, когда подгрузятся его плееры.
 #[derive(Debug, Clone, Copy)]
-enum EpisodeAction {
+pub enum EpisodeAction {
     Teams,
     Watch,
     Download,
@@ -116,9 +120,20 @@ impl TitleView {
         };
         view.refresh_local(ctx);
         let cover = local_cover(ctx, site, &slug).map(|p| images.request(ImageReq::File(p), Msg::Image));
-        let ctx = ctx.clone();
-        let load = Task::perform(load_title(ctx, site, slug), |r| Msg::Loaded(r.map(Box::new)));
+        let load = view.load(ctx);
         (view, Task::batch(cover.into_iter().chain([load])))
+    }
+
+    fn load(&self, ctx: &Ctx) -> Task<Msg> {
+        let (site, slug) = (self.site, self.slug.clone());
+        Task::perform(load_title(ctx.clone(), site, slug.clone()), move |r| {
+            Msg::Loaded(site, slug.clone(), r.map(Box::new))
+        })
+    }
+
+    /// Запуск плеера закончился: убрать надпись «Запускаю плеер…».
+    pub fn launched(&mut self) {
+        self.busy = None;
     }
 
     /// Перечитывает с диска состояние загрузок, прогресса и библиотеки.
@@ -157,7 +172,8 @@ impl TitleView {
 
     pub fn update(&mut self, msg: Msg, ctx: &Ctx, images: &mut Images) -> Effect {
         match msg {
-            Msg::Loaded(Ok(data)) => {
+            Msg::Loaded(site, slug, _) if site != self.site || slug != self.slug => Effect::Task(Task::none()),
+            Msg::Loaded(_, _, Ok(data)) => {
                 let data = *data;
                 self.error = None;
                 let mut tasks = Vec::new();
@@ -190,9 +206,13 @@ impl TitleView {
                 self.data = Some(data);
                 Effect::Task(Task::batch(tasks))
             }
-            Msg::Loaded(Err(e)) => {
+            Msg::Loaded(_, _, Err(e)) => {
                 self.error = Some(e);
                 Effect::Task(Task::none())
+            }
+            Msg::Retry => {
+                self.error = None;
+                Effect::Task(self.load(ctx))
             }
             Msg::Back => Effect::Back,
             Msg::ToggleLibrary => {
@@ -221,12 +241,13 @@ impl TitleView {
             }
             Msg::Read(index) => self.read(ctx, index),
             Msg::Continue => {
-                let chapters = self.visible_chapters();
-                let index = chapters
-                    .iter()
-                    .position(|c| !self.progress_of(c).is_some_and(|p| p.finished))
-                    .unwrap_or(0);
-                self.read(ctx, index)
+                let Some(id) = self.continue_target() else {
+                    return Effect::Task(Task::none());
+                };
+                match self.visible_chapters().iter().position(|c| c.id == id) {
+                    Some(index) => self.read(ctx, index),
+                    None => Effect::Task(Task::none()),
+                }
             }
             Msg::Download(index) => {
                 let chapters = self.visible_chapters();
@@ -281,6 +302,20 @@ impl TitleView {
                 Effect::Task(Task::none())
             }
             Msg::Export => self.export(ctx),
+            Msg::Enqueued(result, locked) => {
+                self.refresh_local(ctx);
+                match result {
+                    Ok(added) if added + locked > 1 || locked > 0 => {
+                        let mut text = format!("В очередь добавлено глав: {added}");
+                        if locked > 0 {
+                            text.push_str(&format!(", закрытых пропущено: {locked}"));
+                        }
+                        Effect::Toast(text)
+                    }
+                    Ok(_) => Effect::Task(Task::none()),
+                    Err(e) => Effect::Toast(format!("Не поставилось в очередь: {e}")),
+                }
+            }
             Msg::Exported(result) => {
                 self.busy = None;
                 match result {
@@ -296,7 +331,7 @@ impl TitleView {
                 self.team = choice.id;
                 Effect::Task(Task::none())
             }
-            Msg::EpisodeLoaded(id, result) => self.episode_loaded(ctx, id, result),
+            Msg::EpisodeLoaded(id, action, result) => self.episode_loaded(ctx, id, action, result),
             Msg::Watch(i) => self.episode_action(ctx, i, EpisodeAction::Watch),
             Msg::DownloadEpisode(i) => self.episode_action(ctx, i, EpisodeAction::Download),
             Msg::Kodik(i) => self.episode_action(ctx, i, EpisodeAction::Kodik),
@@ -343,37 +378,55 @@ impl TitleView {
         })
     }
 
+    /// Ставит главы в очередь одной транзакцией в фоне: на сотнях глав запись в базу
+    /// иначе подвесила бы окно.
     fn enqueue_chapters(&mut self, ctx: &Ctx, chapters: &[Chapter]) -> Effect {
         let Some(data) = &self.data else {
             return Effect::Task(Task::none());
         };
         let title = title_row(self.site, &data.details);
-        let mut added = 0;
+        let mut jobs = Vec::new();
         let mut locked = 0;
         for chapter in chapters {
             let branch = self.branch_of(chapter);
-            if !chapter.branch(branch).is_some_and(|b| b.is_open()) {
+            if chapter.branch(branch).is_some_and(|b| b.is_open()) {
+                jobs.push((chapter.title(), Job::chapter(chapter, branch)));
+            } else {
                 locked += 1;
-                continue;
-            }
-            match ctx
-                .downloader
-                .enqueue(&title, &chapter.title(), Job::chapter(chapter, branch))
-            {
-                Ok(true) => added += 1,
-                Ok(false) => {}
-                Err(e) => return Effect::Toast(format!("Не поставилось в очередь: {e:#}")),
             }
         }
-        self.refresh_local(ctx);
-        if chapters.len() == 1 && locked == 0 {
-            return Effect::Task(Task::none());
+        let downloader = ctx.downloader.clone();
+        Effect::Task(Task::perform(
+            async move {
+                tokio::task::spawn_blocking(move || downloader.enqueue_many(&title, jobs))
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .map_err(|e| format!("{e:#}"))
+            },
+            move |r| Msg::Enqueued(r, locked),
+        ))
+    }
+
+    /// С какой главы продолжить: начатая и не дочитанная, иначе первая непрочитанная
+    /// после последней прочитанной, иначе первая.
+    fn continue_target(&self) -> Option<u64> {
+        let chapters = self.visible_chapters_asc();
+        let open = |c: &Chapter| c.branch(self.branch_of(c)).is_some_and(|b| b.is_open());
+        if let Some(c) = chapters
+            .iter()
+            .find(|c| open(c) && self.progress_of(c).is_some_and(|p| !p.finished && p.position > 0))
+        {
+            return Some(c.id);
         }
-        let mut text = format!("В очередь добавлено глав: {added}");
-        if locked > 0 {
-            text.push_str(&format!(", закрытых пропущено: {locked}"));
-        }
-        Effect::Toast(text)
+        let last_read = chapters
+            .iter()
+            .rposition(|c| self.progress_of(c).is_some_and(|p| p.finished));
+        let from = last_read.map(|i| i + 1).unwrap_or(0);
+        chapters[from.min(chapters.len())..]
+            .iter()
+            .find(|c| open(c))
+            .or_else(|| chapters.iter().find(|c| open(c)))
+            .map(|c| c.id)
     }
 
     fn export(&mut self, ctx: &Ctx) -> Effect {
@@ -397,6 +450,9 @@ impl TitleView {
                 },
             ));
         }
+        if self.busy.is_some() {
+            return Effect::Task(Task::none());
+        }
         if by_volume.is_empty() {
             return Effect::Toast("Сначала скачайте главы: экспорт собирает CBZ из скачанного.".into());
         }
@@ -409,7 +465,8 @@ impl TitleView {
                     for (volume, mut chapters) in by_volume {
                         chapters.sort_by(|a, b| a.0.total_cmp(&b.0));
                         let chapters: Vec<ExportChapter> = chapters.into_iter().map(|(_, c)| c).collect();
-                        let file = out_dir.join(library::safe(&format!("{name} – Том {volume}.cbz")));
+                        // Расширение дописывается после обрезки длинного имени.
+                        let file = out_dir.join(format!("{}.cbz", library::safe(&format!("{name} – Том {volume}"))));
                         library::export_cbz(&name, &chapters, &file)?;
                     }
                     Ok::<PathBuf, anyhow::Error>(out_dir)
@@ -427,7 +484,7 @@ impl TitleView {
         let client = ctx.client.clone();
         Task::perform(
             async move { client.episode(id).await.map_err(|e| human_error(&e)) },
-            move |r| Msg::EpisodeLoaded(id, r.map(|d| (action, d)).map(|(a, d)| tag(a, d))),
+            move |r| Msg::EpisodeLoaded(id, action, r),
         )
     }
 
@@ -442,9 +499,7 @@ impl TitleView {
         {
             let path = PathBuf::from(&row.path);
             let start = self.progress.get(&episode_key(episode.id)).map(|p| p.position);
-            let _ = ctx
-                .db
-                .save_progress(self.site, &self.slug, &episode_key(episode.id), started());
+            self.mark_started(ctx, episode.id);
             return Effect::Task(Task::perform(
                 crate::player::play_file(path, start, episode.title()),
                 Msg::Launched,
@@ -459,14 +514,26 @@ impl TitleView {
         }
     }
 
-    fn episode_loaded(&mut self, ctx: &Ctx, id: u64, result: Result<EpisodeDetails, String>) -> Effect {
+    fn episode_loaded(
+        &mut self,
+        ctx: &Ctx,
+        id: u64,
+        action: EpisodeAction,
+        result: Result<EpisodeDetails, String>,
+    ) -> Effect {
+        // Ответ мог прийти от серии другого тайтла, если страницу успели сменить.
+        let ours = self
+            .data
+            .as_ref()
+            .is_some_and(|d| d.episodes.iter().any(|e| e.id == id));
+        if !ours {
+            return Effect::Task(Task::none());
+        }
         self.busy = None;
         let details = match result {
             Ok(d) => d,
             Err(e) => return Effect::Toast(format!("Серия не загрузилась: {e}")),
         };
-        let action = untag(&details);
-        let details = details.clone();
         self.episodes.insert(id, details.clone());
         if matches!(action, EpisodeAction::Teams) {
             self.teams = details
@@ -520,7 +587,8 @@ impl TitleView {
                     .iter()
                     .find(|p| p.kind() == PlayerKind::Kodik && p.team.as_ref().map(|t| t.id) == self.team)
                     .or_else(|| details.players.iter().find(|p| p.kind() == PlayerKind::Kodik));
-                match kodik.and_then(|p| p.embed_url()) {
+                // Открываем в браузере только https: адрес пришёл с сервера.
+                match kodik.and_then(|p| p.embed_url()).filter(|u| u.starts_with("https://")) {
                     Some(url) => {
                         let _ = open::that_detached(url);
                         Effect::Task(Task::none())
@@ -538,7 +606,7 @@ impl TitleView {
                 };
                 let key = episode_key(episode.id);
                 let start = self.progress.get(&key).map(|p| p.position);
-                let _ = ctx.db.save_progress(self.site, &self.slug, &key, started());
+                self.mark_started(ctx, episode.id);
                 self.busy = Some("Запускаю плеер…".into());
                 let client = ctx.client.clone();
                 let quality = ctx.config.max_quality;
@@ -582,6 +650,21 @@ impl TitleView {
     }
 
     // --- Помощники ---
+
+    /// Отмечает серию начатой, не затирая уже записанный прогресс.
+    fn mark_started(&mut self, ctx: &Ctx, episode_id: u64) {
+        let key = episode_key(episode_id);
+        if self.progress.contains_key(&key) {
+            return;
+        }
+        let p = Progress {
+            position: 0,
+            total: 0,
+            finished: false,
+        };
+        let _ = ctx.db.save_progress(self.site, &self.slug, &key, p);
+        self.progress.insert(key, p);
+    }
 
     fn branch_of(&self, chapter: &Chapter) -> Option<u64> {
         pick_branch(chapter, self.branch)
@@ -629,7 +712,13 @@ impl TitleView {
         let back = button("← Назад").style(button::text).on_press(Msg::Back);
         let Some(data) = &self.data else {
             let status: Element<'a, Msg> = match &self.error {
-                Some(e) => text(format!("Не загрузилось: {e}")).into(),
+                Some(e) => row![
+                    text(format!("Не загрузилось: {e}")),
+                    button("Ещё раз").on_press(Msg::Retry)
+                ]
+                .spacing(12)
+                .align_y(Alignment::Center)
+                .into(),
                 None => text("Загружаю…").style(text::secondary).into(),
             };
             return column![back, status].spacing(12).padding(16).into();
@@ -910,14 +999,6 @@ fn ctx_logged_hint(details: &EpisodeDetails) -> bool {
     details.players.iter().any(|p| p.kind() == PlayerKind::Kodik)
 }
 
-fn started() -> Progress {
-    Progress {
-        position: 0,
-        total: 0,
-        finished: false,
-    }
-}
-
 /// `2026-10-13T17:05:00.000000Z` → `13.10.2026`.
 fn short_date(iso: &str) -> String {
     let date = iso.get(..10).unwrap_or(iso);
@@ -940,32 +1021,6 @@ trait IfEmpty {
 impl IfEmpty for String {
     fn if_empty(self, f: impl FnOnce() -> String) -> String {
         if self.trim().is_empty() { f() } else { self }
-    }
-}
-
-// Действие над эпизодом путешествует вместе с ответом сервера в имени эпизода:
-// так обходимся без отдельного типа сообщения на каждый случай.
-const TAG: &str = "\u{1}polka:";
-
-fn tag(action: EpisodeAction, mut d: EpisodeDetails) -> EpisodeDetails {
-    let code = match action {
-        EpisodeAction::Teams => "t",
-        EpisodeAction::Watch => "w",
-        EpisodeAction::Download => "d",
-        EpisodeAction::Kodik => "k",
-    };
-    let name = d.name.take().unwrap_or_default();
-    d.name = Some(format!("{TAG}{code}{name}"));
-    d
-}
-
-fn untag(d: &EpisodeDetails) -> EpisodeAction {
-    let name = d.name.as_deref().unwrap_or("");
-    match name.strip_prefix(TAG).and_then(|s| s.chars().next()) {
-        Some('w') => EpisodeAction::Watch,
-        Some('d') => EpisodeAction::Download,
-        Some('k') => EpisodeAction::Kodik,
-        _ => EpisodeAction::Teams,
     }
 }
 
@@ -994,7 +1049,12 @@ async fn load_title(ctx: Ctx, site: Site, slug: String) -> Result<TitleData, Str
     };
     match online.await {
         Ok(data) => Ok(data),
-        Err(e) => offline_title(&ctx, site, &slug).ok_or_else(|| human_error(&e)),
+        // Скачанное показываем только когда до сервера не достучаться. На 404 или
+        // испорченный ответ честно показываем ошибку.
+        Err(e @ (libsocial::Error::Network(_) | libsocial::Error::Forbidden)) => {
+            offline_title(&ctx, site, &slug).ok_or_else(|| human_error(&e))
+        }
+        Err(e) => Err(human_error(&e)),
     }
 }
 
@@ -1005,19 +1065,27 @@ fn offline_title(ctx: &Ctx, site: Site, slug: &str) -> Option<TitleData> {
     let mut chapters = Vec::new();
     let mut episodes = Vec::new();
     for d in downloads.iter().filter(|d| d.state == DownloadState::Done) {
-        match serde_json::from_str::<Job>(&d.job).ok()? {
+        let Ok(job) = serde_json::from_str::<Job>(&d.job) else {
+            continue;
+        };
+        match job {
             Job::Chapter {
                 chapter_id,
                 volume,
                 number,
                 branch_id,
             } => {
-                let chapter: Chapter = serde_json::from_value(serde_json::json!({
+                // Две скачанные ветки одной главы показываем одной строкой.
+                if chapters.iter().any(|c: &Chapter| c.id == chapter_id) {
+                    continue;
+                }
+                let Ok(chapter) = serde_json::from_value::<Chapter>(serde_json::json!({
                     "id": chapter_id, "volume": volume, "number": number,
                     "branches_count": 1,
                     "branches": [{"id": chapter_id, "branch_id": branch_id, "teams": []}],
-                }))
-                .ok()?;
+                })) else {
+                    continue;
+                };
                 chapters.push(chapter);
             }
             Job::Episode {
@@ -1026,10 +1094,11 @@ fn offline_title(ctx: &Ctx, site: Site, slug: &str) -> Option<TitleData> {
                 number,
                 ..
             } => {
-                let ep: Episode = serde_json::from_value(serde_json::json!({
+                let Ok(ep) = serde_json::from_value::<Episode>(serde_json::json!({
                     "id": episode_id, "season": season, "number": number,
-                }))
-                .ok()?;
+                })) else {
+                    continue;
+                };
                 episodes.push(ep);
             }
         }

@@ -143,6 +143,8 @@ impl Db {
         // Таймаут первым: переключение журнала тоже может упереться в чужую блокировку.
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
+        // В режиме WAL это безопасно и избавляет от fsync на каждой записи.
+        conn.pragma_update(None, "synchronous", "NORMAL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         // Два процесса при первом запуске не должны мигрировать одновременно: версию
         // читаем уже под блокировкой записи.
@@ -250,28 +252,21 @@ impl Db {
     /// Ставит загрузку в очередь. Уже скачанное и уже стоящее в очереди не трогает,
     /// упавшее или остановленное перезапускает.
     pub fn enqueue(&self, row: &DownloadRow) -> Result<bool> {
+        self.with(|c| enqueue_row(c, row))
+    }
+
+    /// Ставит пачку заданий одной транзакцией. Возвращает, сколько добавлено.
+    pub fn enqueue_many(&self, rows: &[DownloadRow]) -> Result<usize> {
         self.with(|c| {
-            let changed = c.execute(
-                "INSERT INTO downloads (site, slug, item, label, sort, state, done, total, path, job, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, 'queued', 0, ?6, ?7, ?8, ?9, ?9)
-                 ON CONFLICT (site, slug, item) DO UPDATE SET
-                    state = 'queued', error = NULL, job = excluded.job, path = excluded.path,
-                    label = excluded.label, sort = excluded.sort,
-                    created_at = excluded.created_at, updated_at = excluded.updated_at
-                 WHERE downloads.state IN ('failed', 'paused')",
-                params![
-                    row.site.key(),
-                    row.slug,
-                    row.item,
-                    row.label,
-                    row.sort,
-                    row.total as i64,
-                    row.path,
-                    row.job,
-                    now()
-                ],
-            )?;
-            Ok(changed > 0)
+            let tx = c.unchecked_transaction()?;
+            let mut added = 0;
+            for row in rows {
+                if enqueue_row(&tx, row)? {
+                    added += 1;
+                }
+            }
+            tx.commit()?;
+            Ok(added)
         })
     }
 
@@ -478,6 +473,32 @@ impl Db {
             .collect()
         })
     }
+}
+
+/// Постановка одного задания: уже скачанное и ждущее в очереди не трогает,
+/// упавшее или остановленное перезапускает с новыми параметрами.
+fn enqueue_row(c: &Connection, row: &DownloadRow) -> rusqlite::Result<bool> {
+    let changed = c.execute(
+        "INSERT INTO downloads (site, slug, item, label, sort, state, done, total, path, job, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, 'queued', 0, ?6, ?7, ?8, ?9, ?9)
+         ON CONFLICT (site, slug, item) DO UPDATE SET
+            state = 'queued', error = NULL, job = excluded.job, path = excluded.path,
+            label = excluded.label, sort = excluded.sort,
+            created_at = excluded.created_at, updated_at = excluded.updated_at
+         WHERE downloads.state IN ('failed', 'paused')",
+        params![
+            row.site.key(),
+            row.slug,
+            row.item,
+            row.label,
+            row.sort,
+            row.total as i64,
+            row.path,
+            row.job,
+            now()
+        ],
+    )?;
+    Ok(changed > 0)
 }
 
 const DOWNLOAD_COLS: &str = "site, slug, item, label, sort, state, done, total, error, path, job";

@@ -12,6 +12,9 @@ use crate::db::TitleRow;
 #[derive(Default)]
 pub struct LibraryView {
     rows: Vec<TitleRow>,
+    /// Обложка для каждой строки. Считается при загрузке списка, а не при каждой
+    /// отрисовке: проверка файла на диске в отрисовке тормозила бы прокрутку.
+    covers: Vec<Option<ImageReq>>,
     error: Option<String>,
 }
 
@@ -30,10 +33,12 @@ impl LibraryView {
             }
             Err(e) => self.error = Some(format!("{e:#}")),
         }
+        self.covers = self.rows.iter().map(|r| cover_req(ctx, r)).collect();
         let tasks: Vec<_> = self
-            .rows
+            .covers
             .iter()
-            .filter_map(|r| cover_req(ctx, r))
+            .flatten()
+            .cloned()
             .map(|req| images.request(req, |k, l| Message::Library(Msg::Image(k, l))))
             .collect();
         Task::batch(tasks)
@@ -50,7 +55,7 @@ impl LibraryView {
         }
     }
 
-    pub fn view<'a>(&'a self, ctx: &'a Ctx, images: &'a Images) -> Element<'a, Msg> {
+    pub fn view<'a>(&'a self, images: &'a Images) -> Element<'a, Msg> {
         if let Some(e) = &self.error {
             return container(text(format!("Библиотека не открылась: {e}")))
                 .padding(20)
@@ -64,8 +69,7 @@ impl LibraryView {
             .padding(20)
             .into();
         }
-        let cards = row(self.rows.iter().map(|r| {
-            let req = cover_req(ctx, r);
+        let cards = row(self.rows.iter().zip(&self.covers).map(|(r, req)| {
             button(
                 column![
                     cover(images, req.as_ref(), CARD_W, CARD_H),

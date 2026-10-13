@@ -153,7 +153,9 @@ impl Catalog {
                 }
             }
             Msg::Scrolled(viewport) => {
-                if viewport.relative_offset().y > 0.92 {
+                // После ошибки сами не повторяем: прокрутка приходит и при любом
+                // изменении высоты списка, иначе запросы пошли бы по кругу.
+                if self.error.is_none() && viewport.relative_offset().y > 0.92 {
                     self.load(ctx, true)
                 } else {
                     Task::none()
