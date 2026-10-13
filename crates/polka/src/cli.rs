@@ -3,14 +3,15 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result, bail};
-use libsocial::models::{Chapter, PlayerKind, TitleDetails};
+use libsocial::models::{PlayerKind, TitleDetails};
 use libsocial::{Client, Site};
 
-use crate::config::Config;
-use crate::db::{Db, DownloadState, TitleRow};
-use crate::downloads::Downloader;
-use crate::library::{Job, Library};
-use crate::session;
+use polka_core::config::Config;
+use polka_core::db::{Db, DownloadState};
+use polka_core::downloads::Downloader;
+use polka_core::library::{Job, Library};
+use polka_core::session;
+use polka_core::titles::{pick_branch, title_row};
 
 /// `polka download <сайт> <slug> [от-до]`: ставит главы или серии в очередь и ждёт.
 pub async fn download(args: &[String]) -> Result<()> {
@@ -109,28 +110,6 @@ fn parse_range(s: &str) -> Result<(f64, f64)> {
     let a: f64 = a.trim().parse().with_context(|| format!("не число: {a}"))?;
     let b: f64 = b.trim().parse().with_context(|| format!("не число: {b}"))?;
     Ok((a.min(b), a.max(b)))
-}
-
-pub fn title_row(site: Site, details: &TitleDetails) -> TitleRow {
-    TitleRow {
-        site,
-        slug: details.short.slug_url.clone(),
-        title_id: details.short.id,
-        name: details.short.display_name().to_string(),
-        cover_url: details.short.cover.best().map(str::to_string),
-        details: serde_json::to_string(details).ok(),
-        in_library: false,
-    }
-}
-
-/// Ветка перевода для главы: выбранная на сайте по умолчанию, если она есть у главы.
-pub fn pick_branch(chapter: &Chapter, preferred: Option<u64>) -> Option<u64> {
-    chapter
-        .branches
-        .iter()
-        .find(|b| preferred.is_some() && b.branch_id == preferred)
-        .or(chapter.branches.first())
-        .and_then(|b| b.branch_id)
 }
 
 async fn manga_jobs(

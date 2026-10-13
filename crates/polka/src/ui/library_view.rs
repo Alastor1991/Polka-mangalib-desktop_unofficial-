@@ -9,7 +9,7 @@ use libsocial::{Bookmark, BookmarkPage, Site};
 use super::catalog::{CARD_H, CARD_W, cover};
 use super::images::{ImageReq, Images, Loaded};
 use super::{Ctx, Message, human_error};
-use crate::db::TitleRow;
+use polka_core::db::TitleRow;
 
 /// Карточка тайтла в библиотеке.
 struct Card {

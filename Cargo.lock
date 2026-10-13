@@ -4218,17 +4218,30 @@ dependencies = [
  "anyhow",
  "futures",
  "iced",
+ "libsocial",
+ "open",
+ "polka-core",
+ "serde_json",
+ "tao",
+ "tokio",
+ "wry",
+]
+
+[[package]]
+name = "polka-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
  "keyring",
  "libsocial",
  "open",
  "rusqlite",
  "serde",
  "serde_json",
- "tao",
  "tokio",
  "toml 1.1.8+spec-1.1.0",
  "wiremock",
- "wry",
  "zip",
 ]
 

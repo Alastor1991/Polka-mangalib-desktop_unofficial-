@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/libsocial", "crates/polka"]
+members = ["crates/libsocial", "crates/polka-core", "crates/polka"]
 
 [workspace.package]
 edition = "2024"

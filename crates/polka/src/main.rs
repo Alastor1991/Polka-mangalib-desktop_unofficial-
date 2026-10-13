@@ -1,17 +1,11 @@
 mod cli;
-mod config;
-mod db;
 mod doctor;
-mod downloads;
-mod library;
+mod login;
 mod login_window;
-mod player;
-mod secrets;
-mod session;
-mod sync;
 mod ui;
 
 use anyhow::Result;
+use polka_core::{config, db, downloads, library, session, sync};
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -19,7 +13,7 @@ fn main() -> Result<()> {
     match args.first().map(String::as_str) {
         Some("login") => {
             let mode = if args.iter().any(|a| a == "--browser") {
-                session::LoginMode::Browser
+                login::LoginMode::Browser
             } else {
                 let mirror = args
                     .iter()
@@ -27,14 +21,14 @@ fn main() -> Result<()> {
                     .and_then(|i| args.get(i + 1))
                     .and_then(|n| n.parse::<usize>().ok())
                     .unwrap_or(1);
-                session::LoginMode::Window {
+                login::LoginMode::Window {
                     mirror: mirror.saturating_sub(1),
                 }
             };
-            session::cli_login(&runtime, mode)
+            login::cli_login(&runtime, mode)
         }
-        Some("logout") => runtime.block_on(session::cli_logout()),
-        Some("whoami") => runtime.block_on(session::cli_whoami()),
+        Some("logout") => runtime.block_on(login::cli_logout()),
+        Some("whoami") => runtime.block_on(login::cli_whoami()),
         Some("doctor") => runtime.block_on(doctor::run()),
         Some("download") => runtime.block_on(cli::download(&args[1..])),
         // Отладка: сырой ответ API, `polka dev-get animelib episodes/123`.

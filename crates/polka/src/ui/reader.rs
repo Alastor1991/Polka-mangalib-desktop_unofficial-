@@ -12,9 +12,9 @@ use libsocial::models::{Chapter, PageImage};
 
 use super::images::{ImageReq, Images, Loaded};
 use super::{Ctx, human_error, style};
-use crate::db::Progress;
-use crate::library::{self, chapter_key};
-use crate::sync::Mark;
+use polka_core::db::Progress;
+use polka_core::library::{self, chapter_key};
+use polka_core::sync::Mark;
 
 const SCROLL_ID: &str = "reader-scroll";
 /// Сколько страниц вперёд грузить заранее.

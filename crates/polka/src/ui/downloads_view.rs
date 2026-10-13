@@ -5,8 +5,8 @@ use iced::{Alignment, Element, Fill};
 use libsocial::Site;
 
 use super::Ctx;
-use crate::db::{DownloadRow, DownloadState};
-use crate::downloads::DownloadEvent;
+use polka_core::db::{DownloadRow, DownloadState};
+use polka_core::downloads::DownloadEvent;
 
 #[derive(Default)]
 pub struct DownloadsView {

@@ -13,11 +13,11 @@ use super::catalog::cover;
 use super::images::{ImageReq, Images, Loaded};
 use super::reader::ReaderStart;
 use super::{Ctx, human_error};
-use crate::cli::{pick_branch, title_row};
-use crate::db::{DownloadRow, DownloadState, Progress};
-use crate::downloads::DownloadEvent;
-use crate::library::{self, ExportChapter, Job, chapter_key, episode_key};
-use crate::sync::Mark;
+use polka_core::db::{DownloadRow, DownloadState, Progress};
+use polka_core::downloads::DownloadEvent;
+use polka_core::library::{self, ExportChapter, Job, chapter_key, episode_key};
+use polka_core::sync::Mark;
+use polka_core::titles::{pick_branch, title_row};
 
 #[derive(Debug, Clone)]
 pub struct TitleData {
@@ -591,7 +591,7 @@ impl TitleView {
             let mut track = self.track(ctx, &episode, player.as_ref());
             track.player_id = track.player_id.or(player_id);
             return Effect::Task(watch_player(
-                crate::player::play_file(path, start, episode.title()),
+                polka_core::player::play_file(path, start, episode.title()),
                 track,
             ));
         }
@@ -725,7 +725,7 @@ impl TitleView {
                             .resolve_video(&player, quality, None, true)
                             .await
                             .map_err(|e| human_error(&e))?;
-                        crate::player::play_stream(video, start, title).await
+                        polka_core::player::play_stream(video, start, title).await
                     },
                     track,
                 ))
@@ -763,8 +763,8 @@ impl TitleView {
             .map(|p| p.position)
     }
 
-    fn track(&self, ctx: &Ctx, episode: &Episode, player: Option<&Player>) -> crate::player::Track {
-        crate::player::Track {
+    fn track(&self, ctx: &Ctx, episode: &Episode, player: Option<&Player>) -> polka_core::player::Track {
+        polka_core::player::Track {
             db: ctx.db.clone(),
             sync: ctx.sync.clone(),
             site: self.site,
@@ -1385,8 +1385,8 @@ fn clock(secs: u64) -> String {
 /// Запускает плеер и следит за ним в фоне: сначала сообщает о запуске, а после
 /// закрытия плеера просит перечитать прогресс.
 fn watch_player(
-    launch: impl Future<Output = Result<crate::player::Playback, String>> + Send + 'static,
-    track: crate::player::Track,
+    launch: impl Future<Output = Result<polka_core::player::Playback, String>> + Send + 'static,
+    track: polka_core::player::Track,
 ) -> Task<Msg> {
     let (tx, rx) = futures::channel::mpsc::unbounded();
     tokio::spawn(async move {

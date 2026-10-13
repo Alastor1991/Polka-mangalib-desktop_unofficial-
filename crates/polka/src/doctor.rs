@@ -4,8 +4,8 @@ use anyhow::Result;
 use libsocial::models::PlayerKind;
 use libsocial::{CatalogQuery, Site};
 
-use crate::config::Config;
-use crate::session;
+use polka_core::config::Config;
+use polka_core::session;
 
 /// Тайтл с длинной историей и собственным плеером, на нём проверяется видео.
 const ANIME_PROBE: &[&str] = &["16133--jujutsu-kaisen-anime", "14421--kimetsu-no-yaiba-anime"];

@@ -5,7 +5,7 @@ use iced::{Alignment, Element, Task};
 use libsocial::models::Me;
 
 use super::{Ctx, Message};
-use crate::config::Config;
+use polka_core::config::Config;
 
 const SERVERS: [&str; 4] = ["compress", "main", "secondary", "download"];
 const QUALITIES: [u64; 5] = [360, 480, 720, 1080, 2160];
@@ -201,7 +201,7 @@ fn server_static(s: &str) -> &'static str {
 
 /// Вход в отдельном процессе: окну WebKitGTK нужен главный поток, а он занят iced.
 /// Новый токен процесс кладёт в хранилище, отсюда его остаётся прочитать.
-async fn login(client: libsocial::Client, store: crate::secrets::TokenStore) -> Result<Option<Me>, String> {
+async fn login(client: libsocial::Client, store: polka_core::secrets::TokenStore) -> Result<Option<Me>, String> {
     let exe = own_exe().ok_or("не удалось найти программу polka")?;
     let child = tokio::process::Command::new(exe)
         .arg("login")

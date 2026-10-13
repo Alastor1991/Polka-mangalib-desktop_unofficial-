@@ -10,17 +10,11 @@ description = "Полка: неофициальный десктопный кл�
 anyhow = "1.0.104"
 futures = "0.3.34"
 iced = { version = "0.14.0", features = ["image", "tokio", "advanced"] }
-keyring = "4.2.0"
 libsocial = { version = "0.1.0", path = "../libsocial" }
+polka-core = { version = "0.1.0", path = "../polka-core" }
 open = "5.4.4"
-rusqlite = { version = "0.40.2", features = ["bundled"] }
-serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 tao = "0.37.1"
 tokio = { version = "1.53.2", features = ["full"] }
-toml = "1.1.8"
 wry = "0.57.0"
-zip = { version = "9.0.2", default-features = false, features = ["deflate"] }
 
-[dev-dependencies]
-wiremock = "0.6.5"

@@ -17,12 +17,12 @@ use libsocial::models::Me;
 use libsocial::{BookmarkFolder, Client, Site};
 use tokio::sync::broadcast;
 
-use crate::config::Config;
-use crate::db::Db;
-use crate::downloads::{DownloadEvent, Downloader};
-use crate::library::Library;
-use crate::secrets::TokenStore;
-use crate::sync::Sync;
+use polka_core::config::Config;
+use polka_core::db::Db;
+use polka_core::downloads::{DownloadEvent, Downloader};
+use polka_core::library::Library;
+use polka_core::secrets::TokenStore;
+use polka_core::sync::Sync;
 
 /// Всё, что нужно экранам для работы. Клонируется дёшево.
 #[derive(Clone)]
@@ -97,7 +97,7 @@ pub enum Message {
 pub fn run(ctx: Ctx) -> iced::Result {
     let _ = DOWNLOAD_EVENTS.set(ctx.downloader.event_sender());
     let cache_limit = ctx.config.cache_limit_mb * 1024 * 1024;
-    let cache = crate::config::cache_dir().join("images");
+    let cache = polka_core::config::cache_dir().join("images");
     std::thread::spawn(move || {
         let _ = images::prune_cache(&cache, cache_limit);
     });
@@ -120,7 +120,7 @@ impl App {
     fn new(ctx: Ctx) -> (App, Task<Message>) {
         let images = images::Images::new(
             ctx.client.clone(),
-            crate::config::cache_dir().join("images"),
+            polka_core::config::cache_dir().join("images"),
             ctx.config.download_concurrency,
         );
         let mut app = App {
@@ -217,7 +217,7 @@ impl App {
             Message::Catalog(msg) => {
                 // Каталог загрузился: зеркало API рабочее, начнём с него в следующий раз.
                 if matches!(msg, catalog::Msg::Loaded(_, Ok(_))) {
-                    crate::session::remember_mirror(&self.ctx.config, &self.ctx.client);
+                    polka_core::session::remember_mirror(&self.ctx.config, &self.ctx.client);
                 }
                 let (task, open) = self.catalog.update(msg, &self.ctx, &mut self.images);
                 let task = task.map(Message::Catalog);
