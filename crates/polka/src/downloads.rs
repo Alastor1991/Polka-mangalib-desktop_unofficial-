@@ -1,21 +1,32 @@
 //! Загрузчик: берёт задания из очереди в базе по одному и качает их на диск.
 //!
-//! Очередь живёт в базе, поэтому переживает перезапуск: прерванное задание снова
-//! встаёт в очередь, а уже скачанные страницы и куски видео не качаются повторно.
+//! Очередь живёт в базе и переживает перезапуск: прерванное задание снова встаёт
+//! в очередь, скачанные страницы и куски видео повторно не качаются. Качает только
+//! один процесс: он держит блокировку файла, остальные лишь ставят задания в очередь.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use futures::{StreamExt, TryStreamExt};
-use libsocial::models::PlayerKind;
+use libsocial::models::{PlayerKind, image_format};
 use libsocial::{Client, Site};
+use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{Notify, broadcast};
 
 use crate::db::{Db, DownloadRow, DownloadState, TitleRow};
 use crate::library::{self, CHAPTER_MARKER, Job, Library};
+
+/// Сколько ждать очередной кусок видео, прежде чем считать соединение зависшим.
+const CHUNK_TIMEOUT: Duration = Duration::from_secs(60);
+/// Как часто заглядывать в очередь без сигнала: задания мог добавить другой процесс.
+const POLL: Duration = Duration::from_secs(10);
+/// Пауза между заданиями, чтобы не идти к серверу сплошным потоком.
+const BETWEEN_JOBS: Duration = Duration::from_millis(300);
 
 /// Сообщение для интерфейса: у задания поменялось состояние или прогресс.
 #[derive(Debug, Clone)]
@@ -27,16 +38,24 @@ pub struct DownloadEvent {
     pub done: u64,
     pub total: u64,
     pub error: Option<String>,
+    /// Задание удалено вместе с файлами.
+    pub removed: bool,
 }
 
-/// Задание, которое сейчас выполняется, и флажок для его остановки.
+/// Выполняющееся задание и флажки для его остановки.
 struct Running {
     site: Site,
     slug: String,
     item: String,
     stop: Arc<AtomicBool>,
-    /// Что сделать после остановки: поставить на паузу или удалить.
+    /// После остановки удалить, а не поставить на паузу.
     remove: Arc<AtomicBool>,
+}
+
+impl Running {
+    fn is(&self, site: Site, slug: &str, item: &str) -> bool {
+        self.site == site && self.slug == slug && self.item == item
+    }
 }
 
 #[derive(Clone)]
@@ -49,12 +68,25 @@ pub struct Downloader {
     wake: Arc<Notify>,
     running: Arc<Mutex<Option<Running>>>,
     events: broadcast::Sender<DownloadEvent>,
+    /// Тайтлы, обложку которых уже не удалось скачать в этом запуске.
+    cover_failed: Arc<Mutex<HashSet<(Site, String)>>>,
+    /// Блокировка «качаю я». Пока файл открыт, второй процесс не качает.
+    _lock: Option<Arc<std::fs::File>>,
 }
 
 impl Downloader {
-    /// Создаёт загрузчик и запускает его рабочую задачу в текущем рантайме tokio.
-    pub fn start(client: Client, db: Db, library: Library, concurrency: usize, image_server: String) -> Downloader {
+    /// Создаёт загрузчик и, если этот процесс первый, запускает рабочую задачу
+    /// в текущем рантайме tokio.
+    pub fn start(
+        client: Client,
+        db: Db,
+        library: Library,
+        concurrency: usize,
+        image_server: String,
+        lock_path: &Path,
+    ) -> Downloader {
         let (events, _) = broadcast::channel(256);
+        let lock = take_lock(lock_path);
         let downloader = Downloader {
             client,
             db,
@@ -64,34 +96,58 @@ impl Downloader {
             wake: Arc::new(Notify::new()),
             running: Arc::new(Mutex::new(None)),
             events,
+            cover_failed: Arc::new(Mutex::new(HashSet::new())),
+            _lock: lock.map(Arc::new),
         };
-        if let Err(e) = downloader.db.requeue_interrupted() {
-            eprintln!("не удалось вернуть прерванные загрузки в очередь: {e:#}");
+        if downloader.is_active() {
+            if let Err(e) = downloader.db.requeue_interrupted() {
+                eprintln!("не удалось вернуть прерванные загрузки в очередь: {e:#}");
+            }
+            let worker = downloader.clone();
+            tokio::spawn(async move { worker.run().await });
         }
-        let worker = downloader.clone();
-        tokio::spawn(async move { worker.run().await });
         downloader
+    }
+
+    /// Этот процесс качает сам. Иначе задания выполнит процесс, держащий блокировку.
+    pub fn is_active(&self) -> bool {
+        self._lock.is_some()
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<DownloadEvent> {
         self.events.subscribe()
     }
 
+    pub fn event_sender(&self) -> broadcast::Sender<DownloadEvent> {
+        self.events.clone()
+    }
+
     /// Ставит задание в очередь. Карточку тайтла сохраняет в базу и рядом с главами,
     /// чтобы библиотека открывалась без сети. Возвращает `false`, если задание уже
-    /// скачано или уже ждёт в очереди.
+    /// скачано, качается или ждёт в очереди.
     pub fn enqueue(&self, title: &TitleRow, label: &str, job: Job) -> Result<bool> {
         self.db.upsert_title(title)?;
-        if let Some(details) = &title.details
+        let meta = self.library.title_dir(title.site, &title.slug).join("title.json");
+        if !meta.is_file()
+            && let Some(details) = &title.details
             && let Ok(value) = serde_json::from_str::<serde_json::Value>(details)
         {
             self.library.write_title_meta(title.site, &title.slug, &value)?;
         }
         let path = self.library.job_path(title.site, &title.slug, &job);
+        let item = job.item_key();
+        // Повторная постановка с другой озвучкой или качеством: старый недокачанный
+        // файл к новому заданию не относится.
+        if let Some(old) = self.db.download(title.site, &title.slug, &item)?
+            && matches!(old.state, DownloadState::Failed | DownloadState::Paused)
+            && old.path != path.to_string_lossy()
+        {
+            remove_path(Path::new(&old.path))?;
+        }
         let row = DownloadRow {
             site: title.site,
             slug: title.slug.clone(),
-            item: job.item_key(),
+            item,
             label: label.to_string(),
             sort: job.sort(),
             state: DownloadState::Queued,
@@ -103,7 +159,7 @@ impl Downloader {
         };
         let added = self.db.enqueue(&row)?;
         if added {
-            self.emit(&row.site, &row.slug, &row.item, DownloadState::Queued, 0, 0, None);
+            self.emit_row(row.site, &row.slug, &row.item, false);
             self.wake.notify_one();
         }
         Ok(added)
@@ -111,112 +167,148 @@ impl Downloader {
 
     /// Ставит на паузу. Выполняющееся задание останавливается после текущей страницы.
     pub fn pause(&self, site: Site, slug: &str, item: &str) -> Result<()> {
-        if self.signal_running(site, slug, item, false) {
+        let running = self.running.lock().expect("running отравлен");
+        if let Some(r) = running.as_ref().filter(|r| r.is(site, slug, item)) {
+            r.remove.store(false, Ordering::SeqCst);
+            r.stop.store(true, Ordering::SeqCst);
             return Ok(());
         }
-        self.db.set_state(site, slug, item, DownloadState::Paused, None)?;
-        self.emit(&site, slug, item, DownloadState::Paused, 0, 0, None);
+        if self
+            .db
+            .transition(site, slug, item, &[DownloadState::Queued], DownloadState::Paused)?
+        {
+            self.emit_row(site, slug, item, false);
+        }
         Ok(())
     }
 
     pub fn resume(&self, site: Site, slug: &str, item: &str) -> Result<()> {
-        self.db.set_state(site, slug, item, DownloadState::Queued, None)?;
-        self.emit(&site, slug, item, DownloadState::Queued, 0, 0, None);
-        self.wake.notify_one();
+        let from = [DownloadState::Paused, DownloadState::Failed];
+        if self.db.transition(site, slug, item, &from, DownloadState::Queued)? {
+            self.emit_row(site, slug, item, false);
+            self.wake.notify_one();
+        }
         Ok(())
     }
 
-    /// Убирает задание из очереди и стирает его файлы.
+    /// Убирает задание из очереди и стирает его файлы. Работающее задание сначала
+    /// останавливается, а стирает его сам рабочий цикл.
     pub fn remove(&self, site: Site, slug: &str, item: &str) -> Result<()> {
-        if self.signal_running(site, slug, item, true) {
+        // Замок держим до конца: рабочий цикл не захватит и не завершит задание,
+        // пока мы его стираем.
+        let running = self.running.lock().expect("running отравлен");
+        if let Some(r) = running.as_ref().filter(|r| r.is(site, slug, item)) {
+            r.remove.store(true, Ordering::SeqCst);
+            r.stop.store(true, Ordering::SeqCst);
             return Ok(());
         }
         self.remove_now(site, slug, item)
     }
 
     fn remove_now(&self, site: Site, slug: &str, item: &str) -> Result<()> {
-        let rows = self.db.downloads_for(site, slug)?;
-        if let Some(row) = rows.iter().find(|r| r.item == item) {
+        if let Some(row) = self.db.download(site, slug, item)? {
             remove_path(Path::new(&row.path))?;
         }
         self.db.remove_download(site, slug, item)?;
-        self.emit(&site, slug, item, DownloadState::Failed, 0, 0, Some("удалено".into()));
+        self.emit(DownloadEvent {
+            site,
+            slug: slug.to_string(),
+            item: item.to_string(),
+            state: DownloadState::Failed,
+            done: 0,
+            total: 0,
+            error: None,
+            removed: true,
+        });
         Ok(())
     }
 
-    /// Если задание сейчас выполняется, просит его остановиться.
-    fn signal_running(&self, site: Site, slug: &str, item: &str, remove: bool) -> bool {
-        let running = self.running.lock().expect("running отравлен");
-        match running.as_ref() {
-            Some(r) if r.site == site && r.slug == slug && r.item == item => {
-                r.remove.store(remove, Ordering::SeqCst);
-                r.stop.store(true, Ordering::SeqCst);
-                true
-            }
-            _ => false,
+    fn emit(&self, event: DownloadEvent) {
+        let _ = self.events.send(event);
+    }
+
+    /// Шлёт событие с тем, что сейчас записано в базе.
+    fn emit_row(&self, site: Site, slug: &str, item: &str, removed: bool) {
+        if let Ok(Some(row)) = self.db.download(site, slug, item) {
+            self.emit(DownloadEvent {
+                site,
+                slug: slug.to_string(),
+                item: item.to_string(),
+                state: row.state,
+                done: row.done,
+                total: row.total,
+                error: row.error,
+                removed,
+            });
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn emit(
-        &self,
-        site: &Site,
-        slug: &str,
-        item: &str,
-        state: DownloadState,
-        done: u64,
-        total: u64,
-        error: Option<String>,
-    ) {
-        let _ = self.events.send(DownloadEvent {
-            site: *site,
-            slug: slug.to_string(),
-            item: item.to_string(),
-            state,
-            done,
-            total,
-            error,
-        });
-    }
-
     async fn run(self) {
+        let mut failures: u32 = 0;
         loop {
             let next = match self.db.next_queued() {
                 Ok(next) => next,
                 Err(e) => {
                     eprintln!("очередь загрузок недоступна: {e:#}");
-                    None
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    continue;
                 }
             };
-            match next {
-                Some(row) => self.process(row).await,
-                None => self.wake.notified().await,
+            let Some(row) = next else {
+                let _ = tokio::time::timeout(POLL, self.wake.notified()).await;
+                continue;
+            };
+            let (site, slug, item) = (row.site, row.slug.clone(), row.item.clone());
+            // Задание выполняется в своей задаче: паника из-за странных данных
+            // сервера не должна убить весь загрузчик.
+            let worker = self.clone();
+            let state = match tokio::spawn(async move { worker.process(row).await }).await {
+                Ok(state) => state,
+                Err(e) => {
+                    *self.running.lock().expect("running отравлен") = None;
+                    let msg = format!("внутренняя ошибка загрузчика: {e}");
+                    let _ = self.db.set_state(site, &slug, &item, DownloadState::Failed, Some(&msg));
+                    self.emit_row(site, &slug, &item, false);
+                    Some(DownloadState::Failed)
+                }
+            };
+            match state {
+                Some(DownloadState::Failed) => {
+                    failures += 1;
+                    // Сервер лежит или нас не пускают: не долбим его следующими заданиями.
+                    if failures >= 2 {
+                        let pause = Duration::from_secs((5u64 << (failures - 2).min(6)).min(300));
+                        let _ = tokio::time::timeout(pause, self.wake.notified()).await;
+                    }
+                }
+                Some(DownloadState::Done) => failures = 0,
+                _ => {}
             }
+            tokio::time::sleep(BETWEEN_JOBS).await;
         }
     }
 
-    async fn process(&self, row: DownloadRow) {
+    /// Выполняет задание. Возвращает итоговое состояние, `None` если задание не
+    /// досталось этому процессу или удалено.
+    async fn process(&self, row: DownloadRow) -> Option<DownloadState> {
         let stop = Arc::new(AtomicBool::new(false));
         let remove = Arc::new(AtomicBool::new(false));
-        *self.running.lock().expect("running отравлен") = Some(Running {
-            site: row.site,
-            slug: row.slug.clone(),
-            item: row.item.clone(),
-            stop: stop.clone(),
-            remove: remove.clone(),
-        });
-        let _ = self
-            .db
-            .set_state(row.site, &row.slug, &row.item, DownloadState::Running, None);
-        self.emit(
-            &row.site,
-            &row.slug,
-            &row.item,
-            DownloadState::Running,
-            row.done,
-            row.total,
-            None,
-        );
+        {
+            let mut running = self.running.lock().expect("running отравлен");
+            // Захват под замком: пауза или удаление между чтением очереди и захватом
+            // либо уже изменили строку, либо увидят задание выполняющимся.
+            if !self.db.claim(row.site, &row.slug, &row.item).unwrap_or(false) {
+                return None;
+            }
+            *running = Some(Running {
+                site: row.site,
+                slug: row.slug.clone(),
+                item: row.item.clone(),
+                stop: stop.clone(),
+                remove: remove.clone(),
+            });
+        }
+        self.emit_row(row.site, &row.slug, &row.item, false);
         self.ensure_cover(row.site, &row.slug).await;
 
         let result = match serde_json::from_str::<Job>(&row.job) {
@@ -224,45 +316,45 @@ impl Downloader {
             Ok(job @ Job::Episode { .. }) => self.episode(&row, &job, &stop).await,
             Err(e) => Err(anyhow!("испорченное задание: {e}")),
         };
-        *self.running.lock().expect("running отравлен") = None;
 
+        // Решение по итогу и снятие отметки «выполняется» под одним замком, чтобы
+        // запрос на удаление не проскочил между ними.
+        let mut running = self.running.lock().expect("running отравлен");
+        let removing = remove.load(Ordering::SeqCst);
+        *running = None;
+        if removing {
+            if let Err(e) = self.remove_now(row.site, &row.slug, &row.item) {
+                eprintln!("не удалось удалить загрузку: {e:#}");
+            }
+            return None;
+        }
         let (state, error) = match result {
             Ok(Outcome::Done) => (DownloadState::Done, None),
-            Ok(Outcome::Stopped) if remove.load(Ordering::SeqCst) => {
-                if let Err(e) = self.remove_now(row.site, &row.slug, &row.item) {
-                    eprintln!("не удалось удалить загрузку: {e:#}");
-                }
-                return;
-            }
             Ok(Outcome::Stopped) => (DownloadState::Paused, None),
             Err(e) => (DownloadState::Failed, Some(format!("{e:#}"))),
         };
         let _ = self
             .db
             .set_state(row.site, &row.slug, &row.item, state, error.as_deref());
-        let (done, total) = self
-            .db
-            .downloads_for(row.site, &row.slug)
-            .ok()
-            .and_then(|rows| rows.into_iter().find(|r| r.item == row.item))
-            .map(|r| (r.done, r.total))
-            .unwrap_or((0, 0));
-        self.emit(&row.site, &row.slug, &row.item, state, done, total, error);
+        drop(running);
+        self.emit_row(row.site, &row.slug, &row.item, false);
+        Some(state)
     }
 
     fn report(&self, row: &DownloadRow, done: u64, total: u64) {
         let _ = self
             .db
             .set_download_progress(row.site, &row.slug, &row.item, done, total);
-        self.emit(
-            &row.site,
-            &row.slug,
-            &row.item,
-            DownloadState::Running,
+        self.emit(DownloadEvent {
+            site: row.site,
+            slug: row.slug.clone(),
+            item: row.item.clone(),
+            state: DownloadState::Running,
             done,
             total,
-            None,
-        );
+            error: None,
+            removed: false,
+        });
     }
 
     async fn chapter(&self, row: &DownloadRow, job: &Job, stop: &Arc<AtomicBool>) -> Result<Outcome> {
@@ -299,7 +391,7 @@ impl Downloader {
             .into_iter()
             .enumerate()
             .map(|(i, page)| {
-                let target = dir.join(library::page_file_name(i, page.extension()));
+                let dir = dir.clone();
                 let done = done.clone();
                 let this = self.clone();
                 let row = row.clone();
@@ -308,13 +400,16 @@ impl Downloader {
                     if stop.load(Ordering::SeqCst) {
                         return Ok::<bool, anyhow::Error>(false);
                     }
-                    if !target.is_file() {
+                    if library::find_page(&dir, i).is_none() {
                         let bytes = this
                             .client
                             .fetch_page(row.site, &page, &this.image_server)
                             .await
                             .with_context(|| format!("страница {}", i + 1))?;
-                        write_file(&target, &bytes).await?;
+                        // Расширение по содержимому: сервер сжатия отдаёт JPEG под именем .png.
+                        let ext = image_format(&bytes)
+                            .ok_or_else(|| anyhow!("страница {}: сервер вернул не картинку", i + 1))?;
+                        write_file(&dir.join(library::page_file_name(i, ext)), &bytes).await?;
                     }
                     let n = done.fetch_add(1, Ordering::SeqCst) + 1;
                     this.report(&row, n, total);
@@ -371,7 +466,7 @@ impl Downloader {
             tokio::fs::create_dir_all(dir).await?;
         }
         for sub in &video.subtitles {
-            let path = target.with_extension(sub.format.trim_start_matches('.'));
+            let path = target.with_extension(subtitle_ext(&sub.format));
             if !path.is_file()
                 && let Ok(bytes) = self.client.fetch_bytes(Site::AnimeLib, &sub.url).await
             {
@@ -379,12 +474,29 @@ impl Downloader {
             }
         }
 
+        // Недокачанный кусок годится, только если он от того же файла: та же озвучка
+        // и то же качество. Сервер может быть другим, путь файла в API на всех один.
         let part = part_path(&target);
+        let identity = PartIdentity {
+            file: video.href.clone(),
+            quality: video.quality,
+        };
+        let sidecar = sidecar_path(&part);
+        let saved: Option<PartIdentity> = tokio::fs::read(&sidecar)
+            .await
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok());
+        if saved.as_ref() != Some(&identity) {
+            let _ = tokio::fs::remove_file(&part).await;
+        }
+        write_file(&sidecar, &serde_json::to_vec(&identity)?).await?;
+
         let mut last_error = None;
         for url in std::iter::once(&video.url).chain(&video.fallbacks) {
             match self.stream_to(row, url, &part, stop).await {
                 Ok(Outcome::Done) => {
                     tokio::fs::rename(&part, &target).await?;
+                    let _ = tokio::fs::remove_file(&sidecar).await;
                     return Ok(Outcome::Done);
                 }
                 Ok(Outcome::Stopped) => return Ok(Outcome::Stopped),
@@ -399,11 +511,14 @@ impl Downloader {
         let have = tokio::fs::metadata(part).await.map(|m| m.len()).unwrap_or(0);
         let response = match self.client.fetch_stream(Site::AnimeLib, url, have).await {
             Ok(r) => r,
-            // Сервер не умеет докачивать: начинаем заново.
-            Err(_) if have > 0 => {
+            // Кусок за концом файла: всё уже скачано, процесс прервали перед переименованием.
+            Err(libsocial::Error::RangeNotSatisfiable) => return Ok(Outcome::Done),
+            // Сервер не умеет докачивать: только в этом случае начинаем заново.
+            Err(libsocial::Error::RangeUnsupported) => {
                 tokio::fs::remove_file(part).await.ok();
                 self.client.fetch_stream(Site::AnimeLib, url, 0).await?
             }
+            // Остальные ошибки временные: недокачанное сохраняем до следующей попытки.
             Err(e) => return Err(e.into()),
         };
         let have = tokio::fs::metadata(part).await.map(|m| m.len()).unwrap_or(0);
@@ -416,12 +531,19 @@ impl Downloader {
         let mut done = have;
         let mut reported = done;
         let mut body = response.bytes_stream();
-        while let Some(chunk) = body.next().await {
+        loop {
             if stop.load(Ordering::SeqCst) {
                 file.flush().await?;
                 return Ok(Outcome::Stopped);
             }
-            let chunk = chunk.context("обрыв загрузки видео")?;
+            let chunk = match tokio::time::timeout(CHUNK_TIMEOUT, body.next()).await {
+                Ok(Some(chunk)) => chunk.context("обрыв загрузки видео")?,
+                Ok(None) => break,
+                Err(_) => {
+                    file.flush().await?;
+                    return Err(anyhow!("сервер перестал отдавать видео, продолжу позже"));
+                }
+            };
             file.write_all(&chunk).await?;
             done += chunk.len() as u64;
             if done - reported > 2 * 1024 * 1024 {
@@ -440,15 +562,21 @@ impl Downloader {
     /// Обложка рядом с главами, чтобы библиотека показывала её без сети.
     async fn ensure_cover(&self, site: Site, slug: &str) {
         let path = self.library.cover_path(site, slug);
-        if path.is_file() {
+        let key = (site, slug.to_string());
+        if path.is_file() || self.cover_failed.lock().expect("cover_failed отравлен").contains(&key) {
             return;
         }
         let Ok(Some(title)) = self.db.title(site, slug) else {
             return;
         };
         let Some(url) = title.cover_url else { return };
-        if let Ok(bytes) = self.client.fetch_bytes(site, &url).await {
-            let _ = write_file(&path, &bytes).await;
+        match self.client.fetch_bytes(site, &url).await {
+            Ok(bytes) if image_format(&bytes).is_some() => {
+                let _ = write_file(&path, &bytes).await;
+            }
+            _ => {
+                self.cover_failed.lock().expect("cover_failed отравлен").insert(key);
+            }
         }
     }
 }
@@ -458,10 +586,47 @@ enum Outcome {
     Stopped,
 }
 
+/// Что именно лежит в `.part`: путь файла на сервере и качество.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+struct PartIdentity {
+    file: String,
+    quality: u64,
+}
+
+/// Расширение субтитров из ответа сервера: только буквы и цифры, иначе vtt.
+fn subtitle_ext(format: &str) -> &str {
+    let f = format.trim().trim_start_matches('.');
+    if !f.is_empty() && f.len() <= 5 && f.chars().all(|c| c.is_ascii_alphanumeric()) {
+        f
+    } else {
+        "vtt"
+    }
+}
+
+fn take_lock(path: &Path) -> Option<std::fs::File> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).ok()?;
+    }
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(path)
+        .ok()?;
+    file.try_lock().ok()?;
+    Some(file)
+}
+
 fn part_path(target: &Path) -> PathBuf {
     let mut name = target.file_name().unwrap_or_default().to_os_string();
     name.push(".part");
     target.with_file_name(name)
+}
+
+fn sidecar_path(part: &Path) -> PathBuf {
+    let mut name = part.file_name().unwrap_or_default().to_os_string();
+    name.push(".json");
+    part.with_file_name(name)
 }
 
 /// Пишет файл через `.part`, чтобы оборванная запись не выглядела готовой страницей.
@@ -475,23 +640,78 @@ async fn write_file(path: &Path, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-/// Стирает каталог главы или файл эпизода вместе с недокачанным куском и субтитрами.
+/// Стирает каталог главы или файл эпизода вместе с недокачанным куском, его
+/// описанием и субтитрами. Имя эпизода уникально (сезон, серия, озвучка), поэтому
+/// все файлы `<имя>.*` рядом принадлежат ему.
 fn remove_path(path: &Path) -> Result<()> {
     if path.is_dir() {
         std::fs::remove_dir_all(path)?;
-    } else {
-        for candidate in [path.to_path_buf(), part_path(path)] {
-            match std::fs::remove_file(&candidate) {
+        return Ok(());
+    }
+    let (Some(dir), Some(stem)) = (path.parent(), path.file_stem().and_then(|s| s.to_str())) else {
+        return Ok(());
+    };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Ok(());
+    };
+    let prefix = format!("{stem}.");
+    for entry in entries.filter_map(|e| e.ok()) {
+        let name = entry.file_name();
+        if name.to_str().is_some_and(|n| n.starts_with(&prefix)) && entry.path().is_file() {
+            match std::fs::remove_file(entry.path()) {
                 Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                 Err(e) => return Err(e.into()),
             }
         }
-        if let (Some(dir), Some(stem)) = (path.parent(), path.file_stem().and_then(|s| s.to_str())) {
-            for ext in ["vtt", "ass", "srt"] {
-                let _ = std::fs::remove_file(dir.join(format!("{stem}.{ext}")));
-            }
-        }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn subtitle_extensions() {
+        assert_eq!(subtitle_ext("vtt"), "vtt");
+        assert_eq!(subtitle_ext(".ass"), "ass");
+        assert_eq!(subtitle_ext("../x"), "vtt");
+        assert_eq!(subtitle_ext("a/b"), "vtt");
+        assert_eq!(subtitle_ext(""), "vtt");
+    }
+
+    #[test]
+    fn remove_episode_files_only() {
+        let dir = std::env::temp_dir().join(format!("polka-rm-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in [
+            "s1-e1-p5.mp4.part",
+            "s1-e1-p5.mp4.part.json",
+            "s1-e1-p5.vtt",
+            "s1-e10-p5.mp4",
+            "cover.jpg",
+        ] {
+            std::fs::write(dir.join(name), b"x").unwrap();
+        }
+        remove_path(&dir.join("s1-e1-p5.mp4")).unwrap();
+        let mut left: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        left.sort();
+        assert_eq!(left, ["cover.jpg", "s1-e10-p5.mp4"]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn single_lock_holder() {
+        let path = std::env::temp_dir().join(format!("polka-lock-{}", std::process::id()));
+        let first = take_lock(&path);
+        assert!(first.is_some());
+        assert!(take_lock(&path).is_none());
+        drop(first);
+        assert!(take_lock(&path).is_some());
+        let _ = std::fs::remove_file(&path);
+    }
 }

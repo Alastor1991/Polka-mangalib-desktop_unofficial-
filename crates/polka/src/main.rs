@@ -5,8 +5,10 @@ mod doctor;
 mod downloads;
 mod library;
 mod login_window;
+mod player;
 mod secrets;
 mod session;
+mod ui;
 
 use anyhow::Result;
 
@@ -45,10 +47,7 @@ fn main() -> Result<()> {
             print_help();
             std::process::exit(2);
         }
-        None => {
-            eprintln!("Интерфейс ещё не готов. Доступны команды: login, logout, whoami.");
-            Ok(())
-        }
+        None => gui(runtime),
     }
 }
 
@@ -67,4 +66,31 @@ fn print_help() {
          POLKA_INTERFACE  сетевой интерфейс для запросов (например enp4s0)\n  \
          POLKA_PROXY      прокси для запросов (socks5h://127.0.0.1:1080)"
     );
+}
+
+/// Запускает окно приложения. Свой рантайм tokio живёт всё время работы окна:
+/// на нём крутится загрузчик, а iced исполняет задачи интерфейса на своём.
+fn gui(runtime: tokio::runtime::Runtime) -> Result<()> {
+    let _guard = runtime.enter();
+    let config = config::Config::load()?;
+    let (client, store) = runtime.block_on(session::connect(&config))?;
+    let db = db::Db::open(&config.db_path())?;
+    let library = library::Library::new(config.library_dir());
+    let downloader = downloads::Downloader::start(
+        client.clone(),
+        db.clone(),
+        library.clone(),
+        config.download_concurrency,
+        config.image_server.clone(),
+        &config.lock_path(),
+    );
+    let ctx = ui::Ctx {
+        client,
+        db,
+        library,
+        downloader,
+        config,
+        store,
+    };
+    ui::run(ctx).map_err(|e| anyhow::anyhow!("интерфейс: {e}"))
 }

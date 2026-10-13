@@ -159,6 +159,16 @@ pub fn page_file_name(index: usize, ext: &str) -> String {
     format!("{:04}.{}", index + 1, ext)
 }
 
+const PAGE_EXTS: [&str; 6] = ["jpg", "jpeg", "png", "webp", "gif", "avif"];
+
+/// Уже скачанная страница с этим номером, с любым расширением.
+pub fn find_page(dir: &Path, index: usize) -> Option<PathBuf> {
+    PAGE_EXTS
+        .iter()
+        .map(|ext| dir.join(page_file_name(index, ext)))
+        .find(|p| p.is_file())
+}
+
 fn is_page_file(p: &Path) -> bool {
     let stem_ok = p
         .file_stem()
@@ -181,18 +191,37 @@ pub struct ExportChapter {
 }
 
 /// Собирает главы в один CBZ. Картинки уже сжаты, поэтому кладутся без сжатия.
+/// Недокачанная глава в экспорт не попадает: это ошибка, а не тихий пропуск.
 pub fn export_cbz(series: &str, chapters: &[ExportChapter], out: &Path) -> Result<()> {
-    use zip::write::SimpleFileOptions;
-
+    let first = chapters.first().context("нечего экспортировать")?;
+    for chapter in chapters {
+        if !chapter_complete(&chapter.dir) {
+            anyhow::bail!("глава {} скачана не полностью", chapter.number);
+        }
+    }
     if let Some(dir) = out.parent() {
         std::fs::create_dir_all(dir)?;
     }
     let tmp = out.with_extension("cbz.part");
-    let file = std::fs::File::create(&tmp).with_context(|| format!("не создать {}", tmp.display()))?;
+    let result = write_cbz(series, first, chapters, &tmp);
+    match result {
+        Ok(()) => {
+            std::fs::rename(&tmp, out)?;
+            Ok(())
+        }
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp);
+            Err(e)
+        }
+    }
+}
+
+fn write_cbz(series: &str, first: &ExportChapter, chapters: &[ExportChapter], tmp: &Path) -> Result<()> {
+    use zip::write::SimpleFileOptions;
+
+    let file = std::fs::File::create(tmp).with_context(|| format!("не создать {}", tmp.display()))?;
     let mut zip = zip::ZipWriter::new(file);
     let stored = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
-
-    let first = chapters.first().context("нечего экспортировать")?;
     let number = if chapters.len() == 1 {
         first.number.clone()
     } else {
@@ -210,16 +239,14 @@ pub fn export_cbz(series: &str, chapters: &[ExportChapter], out: &Path) -> Resul
     );
     zip.start_file("ComicInfo.xml", SimpleFileOptions::default())?;
     zip.write_all(info.as_bytes())?;
-
     for (ci, chapter) in chapters.iter().enumerate() {
         for (pi, page) in chapter_pages(&chapter.dir)?.iter().enumerate() {
             let ext = page.extension().and_then(|e| e.to_str()).unwrap_or("jpg");
-            zip.start_file(format!("{:03}-{:04}.{ext}", ci + 1, pi + 1), stored)?;
+            zip.start_file(format!("{:04}-{:04}.{ext}", ci + 1, pi + 1), stored)?;
             std::io::copy(&mut std::fs::File::open(page)?, &mut zip)?;
         }
     }
     zip.finish()?;
-    std::fs::rename(&tmp, out)?;
     Ok(())
 }
 
@@ -242,10 +269,18 @@ pub fn safe(s: &str) -> String {
         .collect();
     let trimmed = cleaned.trim_start_matches('.').trim();
     if trimmed.is_empty() {
-        "_".into()
-    } else {
-        trimmed.chars().take(150).collect()
+        return "_".into();
     }
+    // Предел имени файла 255 байт, а кириллица занимает по два: режем по байтам,
+    // оставляя место под расширение и приставки.
+    let mut out = String::new();
+    for c in trimmed.chars() {
+        if out.len() + c.len_utf8() > 200 {
+            break;
+        }
+        out.push(c);
+    }
+    out
 }
 
 #[cfg(test)]
@@ -258,6 +293,7 @@ mod tests {
         assert_eq!(safe("7965--chainsaw-man"), "7965--chainsaw-man");
         assert_eq!(safe(".."), "_");
         assert!(!safe("a/b").contains('/'));
+        assert!(safe(&"я".repeat(300)).len() <= 200);
     }
 
     #[test]
@@ -301,7 +337,7 @@ mod tests {
         let names: Vec<String> = (0..zip.len())
             .map(|i| zip.by_index(i).unwrap().name().unwrap().to_string())
             .collect();
-        assert_eq!(names, ["ComicInfo.xml", "001-0001.jpg", "001-0002.png"]);
+        assert_eq!(names, ["ComicInfo.xml", "0001-0001.jpg", "0001-0002.png"]);
         std::fs::remove_dir_all(&tmp).unwrap();
     }
 }

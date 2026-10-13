@@ -451,8 +451,9 @@ impl Client {
     }
 
     /// Начинает потоковую загрузку большого файла (видео). Вызывающий читает тело сам.
-    /// При докачке сервер обязан ответить 206, иначе файл испортился бы дозаписью
-    /// с начала, и возвращается ошибка.
+    /// При докачке сервер обязан ответить 206. Если он отдал файл целиком, это
+    /// `RangeUnsupported`, а 416 означает `RangeNotSatisfiable`: дозапись с начала
+    /// испортила бы файл.
     pub async fn fetch_stream(&self, site: Site, url: &str, resume_from: u64) -> Result<Response> {
         let mut request = self
             .http
@@ -464,10 +465,13 @@ impl Client {
         }
         let response = request.send().await?;
         let status = response.status();
-        if resume_from > 0 && status != StatusCode::PARTIAL_CONTENT {
-            return Err(Error::Other(format!(
-                "сервер не умеет докачивать ({status}), начните загрузку заново"
-            )));
+        if resume_from > 0 {
+            match status {
+                StatusCode::PARTIAL_CONTENT => {}
+                StatusCode::RANGE_NOT_SATISFIABLE => return Err(Error::RangeNotSatisfiable),
+                s if s.is_success() => return Err(Error::RangeUnsupported),
+                _ => return Err(status_error(response).await),
+            }
         }
         if status.is_success() {
             Ok(response)

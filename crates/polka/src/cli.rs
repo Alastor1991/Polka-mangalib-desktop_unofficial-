@@ -30,7 +30,11 @@ pub async fn download(args: &[String]) -> Result<()> {
         library,
         config.download_concurrency,
         config.image_server.clone(),
+        &config.lock_path(),
     );
+    if !downloader.is_active() {
+        println!("Загрузки уже идут в открытом приложении Полка: задания встанут в его очередь.");
+    }
     let mut events = downloader.subscribe();
 
     let details = client.title(site, slug).await.context("карточка тайтла")?;
@@ -66,7 +70,9 @@ pub async fn download(args: &[String]) -> Result<()> {
                     );
                 }
                 DownloadState::Done => eprintln!("\r{:<14} готово{:20}", e.item, ""),
-                DownloadState::Failed => eprintln!("\r{:<14} ошибка: {}", e.item, e.error.unwrap_or_default()),
+                DownloadState::Failed if !e.removed => {
+                    eprintln!("\r{:<14} ошибка: {}", e.item, e.error.unwrap_or_default())
+                }
                 _ => {}
             },
             _ => {}

@@ -9,6 +9,8 @@ pub struct ResolvedVideo {
     pub url: String,
     /// Тот же файл на остальных серверах, на случай если первый закрыт.
     pub fallbacks: Vec<String>,
+    /// Путь файла из ответа API: одинаков на всех серверах, по нему узнаётся файл.
+    pub href: String,
     pub quality: u64,
     pub subtitles: Vec<ResolvedSubtitle>,
 }
@@ -110,6 +112,7 @@ impl Client {
         Ok(ResolvedVideo {
             url: main,
             fallbacks: urls,
+            href: quality.href.clone(),
             quality: quality.quality,
             subtitles,
         })

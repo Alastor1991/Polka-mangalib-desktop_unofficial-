@@ -536,3 +536,16 @@ pub struct Me {
     #[serde(default)]
     pub avatar: Option<Value>,
 }
+
+/// Формат картинки по первым байтам: `jpg`, `png`, `webp`, `gif`, `avif`.
+/// Расширению в адресе верить нельзя: сервер сжатия отдаёт под именем `.png` JPEG.
+pub fn image_format(bytes: &[u8]) -> Option<&'static str> {
+    match bytes {
+        [0xFF, 0xD8, 0xFF, ..] => Some("jpg"),
+        [0x89, b'P', b'N', b'G', ..] => Some("png"),
+        [b'G', b'I', b'F', b'8', ..] => Some("gif"),
+        [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] => Some("webp"),
+        [_, _, _, _, b'f', b't', b'y', b'p', b'a', b'v', b'i', b'f' | b's', ..] => Some("avif"),
+        _ => None,
+    }
+}

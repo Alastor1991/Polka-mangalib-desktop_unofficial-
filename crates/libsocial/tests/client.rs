@@ -223,7 +223,9 @@ async fn page_falls_back_to_other_server() {
         .mount(&dead)
         .await;
     Mock::given(path("/manga/x/1.jpg"))
-        .respond_with(ResponseTemplate::new(200).set_body_bytes(vec![7u8; 4096]))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_bytes([vec![0xFF, 0xD8, 0xFF, 0xE0], vec![7u8; 4092]].concat()),
+        )
         .mount(&alive)
         .await;
 

@@ -113,6 +113,11 @@ impl Config {
         cache_dir().join("api-mirror")
     }
 
+    /// Блокировка загрузчика: качает только процесс, который её держит.
+    pub fn lock_path(&self) -> PathBuf {
+        self.data_dir().join("downloader.lock")
+    }
+
     pub fn db_path(&self) -> PathBuf {
         self.data_dir().join("polka.sqlite3")
     }

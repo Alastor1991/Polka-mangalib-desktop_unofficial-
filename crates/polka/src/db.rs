@@ -140,14 +140,31 @@ impl Db {
     }
 
     fn init(conn: Connection) -> Result<Db> {
+        // Таймаут первым: переключение журнала тоже может упереться в чужую блокировку.
+        conn.busy_timeout(std::time::Duration::from_secs(5))?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
-        conn.busy_timeout(std::time::Duration::from_secs(5))?;
-        let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
-        let version = version.max(0) as usize;
-        for (i, sql) in MIGRATIONS.iter().enumerate().skip(version) {
-            conn.execute_batch(&format!("BEGIN; {sql}; PRAGMA user_version = {}; COMMIT;", i + 1))
-                .with_context(|| format!("миграция базы до версии {}", i + 1))?;
+        // Два процесса при первом запуске не должны мигрировать одновременно: версию
+        // читаем уже под блокировкой записи.
+        conn.execute_batch("BEGIN IMMEDIATE")?;
+        let migrated = (|| -> Result<()> {
+            let version: i64 = conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
+            let version = version.max(0) as usize;
+            if version > MIGRATIONS.len() {
+                anyhow::bail!("база создана более новой версией Полки, обновите приложение");
+            }
+            for (i, sql) in MIGRATIONS.iter().enumerate().skip(version) {
+                conn.execute_batch(&format!("{sql}; PRAGMA user_version = {};", i + 1))
+                    .with_context(|| format!("миграция базы до версии {}", i + 1))?;
+            }
+            Ok(())
+        })();
+        match migrated {
+            Ok(()) => conn.execute_batch("COMMIT")?,
+            Err(e) => {
+                let _ = conn.execute_batch("ROLLBACK");
+                return Err(e);
+            }
         }
         Ok(Db {
             conn: Arc::new(Mutex::new(conn)),
@@ -219,7 +236,8 @@ impl Db {
                 "SELECT t.site, t.slug, t.title_id, t.name, t.cover_url, t.details, t.in_library
                  FROM titles t
                  WHERE t.in_library = 1
-                    OR EXISTS (SELECT 1 FROM downloads d WHERE d.site = t.site AND d.slug = t.slug)
+                    OR EXISTS (SELECT 1 FROM downloads d
+                               WHERE d.site = t.site AND d.slug = t.slug AND d.state = 'done')
                  ORDER BY COALESCE(t.added_at, t.updated_at) DESC",
             )?;
             let rows = st.query_map([], title_row)?.collect::<rusqlite::Result<Vec<_>>>()?;
@@ -237,7 +255,9 @@ impl Db {
                 "INSERT INTO downloads (site, slug, item, label, sort, state, done, total, path, job, created_at, updated_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, 'queued', 0, ?6, ?7, ?8, ?9, ?9)
                  ON CONFLICT (site, slug, item) DO UPDATE SET
-                    state = 'queued', error = NULL, job = excluded.job, updated_at = excluded.updated_at
+                    state = 'queued', error = NULL, job = excluded.job, path = excluded.path,
+                    label = excluded.label, sort = excluded.sort,
+                    created_at = excluded.created_at, updated_at = excluded.updated_at
                  WHERE downloads.state IN ('failed', 'paused')",
                 params![
                     row.site.key(),
@@ -292,6 +312,62 @@ impl Db {
             )
             .map(|_| ())
         })
+    }
+
+    /// Забирает задание из очереди в работу. Возвращает `false`, если его успели
+    /// поставить на паузу или удалить после чтения очереди.
+    pub fn claim(&self, site: Site, slug: &str, item: &str) -> Result<bool> {
+        self.with(|c| {
+            c.execute(
+                "UPDATE downloads SET state = 'running', updated_at = ?4
+                 WHERE site = ?1 AND slug = ?2 AND item = ?3 AND state = 'queued'",
+                params![site.key(), slug, item, now()],
+            )
+            .map(|n| n == 1)
+        })
+    }
+
+    /// Меняет состояние, только если текущее входит в `from`. Возвращает, поменялось ли.
+    pub fn transition(
+        &self,
+        site: Site,
+        slug: &str,
+        item: &str,
+        from: &[DownloadState],
+        to: DownloadState,
+    ) -> Result<bool> {
+        let allowed: Vec<&str> = from.iter().map(|s| s.as_str()).collect();
+        self.with(|c| {
+            let current: Option<String> = c
+                .query_row(
+                    "SELECT state FROM downloads WHERE site = ?1 AND slug = ?2 AND item = ?3",
+                    params![site.key(), slug, item],
+                    |r| r.get(0),
+                )
+                .optional()?;
+            match current {
+                Some(state) if allowed.contains(&state.as_str()) => c
+                    .execute(
+                        "UPDATE downloads SET state = ?4, error = NULL, updated_at = ?5
+                         WHERE site = ?1 AND slug = ?2 AND item = ?3",
+                        params![site.key(), slug, item, to.as_str(), now()],
+                    )
+                    .map(|n| n == 1),
+                _ => Ok(false),
+            }
+        })
+    }
+
+    pub fn download(&self, site: Site, slug: &str, item: &str) -> Result<Option<DownloadRow>> {
+        self.with(|c| {
+            c.query_row(
+                &format!("SELECT {DOWNLOAD_COLS} FROM downloads WHERE site = ?1 AND slug = ?2 AND item = ?3"),
+                params![site.key(), slug, item],
+                download_row,
+            )
+            .optional()
+        })
+        .map(Option::flatten)
     }
 
     /// Следующая загрузка из очереди, самая старая.
@@ -362,6 +438,17 @@ impl Db {
         })
     }
 
+    /// Снимает отметку о прочтении или просмотре.
+    pub fn clear_progress(&self, site: Site, slug: &str, item: &str) -> Result<()> {
+        self.with(|c| {
+            c.execute(
+                "DELETE FROM progress WHERE site = ?1 AND slug = ?2 AND item = ?3",
+                params![site.key(), slug, item],
+            )
+            .map(|_| ())
+        })
+    }
+
     pub fn progress(&self, site: Site, slug: &str, item: &str) -> Result<Option<Progress>> {
         self.with(|c| {
             c.query_row(
@@ -389,18 +476,6 @@ impl Db {
                 ))
             })?
             .collect()
-        })
-    }
-
-    /// Последний открытый элемент тайтла, чтобы предложить «продолжить».
-    pub fn last_item(&self, site: Site, slug: &str) -> Result<Option<String>> {
-        self.with(|c| {
-            c.query_row(
-                "SELECT item FROM progress WHERE site = ?1 AND slug = ?2 ORDER BY updated_at DESC LIMIT 1",
-                params![site.key(), slug],
-                |r| r.get(0),
-            )
-            .optional()
         })
     }
 }
@@ -529,6 +604,5 @@ mod tests {
         // Прочитанная глава не становится непрочитанной при повторном открытии.
         db.save_progress(Site::MangaLib, "1--x", "c1", p).unwrap();
         assert!(db.progress(Site::MangaLib, "1--x", "c1").unwrap().unwrap().finished);
-        assert_eq!(db.last_item(Site::MangaLib, "1--x").unwrap().as_deref(), Some("c1"));
     }
 }

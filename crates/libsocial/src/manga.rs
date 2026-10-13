@@ -1,6 +1,8 @@
 use crate::client::Client;
 use crate::error::{Error, Result};
-use crate::models::{Branch, Chapter, ChapterPages, MediaServer, PageImage, Paged, TitleDetails, TitleShort};
+use crate::models::{
+    Branch, Chapter, ChapterPages, MediaServer, PageImage, Paged, TitleDetails, TitleShort, image_format,
+};
 use crate::site::Site;
 
 /// Поля полной карточки, которые сервер отдаёт только по запросу.
@@ -202,8 +204,12 @@ impl Client {
         for retries in [0, 1] {
             for url in &urls {
                 match self.fetch_bytes_tries(site, url, retries).await {
-                    // Битые заглушки сервера бывают в сотню байт, такую пробуем заменить
-                    // картинкой с другого сервера, но если других нет, отдаём её.
+                    // Страница блокировки или капча приходит со статусом 200: не картинка.
+                    Ok(bytes) if image_format(&bytes).is_none() => {
+                        last = Some(Error::Other(format!("сервер вернул не картинку: {url}")));
+                    }
+                    // Битые заглушки бывают в сотню байт: пробуем другой сервер,
+                    // но если других нет, отдаём что есть.
                     Ok(bytes) if bytes.len() <= 600 => tiny = Some(bytes),
                     Ok(bytes) => return Ok(bytes),
                     Err(e) => last = Some(e),
