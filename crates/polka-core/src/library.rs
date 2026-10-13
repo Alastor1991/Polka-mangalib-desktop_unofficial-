@@ -23,10 +23,15 @@ pub const CHAPTER_MARKER: &str = "chapter.json";
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Job {
     Chapter {
+        /// Id главы в списке глав.
         chapter_id: u64,
         volume: String,
         number: String,
         branch_id: Option<u64>,
+        /// Id перевода в этой ветке: его ждёт сайт в отметке о прочтении. В заданиях,
+        /// поставленных до появления поля, его нет.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        item_id: Option<u64>,
     },
     Episode {
         episode_id: u64,
@@ -44,6 +49,7 @@ impl Job {
             volume: chapter.volume.clone(),
             number: chapter.number.clone(),
             branch_id,
+            item_id: chapter.branch(branch_id).map(|b| b.id),
         }
     }
 
@@ -115,6 +121,7 @@ impl Library {
                 volume,
                 number,
                 branch_id,
+                ..
             } => {
                 let branch = branch_id.map(|b| format!("-b{b}")).unwrap_or_default();
                 dir.join(safe(&format!("v{volume}-c{number}{branch}-{chapter_id}")))
@@ -306,6 +313,7 @@ mod tests {
             volume: "1".into(),
             number: "12.5".into(),
             branch_id: Some(3),
+            item_id: Some(11),
         };
         assert_eq!(
             lib.job_path(Site::MangaLib, "1--x", &job),

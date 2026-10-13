@@ -930,6 +930,7 @@ mod job_tests {
             volume: "1".into(),
             number: "1".into(),
             branch_id: None,
+            item_id: None,
         }
     }
 

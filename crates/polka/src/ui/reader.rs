@@ -1,45 +1,20 @@
-//! Читалка: лента для вебтунов и постраничный режим, с диска или из сети.
-
-use std::collections::HashMap;
-use std::path::PathBuf;
+//! Читалка: лента для вебтунов и постраничный режим, с диска или из сети. Что
+//! открыть, откуда брать страницы и что записать, решает ядро (`ReaderSession`),
+//! здесь только отрисовка, прокрутка и картинки.
 
 use iced::keyboard::{self, Key, key::Named};
 use iced::widget::operation::{AbsoluteOffset, scroll_by, snap_to};
 use iced::widget::{button, column, container, image, row, scrollable, text};
 use iced::{Alignment, ContentFit, Element, Fill, Subscription, Task};
-use libsocial::Site;
-use libsocial::models::{Chapter, PageImage};
+use libsocial::models::PageImage;
+use polka_core::reader::{PageSrc, ReaderSession, ReaderStart, Source};
 
 use super::images::{ImageReq, Images, Loaded};
 use super::{Ctx, human_error, style};
-use polka_core::db::Progress;
-use polka_core::library::{self, chapter_key};
-use polka_core::sync::Mark;
 
 const SCROLL_ID: &str = "reader-scroll";
 /// Сколько страниц вперёд грузить заранее.
 const AHEAD: usize = 6;
-
-/// С чего открыть читалку. Главы идут от первой к последней.
-#[derive(Debug, Clone)]
-pub struct ReaderStart {
-    pub site: Site,
-    pub slug: String,
-    /// Числовой id тайтла: с ним сайт принимает отметки о прочтении.
-    pub title_id: u64,
-    pub title: String,
-    pub chapters: Vec<Chapter>,
-    pub branches: HashMap<u64, Option<u64>>,
-    pub local: HashMap<u64, PathBuf>,
-    pub index: usize,
-    pub offline: bool,
-}
-
-#[derive(Debug, Clone)]
-enum PageSrc {
-    Local(PathBuf),
-    Remote(PageImage),
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -48,13 +23,11 @@ enum Mode {
 }
 
 pub struct Reader {
-    start: ReaderStart,
-    index: usize,
-    pages: Vec<PageSrc>,
+    s: ReaderSession,
     loading: bool,
     error: Option<String>,
     mode: Mode,
-    page: usize,
+    /// Куда перемотать, когда придут страницы из сети.
     saved_page: Option<usize>,
     server: String,
 }
@@ -82,15 +55,11 @@ pub enum Effect {
 
 impl Reader {
     pub fn open(start: ReaderStart, ctx: &Ctx, images: &mut Images) -> (Reader, Task<Msg>) {
-        let index = start.index;
         let mut reader = Reader {
-            start,
-            index,
-            pages: Vec::new(),
+            s: ReaderSession::new(start),
             loading: false,
             error: None,
             mode: Mode::Ribbon,
-            page: 0,
             saved_page: None,
             server: ctx.config.image_server.clone(),
         };
@@ -98,84 +67,46 @@ impl Reader {
         (reader, task)
     }
 
-    fn chapter(&self) -> &Chapter {
-        &self.start.chapters[self.index]
-    }
-
-    fn key(&self) -> String {
-        let c = self.chapter();
-        chapter_key(c.id, self.start.branches.get(&c.id).copied().flatten())
-    }
-
     fn load_chapter(&mut self, ctx: &Ctx, images: &mut Images) -> Task<Msg> {
         images.forget_pages();
-        self.pages.clear();
         self.error = None;
-        self.page = 0;
         self.saved_page = None;
-        let chapter = self.chapter().clone();
-        let resume = ctx
-            .db
-            .progress(self.start.site, &self.start.slug, &self.key())
-            .ok()
-            .flatten()
-            .filter(|p| !p.finished && p.position > 0)
-            .map(|p| p.position as usize);
-
-        if let Some(dir) = self.start.local.get(&chapter.id) {
-            match library::chapter_pages(dir) {
-                Ok(files) if !files.is_empty() => {
-                    self.pages = files.into_iter().map(PageSrc::Local).collect();
-                    self.loading = false;
-                    return Task::batch([self.ensure_window(images), self.jump_to(resume)]);
-                }
-                _ => {}
+        self.loading = false;
+        let (source, resume) = self.s.open_chapter(ctx);
+        match source {
+            Source::Ready => Task::batch([self.ensure_window(images), self.jump_to(resume)]),
+            Source::Unavailable(why) => {
+                self.error = Some(why.into());
+                Task::none()
+            }
+            Source::Remote => {
+                self.loading = true;
+                self.saved_page = resume;
+                let id = self.s.chapter().id;
+                let fetch = self.s.fetch_pages(ctx);
+                Task::perform(async move { fetch.await.map_err(|e| human_error(&e)) }, move |r| {
+                    Msg::Pages(id, r)
+                })
             }
         }
-        if self.start.offline {
-            self.error = Some("Эта глава не скачана, а сети нет".into());
-            return Task::none();
-        }
-        let branch = self.start.branches.get(&chapter.id).copied().flatten();
-        let branch_ok = chapter.branch(branch).is_some_and(|b| b.is_open());
-        if !branch_ok {
-            self.error = Some("Глава закрыта: ранний доступ или платная".into());
-            return Task::none();
-        }
-        self.loading = true;
-        self.saved_page = resume;
-        let client = ctx.client.clone();
-        let site = self.start.site;
-        let slug = self.start.slug.clone();
-        let id = chapter.id;
-        Task::perform(
-            async move {
-                client
-                    .chapter_pages(site, &slug, &chapter, branch)
-                    .await
-                    .map(|c| c.pages)
-                    .map_err(|e| human_error(&e))
-            },
-            move |r| Msg::Pages(id, r),
-        )
     }
 
     /// Перематывает к сохранённой странице. В ленте позиция приблизительная:
     /// высоты страниц до загрузки неизвестны.
     fn jump_to(&mut self, page: Option<usize>) -> Task<Msg> {
-        let Some(page) = page.filter(|p| *p < self.pages.len()) else {
+        let Some(page) = page.filter(|p| *p < self.s.pages.len()) else {
             return snap_to(SCROLL_ID, scrollable::RelativeOffset::START);
         };
-        self.page = page;
-        let y = page as f32 / self.pages.len().max(1) as f32;
+        self.s.page = page;
+        let y = page as f32 / self.s.pages.len().max(1) as f32;
         snap_to(SCROLL_ID, scrollable::RelativeOffset { x: 0.0, y })
     }
 
     fn req(&self, i: usize) -> Option<ImageReq> {
-        Some(match self.pages.get(i)? {
+        Some(match self.s.pages.get(i)? {
             PageSrc::Local(path) => ImageReq::LocalPage(path.clone()),
             PageSrc::Remote(page) => ImageReq::Page {
-                site: self.start.site,
+                site: self.s.start.site,
                 page: page.clone(),
                 server: self.server.clone(),
             },
@@ -184,8 +115,8 @@ impl Reader {
 
     /// Запрашивает страницы вокруг текущей.
     pub fn ensure_window(&mut self, images: &mut Images) -> Task<Msg> {
-        let from = self.page.saturating_sub(1);
-        let to = (self.page + AHEAD).min(self.pages.len());
+        let from = self.s.page.saturating_sub(1);
+        let to = (self.s.page + AHEAD).min(self.s.pages.len());
         let tasks: Vec<_> = (from..to)
             .filter_map(|i| self.req(i))
             .map(|r| images.request(r, Msg::Image))
@@ -193,85 +124,24 @@ impl Reader {
         Task::batch(tasks)
     }
 
-    /// Id перевода текущей главы в выбранной ветке: его ждёт сайт.
-    fn chapter_id(&self) -> u64 {
-        let chapter = self.chapter();
-        let branch = self.start.branches.get(&chapter.id).copied().flatten();
-        chapter.branch(branch).map_or(chapter.id, |b| b.id)
-    }
-
-    fn save(&self, ctx: &Ctx) {
-        if self.pages.is_empty() {
-            return;
-        }
-        let total = self.pages.len() as u64;
-        let finished = self.page + 1 >= self.pages.len();
-        let (site, slug, key) = (self.start.site, &self.start.slug, self.key());
-        let was_finished = ctx
-            .db
-            .progress(site, slug, &key)
-            .ok()
-            .flatten()
-            .is_some_and(|p| p.finished);
-        let _ = ctx.db.save_progress(
-            site,
-            slug,
-            &key,
-            Progress {
-                position: self.page as u64,
-                total,
-                finished,
-            },
-        );
-        // На сайт отмечаем один раз, когда глава дочитана впервые.
-        if finished && !was_finished {
-            ctx.sync.push(Mark::ChapterViewed {
-                site,
-                title_id: self.start.title_id,
-                chapter_id: self.chapter_id(),
-            });
-        }
-    }
-
-    /// Запоминает место в закладке на сайте: при смене главы и при закрытии,
-    /// а не на каждой странице.
-    fn save_place(&self, ctx: &Ctx) {
-        if self.pages.is_empty() {
-            return;
-        }
-        ctx.sync.push(Mark::Place {
-            site: self.start.site,
-            slug: self.start.slug.clone(),
-            place: libsocial::Place {
-                item_id: self.chapter_id(),
-                item_number: self.chapter().item_number,
-                progress: (self.page + 1).to_string(),
-                player: None,
-            },
-        });
-    }
-
     fn go_chapter(&mut self, delta: isize, ctx: &Ctx, images: &mut Images) -> Task<Msg> {
-        let next = self.index as isize + delta;
-        if next < 0 || next as usize >= self.start.chapters.len() {
-            return Task::none();
+        if self.s.go(ctx, delta) {
+            self.load_chapter(ctx, images)
+        } else {
+            Task::none()
         }
-        self.save(ctx);
-        self.save_place(ctx);
-        self.index = next as usize;
-        self.load_chapter(ctx, images)
     }
 
     pub fn update(&mut self, msg: Msg, ctx: &Ctx, images: &mut Images) -> Effect {
         let task = match msg {
             Msg::Pages(id, result) => {
-                if id != self.chapter().id {
+                if id != self.s.chapter().id {
                     return Effect::Task(Task::none());
                 }
                 self.loading = false;
                 match result {
                     Ok(pages) if !pages.is_empty() => {
-                        self.pages = pages.into_iter().map(PageSrc::Remote).collect();
+                        self.s.pages = pages.into_iter().map(PageSrc::Remote).collect();
                         let resume = self.saved_page.take();
                         Task::batch([self.ensure_window(images), self.jump_to(resume)])
                     }
@@ -286,18 +156,18 @@ impl Reader {
                 }
             }
             Msg::Scrolled(viewport) => {
-                if self.pages.is_empty() {
+                if self.s.pages.is_empty() {
                     return Effect::Task(Task::none());
                 }
                 let y = viewport.relative_offset().y.clamp(0.0, 1.0);
                 let page = if y >= 0.995 {
-                    self.pages.len() - 1
+                    self.s.pages.len() - 1
                 } else {
-                    ((y * self.pages.len() as f32) as usize).min(self.pages.len() - 1)
+                    ((y * self.s.pages.len() as f32) as usize).min(self.s.pages.len() - 1)
                 };
-                if page != self.page {
-                    self.page = page;
-                    self.save(ctx);
+                if page != self.s.page {
+                    self.s.page = page;
+                    self.s.save(ctx);
                     self.ensure_window(images)
                 } else {
                     Task::none()
@@ -305,9 +175,9 @@ impl Reader {
             }
             Msg::NextPage => {
                 if self.mode == Mode::Paged {
-                    if self.page + 1 < self.pages.len() {
-                        self.page += 1;
-                        self.save(ctx);
+                    if self.s.page + 1 < self.s.pages.len() {
+                        self.s.page += 1;
+                        self.s.save(ctx);
                         self.ensure_window(images)
                     } else {
                         self.go_chapter(1, ctx, images)
@@ -318,9 +188,9 @@ impl Reader {
             }
             Msg::PrevPage => {
                 if self.mode == Mode::Paged {
-                    if self.page > 0 {
-                        self.page -= 1;
-                        self.save(ctx);
+                    if self.s.page > 0 {
+                        self.s.page -= 1;
+                        self.s.save(ctx);
                         self.ensure_window(images)
                     } else {
                         Task::none()
@@ -338,21 +208,20 @@ impl Reader {
                     Mode::Ribbon => Mode::Paged,
                     Mode::Paged => Mode::Ribbon,
                 };
-                let page = Some(self.page);
+                let page = Some(self.s.page);
                 Task::batch([self.ensure_window(images), self.jump_to(page)])
             }
             Msg::Close => {
-                self.save(ctx);
-                self.save_place(ctx);
+                self.s.close(ctx);
                 return Effect::Close;
             }
             Msg::Retry => {
-                let failed: Vec<ImageReq> = (0..self.pages.len())
+                let failed: Vec<ImageReq> = (0..self.s.pages.len())
                     .filter_map(|i| self.req(i))
                     .filter(|r| images.error(&r.key()).is_some())
                     .collect();
                 let tasks: Vec<_> = failed.into_iter().map(|r| images.retry(r, Msg::Image)).collect();
-                if self.pages.is_empty() {
+                if self.s.pages.is_empty() {
                     self.load_chapter(ctx, images)
                 } else {
                     Task::batch(tasks)
@@ -365,18 +234,18 @@ impl Reader {
     }
 
     pub fn view<'a>(&'a self, images: &'a Images) -> Element<'a, Msg> {
-        let chapter = self.chapter();
-        let has_prev = self.index > 0;
-        let has_next = self.index + 1 < self.start.chapters.len();
-        let counter = if self.pages.is_empty() {
+        let chapter = self.s.chapter();
+        let has_prev = self.s.has_prev();
+        let has_next = self.s.has_next();
+        let counter = if self.s.pages.is_empty() {
             String::new()
         } else {
-            format!("{} / {}", self.page + 1, self.pages.len())
+            format!("{} / {}", self.s.page + 1, self.s.pages.len())
         };
         let bar = container(
             row![
                 button("← К тайтлу").style(button::text).on_press(Msg::Close),
-                column![text(&self.start.title).size(13), text(chapter.title()).size(16)].width(Fill),
+                column![text(&self.s.start.title).size(13), text(chapter.title()).size(16)].width(Fill),
                 text(counter).size(14),
                 button("‹ Глава")
                     .style(button::secondary)
@@ -442,7 +311,7 @@ impl Reader {
                 img.width(Fill).into()
             };
         }
-        let height = match &self.pages[i] {
+        let height = match &self.s.pages[i] {
             PageSrc::Remote(p) => match (p.width, p.height) {
                 (Some(w), Some(h)) if w > 0 => (900.0 * h as f32 / w as f32).min(4000.0),
                 _ => 1200.0,
@@ -464,7 +333,7 @@ impl Reader {
     }
 
     fn ribbon<'a>(&'a self, images: &'a Images, has_next: bool) -> Element<'a, Msg> {
-        let pages = column((0..self.pages.len()).map(|i| self.page_view(i, images, false)))
+        let pages = column((0..self.s.pages.len()).map(|i| self.page_view(i, images, false)))
             .width(Fill)
             .max_width(900);
         let tail = container(
@@ -492,7 +361,7 @@ impl Reader {
                 .style(button::text)
                 .height(Fill)
                 .on_press(Msg::PrevPage),
-            container(self.page_view(self.page, images, true))
+            container(self.page_view(self.s.page, images, true))
                 .width(Fill)
                 .height(Fill),
             button(container(text("›").size(28)).center_y(Fill))

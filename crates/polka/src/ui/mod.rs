@@ -14,38 +14,14 @@ use std::sync::OnceLock;
 use iced::widget::{button, column, container, row, text};
 use iced::{Element, Fill, Subscription, Task, Theme};
 use libsocial::models::Me;
-use libsocial::{BookmarkFolder, Client, Site};
+use libsocial::{BookmarkFolder, Site};
 use tokio::sync::broadcast;
 
 use polka_core::config::Config;
-use polka_core::db::Db;
-use polka_core::downloads::{DownloadEvent, Downloader};
-use polka_core::library::Library;
-use polka_core::secrets::TokenStore;
-use polka_core::sync::Sync;
+use polka_core::downloads::DownloadEvent;
 
-/// Всё, что нужно экранам для работы. Клонируется дёшево.
-#[derive(Clone)]
-pub struct Ctx {
-    pub client: Client,
-    pub db: Db,
-    pub library: Library,
-    pub downloader: Downloader,
-    pub sync: Sync,
-    pub config: Config,
-    pub store: TokenStore,
-    /// Вошедший пользователь. `None` у гостя и пока ответ сервера не пришёл.
-    pub user_id: Option<u64>,
-    /// Папки закладок пользователя. Пусто у гостя и без сети.
-    pub folders: Vec<BookmarkFolder>,
-}
-
-impl Ctx {
-    /// Папки закладок для сайта в порядке сервера.
-    pub fn folders_for(&self, site: Site) -> Vec<&BookmarkFolder> {
-        self.folders.iter().filter(|f| f.is_for(site)).collect()
-    }
-}
+/// Ядро, общее для всех экранов.
+pub type Ctx = polka_core::Core;
 
 /// Канал событий загрузчика для подписки. Подписке в iced нельзя передать замыкание
 /// с данными, поэтому отправитель лежит в глобальной ячейке.

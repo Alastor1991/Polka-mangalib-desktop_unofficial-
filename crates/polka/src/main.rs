@@ -5,7 +5,6 @@ mod login_window;
 mod ui;
 
 use anyhow::Result;
-use polka_core::{config, db, downloads, library, session, sync};
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -67,29 +66,7 @@ fn print_help() {
 /// на нём крутится загрузчик, а iced исполняет задачи интерфейса на своём.
 fn gui(runtime: tokio::runtime::Runtime) -> Result<()> {
     let _guard = runtime.enter();
-    let config = config::Config::load()?;
-    let (client, store) = runtime.block_on(session::connect(&config))?;
-    let db = db::Db::open(&config.db_path())?;
-    let library = library::Library::new(config.library_dir());
-    let downloader = downloads::Downloader::start(
-        client.clone(),
-        db.clone(),
-        library.clone(),
-        config.download_concurrency,
-        config.image_server.clone(),
-        &config.lock_path(),
-    );
-    let sync = sync::Sync::start(client.clone(), db.clone());
-    let ctx = ui::Ctx {
-        client,
-        db,
-        library,
-        downloader,
-        sync,
-        config,
-        store,
-        user_id: None,
-        folders: Vec::new(),
-    };
-    ui::run(ctx).map_err(|e| anyhow::anyhow!("интерфейс: {e}"))
+    let config = polka_core::config::Config::load()?;
+    let core = runtime.block_on(polka_core::Core::start(config))?;
+    ui::run(core).map_err(|e| anyhow::anyhow!("интерфейс: {e}"))
 }
