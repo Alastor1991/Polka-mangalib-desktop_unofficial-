@@ -4,22 +4,12 @@
 
 use iced::widget::{button, column, row, scrollable, text};
 use iced::{Alignment, Element, Fill, Task};
-use libsocial::{Bookmark, BookmarkPage, Site};
+use libsocial::{BookmarkPage, Site};
+use polka_core::shelf::{self, ShelfItem};
 
 use super::catalog::{CARD_H, CARD_W, cover};
 use super::images::{ImageReq, Images, Loaded};
 use super::{Ctx, Message, human_error};
-use polka_core::db::TitleRow;
-
-/// Карточка тайтла в библиотеке.
-struct Card {
-    site: Site,
-    slug: String,
-    name: String,
-    /// Где остановились, если сайт это знает.
-    note: Option<String>,
-    cover: Option<ImageReq>,
-}
 
 #[derive(Default)]
 pub struct LibraryView {
@@ -27,7 +17,7 @@ pub struct LibraryView {
     folder: Option<u64>,
     /// Раздел выбран пользователем, а не подставлен по умолчанию.
     chosen: bool,
-    cards: Vec<Card>,
+    cards: Vec<ShelfItem>,
     /// Следующая страница закладок по каждому сайту папки, если она есть.
     next: Vec<(Site, u32)>,
     loading: bool,
@@ -66,7 +56,7 @@ impl LibraryView {
         self.generation += 1;
         match (self.folder, ctx.user_id) {
             (Some(folder), Some(user_id)) => {
-                let sites = folder_sites(ctx, folder);
+                let sites = shelf::folder_sites(ctx, folder);
                 self.load(ctx, user_id, folder, sites.into_iter().map(|s| (s, 1)).collect())
             }
             _ => self.load_local(ctx, images),
@@ -75,8 +65,8 @@ impl LibraryView {
 
     fn load_local(&mut self, ctx: &Ctx, images: &mut Images) -> Task<Message> {
         self.loading = false;
-        match ctx.db.library() {
-            Ok(rows) => self.cards = rows.iter().map(|r| local_card(ctx, r)).collect(),
+        match shelf::device(ctx) {
+            Ok(items) => self.cards = items,
             Err(e) => self.error = Some(format!("{e:#}")),
         }
         self.request_covers(images)
@@ -85,19 +75,14 @@ impl LibraryView {
     fn load(&mut self, ctx: &Ctx, user_id: u64, folder: u64, pages: Vec<(Site, u32)>) -> Task<Message> {
         self.loading = true;
         let generation = self.generation;
-        let client = ctx.client.clone();
+        let core = ctx.clone();
         Task::perform(
             async move {
-                let mut out = Vec::new();
-                // По сайтам по очереди: запросы и так идут через общую очередь API.
-                for (site, page) in pages {
-                    let result = client
-                        .bookmarks(site, user_id, folder, page)
-                        .await
-                        .map_err(|e| human_error(&e));
-                    out.push((site, page, result));
-                }
-                out
+                shelf::folder_pages(&core, user_id, folder, pages)
+                    .await
+                    .into_iter()
+                    .map(|p| (p.site, p.page, p.result.map_err(|e| human_error(&e))))
+                    .collect()
             },
             move |r| Message::Library(Msg::Loaded(generation, r)),
         )
@@ -107,7 +92,7 @@ impl LibraryView {
         let tasks: Vec<_> = self
             .cards
             .iter()
-            .filter_map(|c| c.cover.clone())
+            .filter_map(cover_req)
             .map(|req| images.request(req, |k, l| Message::Library(Msg::Image(k, l))))
             .collect();
         Task::batch(tasks)
@@ -148,7 +133,7 @@ impl LibraryView {
                                 self.next.push((site, page + 1));
                             }
                             self.cards
-                                .extend(found.bookmarks.iter().filter_map(|b| remote_card(site, b)));
+                                .extend(found.bookmarks.iter().filter_map(|b| shelf::bookmark_item(site, b)));
                         }
                         Err(e) => errors.push(format!("{}: {e}", site.name())),
                     }
@@ -174,7 +159,7 @@ impl LibraryView {
         }
         let cards = row(self.cards.iter().map(|c| {
             let mut card = column![
-                cover(images, c.cover.as_ref(), CARD_W, CARD_H),
+                cover(images, cover_req(c).as_ref(), CARD_W, CARD_H),
                 text(&c.name).size(14).width(CARD_W).height(38),
                 text(c.site.name()).size(12).style(text::secondary),
             ]
@@ -236,51 +221,14 @@ impl LibraryView {
     }
 }
 
-/// Сайты, на которых есть эта папка: у манги их три, у аниме один.
-fn folder_sites(ctx: &Ctx, folder: u64) -> Vec<Site> {
-    let Some(f) = ctx.folders.iter().find(|f| f.id == folder) else {
-        return Vec::new();
-    };
-    Site::ALL.into_iter().filter(|s| f.is_for(*s)).collect()
-}
-
-fn local_card(ctx: &Ctx, r: &TitleRow) -> Card {
-    // Обложка с диска, если тайтл скачивался, иначе из сети.
-    let local = ctx.library.cover_path(r.site, &r.slug);
-    let cover = if local.is_file() {
-        Some(ImageReq::File(local))
-    } else {
-        r.cover_url.as_ref().map(|url| ImageReq::Url {
-            site: r.site,
+/// Обложка карточки: с диска, если тайтл скачивался, иначе из сети.
+fn cover_req(item: &ShelfItem) -> Option<ImageReq> {
+    match (&item.local_cover, &item.cover_url) {
+        (Some(path), _) => Some(ImageReq::File(path.clone())),
+        (None, Some(url)) => Some(ImageReq::Url {
+            site: item.site,
             url: url.clone(),
-        })
-    };
-    Card {
-        site: r.site,
-        slug: r.slug.clone(),
-        name: r.name.clone(),
-        note: None,
-        cover,
-    }
-}
-
-fn remote_card(site: Site, b: &Bookmark) -> Option<Card> {
-    let media = b.media.as_ref()?;
-    let note = b.item.as_ref().map(|item| {
-        if site.is_anime() {
-            format!("{} серия", item.number)
-        } else {
-            format!("Том {} Глава {}", item.volume, item.number)
-        }
-    });
-    Some(Card {
-        site,
-        slug: media.slug_url.clone(),
-        name: media.display_name().to_string(),
-        note,
-        cover: media.cover.best().map(|url| ImageReq::Url {
-            site,
-            url: url.to_string(),
         }),
-    })
+        (None, None) => None,
+    }
 }

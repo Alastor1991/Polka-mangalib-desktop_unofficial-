@@ -11,6 +11,7 @@ pub mod player;
 pub mod reader;
 pub mod secrets;
 pub mod session;
+pub mod shelf;
 pub mod sync;
 pub mod title;
 pub mod titles;
