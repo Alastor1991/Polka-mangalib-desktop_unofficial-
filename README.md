@@ -91,7 +91,7 @@ crates/polka       приложение: база SQLite, загрузчик, б
 ## Разработка
 
 ```sh
-cargo test                       # модульные тесты и тесты на сохранённых ответах API
+cargo test                       # модульные тесты, сохранённые ответы API, клиент и загрузчик на мок-сервере
 cargo test -p libsocial --test live -- --ignored --test-threads=1   # живые проверки против API
 ```
 
