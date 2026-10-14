@@ -6,14 +6,18 @@
 mod anime;
 pub mod auth;
 pub mod bookmarks;
+pub mod catalog;
+pub mod catalog_constants;
 mod client;
 pub mod comments;
 mod error;
+pub mod feeds;
 mod manga;
 pub mod media;
 pub mod mirrors;
 pub mod models;
 pub mod rich;
+pub mod search;
 mod serde_util;
 mod site;
 

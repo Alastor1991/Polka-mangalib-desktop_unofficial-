@@ -1,0 +1,27 @@
+{
+  "data": [
+    {
+      "id": 7965, "name": "Chainsaw Man", "rus_name": "Человек-бензопила", "eng_name": "Chainsaw Man",
+      "model": "manga", "slug": "chainsaw-man", "slug_url": "7965--chainsaw-man",
+      "cover": {"filename": "cover", "thumbnail": "https://cover.cdnlibs.org/t.jpg", "default": "https://cover.cdnlibs.org/d.jpg", "md": "https://cover.cdnlibs.org/m.jpg"},
+      "ageRestriction": {"id": 4, "label": "18+"}, "site": 1,
+      "type": {"id": 1, "label": "Манга"}, "releaseDate": "2018",
+      "rating": {"average": "9.42", "averageFormated": "9.4", "votes": 93785, "votesFormated": "93.8 K", "user": 0},
+      "userBookmark": {"id": 11, "type": "manga", "media_id": null, "item_id": 5, "progress": "3", "status": 1, "created_at": "2026-01-01 10:00:00", "updated_at": "2026-01-02 10:00:00", "meta": {"comment": false, "rewatches": 0, "item_number": 4}},
+      "content_marking": [], "status": {"id": 1, "label": "Онгоинг"}, "releaseDateString": "2018 г."
+    },
+    {
+      "id": 206, "name": "One Piece", "rus_name": "", "eng_name": "",
+      "model": "manga", "slug": "one-piece", "slug_url": "206--one-piece",
+      "cover": {"filename": null, "thumbnail": "https://cover.cdnlibs.org/t2.jpg", "default": "https://cover.cdnlibs.org/d2.jpg", "md": "https://cover.cdnlibs.org/m2.jpg"},
+      "ageRestriction": {"id": 3, "label": "16+"}, "site": 1,
+      "type": {"id": 1, "label": "Манга"}, "releaseDate": "1997",
+      "rating": {"average": "9.72", "averageFormated": "9.7", "votes": 35894, "votesFormated": "35.9 K", "user": 0},
+      "userBookmark": null,
+      "content_marking": [], "status": {"id": 1, "label": "Онгоинг"}, "releaseDateString": "1997 г."
+    },
+    {"broken": true}
+  ],
+  "links": {"first": "http://api.cdnlibs.org/api/manga?page=1", "last": null, "prev": null, "next": "http://api.cdnlibs.org/api/manga?page=2"},
+  "meta": {"current_page": 1, "from": 1, "path": "http://api.cdnlibs.org/api/manga", "per_page": 60, "to": 60, "page": 1, "has_next_page": true, "seed": "6f722d27ae79acdce142486711099825", "random_order": 0.617244741235508}
+}

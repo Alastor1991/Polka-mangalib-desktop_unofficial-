@@ -1,0 +1,11 @@
+{
+  "data": [
+    {"id": 90340, "username": "user1", "avatar": {"filename": null, "url": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"},
+     "last_online_at": null, "can_view_profile": true, "can_view_statistics": false, "viewable_statistics_site_ids": [], "can_view_previous_usernames": true,
+     "points_info": {"top": 1, "total_points": 2657023, "level": 232, "max_level_points": 22968, "current_level_points": 4219, "point_percent_progress": 18.4},
+     "login_streak": {"last_login_at": null}, "premium": {"enabled": true}},
+    {"id": 90341, "username": "user2", "avatar": {"filename": "a.jpg", "url": "https://cover.cdnlibs.org/uploads/users/90341/a.jpg"},
+     "can_view_profile": true, "points_info": {"top": 2, "total_points": 100, "level": 3, "max_level_points": 10, "current_level_points": 5, "point_percent_progress": 50},
+     "login_streak": {"last_login_at": null}, "premium": {"enabled": false}}
+  ]
+}

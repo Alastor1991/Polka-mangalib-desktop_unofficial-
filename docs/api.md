@@ -306,6 +306,62 @@ GET /api/user/{id}/comments                          что написал по�
 - В новом комментарии ответ задают `parent_comment`, `root_id` (корень родителя или сам родитель) и `comment_level` (уровень родителя плюс один).
 - Картинки и стикеры в комментариях доступны только с премиумом.
 
+## Каталог, справочник, ленты и поиск
+
+Код: `crates/libsocial/src/catalog.rs` (фильтр и сортировки), `catalog_constants.rs` (справочник формы), `feeds.rs` (главная, обновления, топ, новости), `search.rs` (люди, команды, персонажи, издатели, франшизы, пользователи). Чтение работает без входа, кроме `user-latest-updates`.
+
+```http
+GET /api/manga?site_id[]=1&page=1&q=…&sort_by=…&sort_type=…&fields[]=rate&fields[]=rate_avg&genres[]=34&…   MangaLib, SlashLib, RanobeLib, HentaiLib
+GET /api/anime?…                                       AnimeLib, с любым Site-Id
+GET /api/constants?fields[]=genres&fields[]=tags&fields[]=types&fields[]=status&fields[]=scanlateStatus&fields[]=ageRestriction&fields[]=ageRestrictionAnime&fields[]=format
+GET /api/                                              вся главная одним ответом
+GET /api/latest-updates?page=1                         по 15 тайтлов
+GET /api/user-latest-updates?page=1                    только из закладок, нужен вход
+GET /api/media/top-views?time=day|week|month           группы по три тайтла
+GET /api/media/top-views?time=…&popularity=3&page=1    плоский список по 56, с оценками
+GET /api/media/hot-newest                              пусто на всех проверенных сайтах
+GET /api/news?type[]=news&type[]=changelog&visible_for[]=all&platform[]=web&page=1
+GET /api/news/308--versiia-204                         по голому id 404
+GET /api/people|teams|character|publisher|franchise?q=…&sort_by=…&sort_type=…&site_ids[]=1&page=1
+GET /api/people/{slug_url}                             то же для teams, character, publisher, franchise
+GET /api/user?q=…&filter=weekly-top|points|moderators|daily-streak|weekly-views&sort_by=id|username&sort_type=…
+```
+
+Каталог:
+
+- Полный перечень параметров: `site_id[]`, `q`, `sort_by`, `sort_type`, `genres[]`, `genres_exclude[]`, `genres_soft_search`, то же для `tags`, `types[]`, `status[]`, `scanlate_status[]`, `caution[]`, `format[]`, `format_exclude[]`, `extra_release_status[]` (`announced`, `ongoing`), `year_min/max`, `chap_count_min/max`, `episodes_min/max`, `rating_min/max` (оценка 0–10), `rate_min/max` (число оценок), `licensed`, `buy`, `long_no_translation`, `has_voice`, `has_droppable_cards`, `ignored_teams`, `bookmarks[]`, `bookmarks_exclude[]`, `target_model` с `target_id`, `moderated[]`, `seed`, `random_order`, `fields[]`. Булевы значения идут как `1` и `0`, массивы с суффиксом `[]`.
+- `/anime` в `meta` не присылает `has_next_page`, как и часть лент. Следующую страницу выдаёт `links.next`; адреса внутри `links` и `meta.path` подставляют случайное зеркало, по ним ходить нельзя.
+- Без `fields[]=rate` и `fields[]=rate_avg` оценка нулевая (`"0"`, 0 голосов). В карточках главной она нулевая всегда, оценки есть только у плоского `top-views` и в каталоге с полями.
+- `site_id[]` сервер пересекает с тем, что разрешено для `Site-Id`: из MangaLib не виден SlashLib и HentaiLib, RanobeLib виден как `site_id[]=3`. Отдельного эндпоинта у ранобэ нет, `model` в карточке остаётся `manga`.
+- Сортировки у манги и аниме разные. Чужая (`chap_count` у аниме, `episodes_count` у манги), чужое поле в `fields[]` (`metadata`, `extra_release_status` у аниме) и `format[]` вне 1–7 дают 422; клиент отказывает до запроса. Форматы 8–10 (ранобэ) есть в справочнике, но каталог их не принимает.
+- `sort_by=rate_avg` без `rate_min=50` поднимает наверх тайтлы с единичными оценками; клиент добавляет `rate_min=50` сам, если нижняя граница не задана. `buy=1` сайт сопровождает `licensed=1`, клиент тоже.
+- Случайный порядок (`sort_by=random_order`): первая страница идёт без вспомогательных параметров, `meta` отдаёт `seed` и `random_order` (число). Вторая страница без пары отвечает 422, выдуманное значение тоже, подходит только пара из ответа предыдущей. Клиент хранит её в `RandomCursor`.
+- `episodes_min` на `/manga` и подобные фильтры другого вида контента сервер молча игнорирует. Неизвестный id жанра или папки закладок не ошибка, список просто пуст.
+- Тайтлы человека, персонажа, команды, франшизы, издателя и пользователя отдаёт тот же каталог с `target_model` и `target_id`. Одиночный `target_id` игнорируется.
+
+Справочник:
+
+- Не зависит от `Site-Id`. Запрос без `fields[]` даёт пустой объект, неизвестные имена пропускаются. Сайт кеширует ответ на 20 минут, в крейте кеша нет.
+- Отбор по сайту делает клиент по `site_ids`. Нуль в `site_ids` статусов сайтом не считается: «Выпуск прекращён» с нулём всё равно не относится к AnimeLib. У типа «Неизвестный» список пуст, его не показывают.
+- Возрасты AnimeLib лежат отдельно (`ageRestrictionAnime`: PG, PG-13, R-17…). Жанры и теги бывают скрыты для страны (`blocked_for_country: ["RU"]`), скрывает клиент. `anilist_id` и `shiki_id` приходят строкой или `null`.
+
+Ленты и новости:
+
+- `latest-updates` кладёт свежие главы или серии в `metadata.latest_items`, «обновления популярных» на главной в `metadata.last_item`. В лентах `restricted_view.is_open` бывает `false` и у обычных глав: закрытой главу считают, только если есть цена или срок раннего доступа.
+- `top-views` без `popularity` даёт группы `1`, `2`, `3` (манга: новинки, набирающие популярность, популярные) или `21`, `22`, `23` (аниме: завершённое, онгоинг, полнометражное). Чужая группа даёт пустой список. Пустые группы приходят как `[]`, а не `{}`.
+- На главной `hot_newest` и `news` обычно пусты. Блоки, их порядок и видимость пользователь задаёт в настройках (`start_page_blocks`), это вне поиска. `slider` – рекламные баннеры.
+- `metadata.contentVersion` новости приходит то строкой, то числом. Прочитанные новости лежат в `visited_news` ключами `<id>_<contentVersion>`.
+- Текст новости – документ ProseMirror, картинки в нём ссылаются на `attachments[].name`, а адреса вложений (`/uploads/news/…`) лежат на хосте API, а не на `cover.cdnlibs.org`. `news_article` подставляет адреса в `Doc`, `Client::upload_url` собирает их для баннеров.
+- Отметка новости прочитанной (`/news/{id}/visited`) не реализована: её метод (PUT или PATCH) по скриптам сайта не определить.
+
+Поиск и списки:
+
+- `q` короче двух символов в списках сущностей даёт 422, в каталоге `q=a` работает. Люди, команды и персонажи с `q` теряют `total` и `last_page`, остаётся `links.next`.
+- Фильтр сайтов в списках сущностей называется `site_ids[]`, в каталоге `site_id[]`. `limit` принимает только `/character` (0–30). `sort_by=likes_count` есть у команд, у людей даёт 422.
+- Число тайтлов по сайтам лежит в `titles_count_details`, ключи – номера сайтов строкой. `stats[].label` склоняется, искать надо по `stats[].tag`.
+- У издателя слаг бывает пустым, тогда `slug_url` выглядит как `6848--` и всё равно годится как путь. Голый id принимают люди и персонажи, команды нет.
+- `/user` с `filter=points` и `moderators` отдаёт всех сразу, без `meta` и `links`; у модераторов есть `roles`, у `weekly-top` и `points` есть `points_info`.
+
 ## Ограничения
 
 Сервис не публикует лимиты. Полка держится в таких рамках:

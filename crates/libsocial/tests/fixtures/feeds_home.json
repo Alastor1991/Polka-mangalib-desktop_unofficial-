@@ -1,0 +1,82 @@
+{
+  "data": {
+    "popular": [
+      {
+        "id": 137229, "name": "Class de 2 Banme", "rus_name": "Вторая самая красивая", "eng_name": "Second Cutest",
+        "model": "manga", "slug": "class-de-2-banme", "slug_url": "137229--class-de-2-banme",
+        "cover": {"filename": "f", "thumbnail": "https://cover.cdnlibs.org/t.jpg", "default": "https://cover.cdnlibs.org/d.jpg", "md": "https://cover.cdnlibs.org/m.jpg"},
+        "ageRestriction": {"id": 3, "label": "16+"}, "site": 1, "type": {"id": 1, "label": "Манга"},
+        "rating": {"average": "0", "averageFormated": "0", "votes": 0, "votesFormated": "0", "user": 0},
+        "last_item_at": "2026-10-13T21:09:11.000000Z", "content_marking": [],
+        "metadata": {
+          "last_item": {"id": 4634300, "model": "chapter", "volume": "8", "number": "43.1", "number_secondary": "8", "name": "Новый класс", "slug": 4634300, "branch_id": 16867, "manga_id": null, "created_at": "2026-10-13T21:09:11.000000Z", "type": "chapter",
+            "restricted_view": {"is_open": false, "price": null, "expired_at": null, "can_open_with_content_key": false}},
+          "last_shiki_updated_at": null
+        },
+        "status": {"id": 1, "label": "Онгоинг"}, "releaseDateString": ""
+      }
+    ],
+    "hot_newest": [],
+    "latest_updates": [
+      {
+        "id": 255146, "name": "Heugmag", "rus_name": "Семья герцога", "eng_name": "",
+        "model": "manga", "slug": "heugmag", "slug_url": "255146--heugmag",
+        "cover": {"filename": "f", "thumbnail": "t", "default": "d", "md": "m"},
+        "ageRestriction": {"id": 2, "label": "12+"}, "site": 1, "type": {"id": 5, "label": "Манхва"},
+        "last_item_at": "2026-10-13T21:17:53.000000Z",
+        "metadata": {"latest_items": {"count": 1, "items": [{"id": 4634307, "model": "chapter", "volume": "2", "number": "37", "number_secondary": "2", "name": "", "branch_id": null, "created_at": "2026-10-13T21:17:53.000000Z", "type": "chapter",
+          "restricted_view": {"is_open": false, "price": null, "expired_at": null}}]}},
+        "status": {"id": 1, "label": "Онгоинг"}, "items_count": {"uploaded": 37, "total": 0}, "releaseDateString": ""
+      }
+    ],
+    "newest": [
+      {
+        "id": 276394, "name": "Senchi kara", "rus_name": "Герой желает жизни", "eng_name": "",
+        "model": "manga", "slug": "senchi", "slug_url": "276394--senchi",
+        "cover": {"filename": "f", "thumbnail": "t", "default": "d", "md": "m"},
+        "ageRestriction": {"id": 4, "label": "18+"}, "site": 1, "type": {"id": 1, "label": "Манга"},
+        "content_marking": [], "status": {"id": 1, "label": "Онгоинг"}, "releaseDateString": ""
+      }
+    ],
+    "currently_views": {
+      "time_filter": "day",
+      "items": {
+        "1": [{"views": 815, "media": {"id": 267876, "name": "Naega", "rus_name": "Дракон", "model": "manga", "slug": "naega", "slug_url": "267876--naega", "site": 1}}],
+        "3": [{"views": 700, "media": {"id": 206, "name": "One Piece", "rus_name": "Ван Пис", "model": "manga", "slug": "one-piece", "slug_url": "206--one-piece", "site": 1}}],
+        "2": []
+      }
+    },
+    "weekly_top_users": [
+      {"id": 100, "username": "user1", "avatar": {"filename": null, "url": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"},
+       "last_online_at": null, "can_view_profile": true, "points_info": {"top": null, "total_points": 5855, "level": 11, "max_level_points": 1089, "current_level_points": 410, "point_percent_progress": 37.6},
+       "login_streak": {"last_login_at": null}, "premium": {"enabled": false}}
+    ],
+    "weekly_top_views_users": [],
+    "news": [],
+    "visited_news": ["308_0"],
+    "forum": [
+      {"id": 643044, "chatter_category_id": 1, "title": "Проблемные названия глав", "user_id": 455345, "source_id": null, "source_type": null, "sticky": 0, "locked": false, "views": 1, "likes": 0, "answered": 0,
+       "last_reply_at": null, "created_at": "2026-10-13T21:26:02.000000Z", "owner": {"id": 455345, "username": "user2", "avatar": {"filename": "a.jpg", "url": "https://cover.cdnlibs.org/uploads/users/455345/a.jpg"}},
+       "category": {"id": 1, "name": "Баги и проблемы", "color": "#f44336", "icon": "bug"}}
+    ],
+    "reviews": [
+      {"id": 53760, "model": "review", "title": "Смешанное ощущение",
+       "content": {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Текст отзыва"}]}]},
+       "views": 1, "comments_count": 1,
+       "rating": [{"label": "Итоговая оценка", "value": 6}, {"label": "Сюжет", "value": 6}],
+       "status": {"id": "published", "label": "Опубликован"}, "evaluation": {"id": "positive", "label": "Положительный"},
+       "related": {"id": 226802, "name": "Kashita", "rus_name": "Магия в кредит", "slug_url": "226802--kashita", "site": 1},
+       "site_id": 1, "created_at": "2026-10-13T20:21:50.000000Z"}
+    ],
+    "collections": [
+      {"id": 22556, "model": "collection", "name": "Конец света", "type": "titles", "views": 53, "favorites_count": 2, "items_count": 16, "comments_count": 8,
+       "votes": {"up": 4, "down": 0, "user": null}, "user_id": 11341723, "site_id": 1, "created_at": "2026-10-13T19:50:19.000000Z", "spoiler": true, "interactive": true, "adult": true,
+       "previews": [{"filename": "cover", "thumbnail": "t", "default": "d", "md": "m"}]}
+    ],
+    "slider": [
+      {"id": 35, "url": "https://example.com/promo", "pictures": {"desktop": {"filename": "d.jpg", "url": "/uploads/slider_items/35/d.jpg"}, "mobile": {"filename": "m.jpg", "url": "/uploads/slider_items/35/m.jpg"}},
+       "published": true, "site_ids": [1], "metrics_goals": {"click": "banner_click", "view": "banner_view"}}
+    ],
+    "server": "debian-files1"
+  }
+}
