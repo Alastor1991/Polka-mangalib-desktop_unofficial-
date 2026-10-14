@@ -1,0 +1,23 @@
+{"data": {
+  "id": 980, "slug": "card-one", "slug_url": "980--card-one", "user_id": 111, "site_id": [1], "site_restricted": false, "model": "card",
+  "cover": {"filename": "f1", "default": "https://cover.cdnlibs.org/uploads/cards/980/f1.webp", "extension": "webp", "sm": "https://cover.cdnlibs.org/uploads/cards/980/f1_sm.webp"},
+  "name": "Карта один", "description": "", "sources": [],
+  "rank": {"id": "C", "name": "C", "value": "C", "label": "Редкая", "frame": {"front": {"orig": "/static/images/ranks/legacy/c.png"}}},
+  "rank_reason": "текст", "frame_set_id": 1, "frame_url": "/static/images/ranks/legacy/c.png",
+  "status": "active", "type": "normal", "type_label": "Обычная", "base_card_id": null, "base_element": null, "base_element_label": null,
+  "droppable": true, "hidden": false, "exchangeable": true, "moderated": 1, "has_instances": true,
+  "stats": [{"value": 0, "formated": "0", "short": "0", "label": "Тайтлов", "tag": "titles"}],
+  "media": [{"id": 7965, "name": "Chainsaw Man", "rus_name": "Человек-бензопила", "eng_name": "Chainsaw Man", "model": "manga",
+             "slug": "chainsaw-man", "slug_url": "7965--chainsaw-man", "site": 1, "type": {"id": 1, "label": "Манга"}}],
+  "characters": [],
+  "user": {"id": 111, "username": "user1", "avatar": {"filename": null, "url": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"}},
+  "albums": [{"album": {"album_id": 3506, "franchise_id": null, "franchise_name": null, "name": "Альбом", "slug": "albom", "type": "manga",
+                        "status": "active", "is_auto_generated": true, "cover": {}, "cover_site": 1},
+              "franchise": null, "source_titles": [], "cards_count": 7, "sources_count": 1, "likes_count": 0,
+              "is_liked_by_me": false, "progress": null, "shard_balance": null, "duplicates_count": 0, "has_duplicates": false,
+              "can_claim": false, "claim_cost": null, "missing_count": 0, "is_completed": false, "badges": [],
+              "actions": {"show_url": "/cards/albums/3506", "can_exchange": false, "can_claim": false}}],
+  "owners": {"total": 58, "preview": [{"id": 5, "username": "user2", "avatar": {"filename": null, "url": "u"}, "copies_count": 2}]},
+  "has_active_market_lots": false,
+  "versions": [{"id": 980, "model": "card", "name": "Карта один", "is_current": true, "is_archived": false}]
+}}

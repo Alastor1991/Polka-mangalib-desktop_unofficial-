@@ -1,0 +1,17 @@
+{"data": [
+  {"id": 980, "slug": "card-one", "slug_url": "980--card-one", "user_id": 111, "site_id": [1], "site_restricted": false, "model": "card",
+   "cover": {"filename": "f1", "default": "https://cover.cdnlibs.org/uploads/cards/980/f1.webp", "extension": "webp", "sm": "https://cover.cdnlibs.org/uploads/cards/980/f1_sm.webp"},
+   "name": "Карта один", "description": "", "sources": [],
+   "rank": {"id": "C", "name": "C", "value": "C", "label": "Редкая", "frame": {"front": {"orig": "/static/images/ranks/legacy/c.png"}, "back": {"orig": "/static/images/ranks/C_B.png"}}},
+   "rank_reason": "текст", "frame_set_id": 1, "frame_url": "/static/images/ranks/legacy/c.png",
+   "status": "active", "type": "normal", "type_label": "Обычная", "base_card_id": null, "base_element": null,
+   "droppable": true, "hidden": false, "exchangeable": true, "moderated": 1,
+   "stats": [{"value": 0, "formated": "0", "short": "0", "label": "Тайтлов", "tag": "titles"}],
+   "titles_count_details": {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0}},
+  {"id": 1002, "slug": "card-two", "slug_url": "1002--card-two", "site_id": [3], "name": "Карта два",
+   "rank": {"id": "S", "name": "S", "value": "S", "label": "Мифическая"}, "type": "animated", "type_label": "Анимированная",
+   "cover": {"default": "https://cover.cdnlibs.org/uploads/cards/1002/f2.webp"}},
+  "сломанный элемент"
+],
+"links": {"first": "x?page=1", "last": "x?page=4", "prev": null, "next": "x?page=2"},
+"meta": {"current_page": 1, "from": 1, "last_page": 4, "per_page": 2, "to": 2, "total": 7}}

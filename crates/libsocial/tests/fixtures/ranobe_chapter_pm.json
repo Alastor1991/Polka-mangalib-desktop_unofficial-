@@ -1,0 +1,25 @@
+{"data": {
+  "id": 4493692, "model": "chapter", "type": "chapter", "volume": "14", "number": "531", "number_secondary": "14",
+  "name": "", "slug": "4493692", "branch_id": 9824, "manga_id": 14841,
+  "created_at": "2026-09-01T10:00:00.000000Z", "likes_count": 3, "is_liked": true, "is_viewed": true,
+  "teams": [],
+  "content": {"type": "doc", "content": [
+    {"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Заголовок"}]},
+    {"type": "paragraph", "content": [{"type": "text", "text": "Первый абзац"}]},
+    {"type": "paragraph", "content": [{"type": "text", "marks": [{"type": "italic"}], "text": "Курсив"}, {"type": "hardBreak"}]},
+    {"type": "image", "attrs": {"images": [{"image": "8c85eaac-0000"}], "description": null}},
+    {"type": "paragraph", "content": [{"type": "hardBreak"}]},
+    {"type": "image", "attrs": {"images": [{"image": "2f23906e-0000"}, {"image": "нет-такого"}], "description": "подпись"}},
+    {"type": "paragraph", "content": [{"type": "text", "text": "Последний"}]}
+  ]},
+  "attachments": [
+    {"filename": "8c85eaac-0000.png", "name": "8c85eaac-0000", "extension": "png", "width": 472, "height": 680,
+     "url": "/uploads/ranobe/14841/chapters/4493692/8c85eaac-0000.png",
+     "previewUrl": "/uploads/ranobe/14841/chapters/4493692/8c85eaac-0000.png",
+     "originalUrl": "/uploads/ranobe/14841/chapters/4493692/8c85eaac-0000.png"},
+    {"filename": "2f23906e-0000.png", "name": "2f23906e-0000", "extension": "png", "width": 3000, "height": 1500,
+     "url": "/uploads/ranobe/14841/chapters/4493692/2f23906e-0000.png",
+     "previewUrl": "/uploads/ranobe/14841/chapters/4493692/2f23906e-0000.png",
+     "originalUrl": "/uploads/ranobe/14841/chapters/4493692/2f23906e-0000.png"}
+  ]
+}}

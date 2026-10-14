@@ -1,0 +1,17 @@
+{"data": {
+  "items": [
+    {"id": "card:1594", "kind": "card_group", "mode": "get", "group_key": "card:1594", "card_id": 1594, "source": "offered",
+     "title": "Карта", "subtitle": null, "rank": "B", "card_type": "normal", "power": null,
+     "power_range": {"min": 172, "max": 190}, "items_count": 2, "orders_count": 2, "requests_count": 1, "lots_count": 1,
+     "offers_count": 0, "available_for_me_count": 0, "is_available_for_me": false, "is_own": false,
+     "requirement": "Минимум: 1 карта B-ранга", "requirement_text": "1 карта B-ранга",
+     "url": "/cards/trade-market/cards/1594", "details_url": "/cards/trade-market/cards/1594",
+     "card": {"id": 1594, "name": "Карта"}, "representative_order": {"id": 1632}, "created_at": "2026-10-13T19:03:41.000000Z", "owned_count": 0},
+    {"id": "condition:7", "kind": "condition_group", "mode": "give", "title": "Карта B-ранга из тайтла", "rank": "B",
+     "power_range": null, "items_count": 1}
+  ],
+  "summary": {"active_orders": 551, "can_receive": 346, "waiting_for_card": 205, "available_for_me": 0, "incoming_offers": 0},
+  "filters": {"ranks": [{"id": "E", "label": "Обычная"}]},
+  "pagination": {"page": 1, "per_page": 24, "total": 402, "last_page": 17, "has_next_page": true, "has_prev_page": false},
+  "tab": "buy", "applied_filters": {"tab": "buy", "page": "1"}
+}}

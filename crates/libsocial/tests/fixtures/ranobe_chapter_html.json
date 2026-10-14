@@ -1,0 +1,12 @@
+{"data": {
+  "id": 2089142, "model": "chapter", "type": "chapter", "volume": "1", "number": "0", "number_secondary": "1",
+  "name": "Пролог", "slug": "2089142", "branch_id": 9824, "manga_id": 14841,
+  "created_at": "2022-08-14T16:22:43.000000Z", "expired_at": null, "publish_at": null,
+  "moderated": {"id": 1, "label": "Принято модерацией"}, "likes_count": 495, "is_liked": false,
+  "is_viewed": false, "is_viewed_last_at": null, "expired_type": 0,
+  "teams": [{"id": 1, "slug_url": "1--team", "name": "Команда"}],
+  "bundle_id": null, "bundle": null,
+  "content": "<img loading=\"lazy\" src=\"https://ranobelib.me/uploads/ranobe/old-slug-novel/chapters/2089142/pic.jpg\" /><p data-paragraph-index=\"1\">Пролог</p><p data-paragraph-index=\"2\">«Первая строка\nвторая строка &amp; конец».</p><p data-paragraph-index=\"3\">*переворот*</p>",
+  "attachments": [{"id": null, "filename": "pic.jpg", "name": "pic", "extension": "jpg",
+                   "url": "/uploads/ranobe/new-slug-novel/chapters/2089142/pic.jpg", "width": 0, "height": 0}]
+}}
