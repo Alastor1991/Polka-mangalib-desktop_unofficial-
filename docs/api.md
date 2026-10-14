@@ -246,6 +246,39 @@ DELETE /api/bookmarks/{id закладки}?media_type={manga|anime}
 - У аниме в `meta` ещё `player` (`Animelib`, `Kodik`), `team` и `translation_type`. Если эти поля есть, они не могут быть `null`: ответ 422.
 - Ответ – закладка с полем `item`, где лежит сама глава или серия. В `updated_at` время последнего изменения, по нему Полка не откатывает закладку, которую позже двигали на другом устройстве.
 
+## Вокруг тайтла
+
+Код: `crates/libsocial/src/media.rs`. Путь `{media}` – `manga` (и для ранобэ, SlashLib, HentaiLib) или `anime`.
+
+```http
+GET /api/{media}/{slug}/covers                       все обложки, у каждой есть orig
+GET /api/{media}/{slug}/stats?bookmarks=true&rating=true   без параметров ответ пустой
+GET /api/{media}/{slug}/relations                    связанные, бывают на другом сайте сети
+GET /api/{media}/{slug}/similar                      похожие с голосами, бывают сотни
+POST /api/similar/{id}/vote       {"vote": 1|0}
+POST /api/similar                 {"source_type", "source_id", "similar_id", "similar_type", "similar_by": [1..3]}
+GET /api/character?media_id=7965&media_type=manga&position=Main&limit=30
+GET /api/{people|character|franchise|publisher}/{slug_url}   только вошедшему, гостю 404
+GET /api/favorites/{type}/{id}    POST /api/favorites {"source_type", "source_id"}   звёздочка-подписка
+POST /api/{media}/rate            {"score": 1..10, "rateable_id", "rateable_type"}   score 0 снимает
+POST /api/chapters/{id}/like      без тела, переключает
+POST /api/chapters/{id}/translation-rating   {"translation_accuracy", "readability_adaptation", "editing_formatting"}
+POST /api/branches/{branch_id}/subscribe     без тела, переключает подписку на новые главы ветки
+GET|POST /api/{media}/{id}/subscriptions     {"items": [{"team_id": 0, "translation_type": 2}]}   озвучка и субтитры
+GET /api/teams/{slug_url}         только slug_url и только вошедшему
+GET /api/teams?sort_by=titles_count&page=1   GET /api/teams/{id}/users   GET /api/teams/{id}/chapters
+POST|DELETE /api/teams/{id}/rating   POST|DELETE /api/teams/{id}/ignore
+GET /api/reviews?reviewable_type=manga&reviewable_id=7965   GET /api/reviews/{id}
+POST /api/reviews   PUT|DELETE /api/reviews/{id}   POST /api/review/{id}/vote
+GET /api/manga/{slug_url}/chapters/players   озвучка манги видео, только по slug_url
+```
+
+- Карточка тайтла принимает много `fields[]` сверх описанных выше: `background`, `views`, `publisher`, `franchise`, `metadata` (`close_comments`, `count`), `chap_count` (даёт `items_count`), `translation_quality_rating`, у аниме `time`, `shiki_rate`, `episodesSchedule`. Своя оценка приходит в `rating.user` (`0` – не оценивал).
+- `metadata.close_comments`: 0 комментарии открыты, 1 и 3 закрыты на странице тайтла, 2 и 3 в главах.
+- Глава отдаёт `likes_count`, `is_liked`, `translation_quality_rating` и полную `restricted_view` с ценой. Признак закрытой главы надёжнее брать по `expired_type` (1 ранний доступ, 2 платная) вместе с `is_open == false`.
+- У плееров аниме в `timecode` лежит разметка `[{"type": "opening", "from": 55, "to": 145}]` в секундах. Полка по ней пропускает отрезки в mpv, если это включено в настройках (`auto_skip`).
+- Видео озвучки манги лежит на своих серверах (`/constants?fields[]=videoServersManga`), без кириллического `/.аs/` в пути.
+
 ## Комментарии
 
 Код: `crates/libsocial/src/comments.rs`, дерево и голоса в `crates/polka-core/src/comments.rs`. Комментарии не зависят от `Site-Id`: id объектов во всей сети общие.

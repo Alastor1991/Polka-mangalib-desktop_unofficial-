@@ -33,6 +33,60 @@ pub struct Paged<T> {
     pub meta: PageMeta,
 }
 
+/// Страница списка, у которого конец определяется по `links.next`, а число
+/// элементов бывает в `meta.total`. Так устроено большинство списков сервиса,
+/// кроме каталога.
+#[derive(Debug, Clone)]
+pub struct ListPage<T> {
+    pub items: Vec<T>,
+    pub has_next: bool,
+    pub total: Option<u64>,
+}
+
+impl<T> Default for ListPage<T> {
+    fn default() -> Self {
+        ListPage {
+            items: Vec::new(),
+            has_next: false,
+            total: None,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub(crate) struct RawList<T> {
+    #[serde(
+        deserialize_with = "crate::serde_util::lenient_vec",
+        bound(deserialize = "T: serde::de::DeserializeOwned")
+    )]
+    pub data: Vec<T>,
+    #[serde(default)]
+    pub links: Option<Value>,
+    #[serde(default)]
+    pub meta: Option<Value>,
+}
+
+impl<T> From<RawList<T>> for ListPage<T> {
+    fn from(raw: RawList<T>) -> ListPage<T> {
+        let meta = raw.meta.unwrap_or(Value::Null);
+        let by_links = raw
+            .links
+            .as_ref()
+            .and_then(|l| l.get("next"))
+            .is_some_and(|n| !n.is_null());
+        let by_meta = meta.get("has_next_page").and_then(Value::as_bool).unwrap_or(false);
+        let total = meta
+            .get("total")
+            .or_else(|| meta.get("items_count"))
+            .and_then(|t| t.as_u64().or_else(|| t.as_str()?.parse().ok()));
+        ListPage {
+            items: raw.data,
+            has_next: by_links || by_meta,
+            total,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Cover {
     #[serde(default)]
@@ -75,6 +129,9 @@ pub struct Rating {
     pub average: f32,
     #[serde(default, deserialize_with = "u64_lenient")]
     pub votes: u64,
+    /// Своя оценка 1–10. `0` или нет поля – не оценивал. Приходит только вошедшему.
+    #[serde(default, deserialize_with = "u64_lenient")]
+    pub user: u64,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -85,6 +142,12 @@ pub struct Team {
     pub name: String,
     #[serde(default)]
     pub slug_url: Option<String>,
+    #[serde(default)]
+    pub cover: Option<Cover>,
+    /// У команд аниме: `branch_id` – тип перевода (2 озвучка, 1 субтитры, 0 оба),
+    /// `subscriptions_count`. У команд ветки: `branch_id`.
+    #[serde(default)]
+    pub details: Option<Value>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -150,15 +213,130 @@ pub struct TitleDetails {
     #[serde(default, deserialize_with = "null_default")]
     pub tags: Vec<Named>,
     #[serde(default, deserialize_with = "null_default")]
-    pub authors: Vec<Named>,
+    pub authors: Vec<EntityRef>,
     #[serde(default, deserialize_with = "null_default")]
-    pub artists: Vec<Named>,
+    pub artists: Vec<EntityRef>,
     #[serde(default, deserialize_with = "null_default")]
     pub teams: Vec<Team>,
     #[serde(default, rename = "scanlateStatus")]
     pub scanlate_status: Option<Label>,
     #[serde(default)]
     pub format: Option<Value>,
+    #[serde(default)]
+    pub background: Option<Background>,
+    #[serde(default)]
+    pub views: Option<Views>,
+    /// Издатели, у аниме студии.
+    #[serde(default, deserialize_with = "null_default")]
+    pub publisher: Vec<EntityRef>,
+    #[serde(default, deserialize_with = "null_default")]
+    pub franchise: Vec<EntityRef>,
+    #[serde(default, deserialize_with = "null_default")]
+    pub content_marking: Vec<Label>,
+    #[serde(default)]
+    pub metadata: Option<TitleMetadata>,
+    #[serde(default)]
+    pub items_count: Option<ItemsCount>,
+    #[serde(default)]
+    pub translation_quality_rating: Option<TranslationRating>,
+    /// Аниме: длительность серии, `{value, formated}`.
+    #[serde(default)]
+    pub time: Option<Value>,
+    /// Аниме: оценка на Shikimori.
+    #[serde(default)]
+    pub shiki_rate: Option<f32>,
+    /// Аниме: расписание выхода серий.
+    #[serde(default, deserialize_with = "null_default")]
+    pub episodes_schedule: Vec<Value>,
+    /// Ограничение просмотра: 0 нет, остальное – лицензия или «только с закладкой».
+    #[serde(default, deserialize_with = "crate::serde_util::opt_u64_lenient")]
+    pub close_view: Option<u64>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Background {
+    #[serde(default)]
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Views {
+    #[serde(default, deserialize_with = "u64_lenient")]
+    pub total: u64,
+    #[serde(default)]
+    pub short: Option<String>,
+}
+
+/// Ссылка на человека, издателя, франшизу, персонажа или команду.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct EntityRef {
+    #[serde(default, deserialize_with = "u64_lenient")]
+    pub id: u64,
+    #[serde(default)]
+    pub slug_url: Option<String>,
+    /// `people`, `publisher`, `franchise`, `character`, `team`.
+    #[serde(default, deserialize_with = "null_default")]
+    pub model: String,
+    #[serde(default, deserialize_with = "null_default")]
+    pub name: String,
+    #[serde(default)]
+    pub rus_name: Option<String>,
+    #[serde(default)]
+    pub cover: Option<Cover>,
+}
+
+impl EntityRef {
+    pub fn display_name(&self) -> &str {
+        self.rus_name.as_deref().filter(|s| !s.is_empty()).unwrap_or(&self.name)
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TitleMetadata {
+    /// 0 комментарии открыты; 1 и 3 закрыты на странице тайтла; 2 и 3 в главах.
+    #[serde(default, deserialize_with = "u64_lenient")]
+    pub close_comments: u64,
+    /// Счётчики: ветки, персонажи по ролям, отзывы по оценкам, связи, обложки.
+    #[serde(default)]
+    pub count: Option<Value>,
+}
+
+impl TitleMetadata {
+    pub fn comments_closed_on_title(&self) -> bool {
+        matches!(self.close_comments, 1 | 3)
+    }
+
+    pub fn comments_closed_in_chapters(&self) -> bool {
+        self.close_comments >= 2
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ItemsCount {
+    #[serde(default, deserialize_with = "u64_lenient")]
+    pub uploaded: u64,
+    /// Сколько всего глав или серий задумано. 0 – не указано.
+    #[serde(default, deserialize_with = "u64_lenient")]
+    pub total: u64,
+}
+
+/// Оценка перевода главы или ветки по трём критериям.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TranslationRating {
+    #[serde(default, deserialize_with = "f32_lenient")]
+    pub average: f32,
+    #[serde(default, deserialize_with = "u64_lenient")]
+    pub votes: u64,
+    /// Можно ли оценивать.
+    #[serde(default, deserialize_with = "null_default")]
+    pub can_rate: bool,
+    /// Средние по критериям: `translation_accuracy`, `readability_adaptation`,
+    /// `editing_formatting`.
+    #[serde(default)]
+    pub categories: Option<Value>,
+    /// Своя оценка по тем же критериям.
+    #[serde(default)]
+    pub user: Option<Value>,
 }
 
 impl TitleDetails {
@@ -234,6 +412,9 @@ pub struct ChapterBranch {
     pub user: Option<UserRef>,
     #[serde(default)]
     pub restricted_view: Option<RestrictedView>,
+    /// 0 обычная, 1 ранний доступ, 2 платная.
+    #[serde(default, deserialize_with = "crate::serde_util::opt_u64_lenient")]
+    pub expired_type: Option<u64>,
 }
 
 impl ChapterBranch {
@@ -300,6 +481,12 @@ pub struct Branch {
     pub name: Option<String>,
     #[serde(default, deserialize_with = "null_default")]
     pub teams: Vec<Team>,
+    /// Подписка на новые главы ветки (только для вошедшего).
+    #[serde(default, deserialize_with = "null_default")]
+    pub notify: bool,
+    /// Оценка перевода ветки целиком, если её показывают.
+    #[serde(default)]
+    pub translation_quality_rating: Option<TranslationRating>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -348,6 +535,17 @@ pub struct ChapterPages {
     /// Глава отмечена прочитанной. Приходит только вошедшему пользователю.
     #[serde(default, deserialize_with = "null_default")]
     pub is_viewed: bool,
+    #[serde(default, deserialize_with = "crate::serde_util::opt_u64_lenient")]
+    pub likes_count: Option<u64>,
+    /// Свой лайк («Сказать спасибо»).
+    #[serde(default, deserialize_with = "null_default")]
+    pub is_liked: bool,
+    #[serde(default)]
+    pub translation_quality_rating: Option<TranslationRating>,
+    #[serde(default, deserialize_with = "null_default")]
+    pub teams: Vec<Team>,
+    #[serde(default)]
+    pub restricted_view: Option<RestrictedView>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -499,6 +697,21 @@ pub struct Player {
     /// Серия отмечена просмотренной в этом плеере. Только для вошедшего.
     #[serde(default, deserialize_with = "null_default")]
     pub is_viewed: bool,
+    /// Разметка опенинга, эндинга и прочего, которую задала команда.
+    #[serde(default, deserialize_with = "null_default")]
+    pub timecode: Vec<Timecode>,
+}
+
+/// Отрезок серии, который можно пропустить.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Timecode {
+    /// `opening`, `ending`, `ost`, `compilation`, `splashScreen`.
+    #[serde(rename = "type", default, deserialize_with = "null_default")]
+    pub kind: String,
+    #[serde(default, deserialize_with = "u64_lenient")]
+    pub from: u64,
+    #[serde(default, deserialize_with = "u64_lenient")]
+    pub to: u64,
 }
 
 impl Player {

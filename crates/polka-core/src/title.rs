@@ -615,6 +615,15 @@ impl TitlePage {
             item_number: episode.item_number,
             player_id: player.map(|p| p.id),
             choice: player.and_then(Player::choice),
+            skips: player
+                .map(|p| {
+                    p.timecode
+                        .iter()
+                        .filter(|t| core.config.auto_skip.iter().any(|k| k == &t.kind))
+                        .cloned()
+                        .collect()
+                })
+                .unwrap_or_default(),
         }
     }
 

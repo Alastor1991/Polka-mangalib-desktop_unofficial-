@@ -77,6 +77,9 @@ cache_limit_mb = 1024
 # api_mirrors = ["https://api.cdnlibs.org/api"]   # свои зеркала вместо встроенных
 
 # Свой клиент OAuth, если его выдали разработчики lib.social:
+# Что mpv пропускает сам по разметке команды:
+# auto_skip = ["opening", "ending"]
+
 # oauth_client_id = "…"
 # oauth_redirect_uri = "…"
 ```

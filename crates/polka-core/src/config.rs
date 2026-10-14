@@ -59,6 +59,9 @@ pub struct Config {
     pub oauth_client_id: Option<String>,
     /// Адрес возврата для своего клиента OAuth.
     pub oauth_redirect_uri: Option<String>,
+    /// Что mpv пропускает сам по разметке команды: `opening`, `ending`, `ost`,
+    /// `compilation`, `splashScreen`. По умолчанию ничего, как на сайте.
+    pub auto_skip: Vec<String>,
 }
 
 impl Default for Config {
@@ -75,6 +78,7 @@ impl Default for Config {
             cache_limit_mb: 1024,
             oauth_client_id: None,
             oauth_redirect_uri: None,
+            auto_skip: Vec::new(),
         }
     }
 }

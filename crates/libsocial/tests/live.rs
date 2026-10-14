@@ -25,6 +25,11 @@ async fn manga_flow() {
 
     let title = c.title(Site::MangaLib, "7965--chainsaw-man").await.unwrap();
     assert!(!title.summary_text().is_empty());
+    // Расширенные поля карточки: сервер их принимает и присылает.
+    assert!(title.views.as_ref().is_some_and(|v| v.total > 0));
+    assert!(!title.publisher.is_empty());
+    assert!(title.metadata.is_some());
+    assert!(title.items_count.as_ref().is_some_and(|i| i.uploaded > 0));
 
     let chapters = c.chapters(Site::MangaLib, "7965--chainsaw-man").await.unwrap();
     let chapter = chapters
@@ -126,5 +131,66 @@ async fn comments_flow() {
     match c.sticker_packs().await {
         Ok(packs) => assert!(packs.iter().any(|p| !p.stickers.is_empty())),
         Err(e) => assert!(matches!(e, libsocial::Error::Unauthorized), "{e}"),
+    }
+}
+
+#[tokio::test]
+#[ignore]
+async fn title_extras() {
+    use libsocial::media::{CharacterRole, EntityKind, ReviewFilter, TeamSort};
+
+    let c = client();
+    let slug = "7965--chainsaw-man";
+    assert!(!c.covers(Site::MangaLib, slug).await.unwrap().is_empty());
+    let stats = c.title_stats(Site::MangaLib, slug).await.unwrap();
+    assert!(stats.rating.count > 0 && stats.rating.stats.len() == 10);
+    let relations = c.relations(Site::MangaLib, slug).await.unwrap();
+    assert!(relations.iter().any(|r| r.related_type.is_some()));
+    let similar = c.similar(Site::MangaLib, slug).await.unwrap();
+    assert!(!similar.is_empty() && !similar[0].similar.is_empty());
+    let chars = c
+        .title_characters(Site::MangaLib, 7965, Some(CharacterRole::Main), 1)
+        .await
+        .unwrap();
+    assert!(!chars.items.is_empty());
+
+    let title = c.title(Site::MangaLib, slug).await.unwrap();
+    let author = &title.authors[0];
+    // Страница человека гостю закрыта: сервер отвечает 404.
+    match c.entity(EntityKind::People, author.slug_url.as_deref().unwrap()).await {
+        Ok(person) => assert!(!person.sites().is_empty()),
+        Err(e) => assert!(matches!(e, libsocial::Error::NotFound), "{e}"),
+    }
+
+    let teams = c.teams("", TeamSort::Titles, 1).await.unwrap();
+    assert!(teams.has_next);
+    let team = &teams.items[0];
+    // Карточка команды гостю закрыта, как и страница человека.
+    match c.team(team.slug_url.as_deref().unwrap()).await {
+        Ok(card) => assert!(!card.stats.is_empty()),
+        Err(e) => assert!(matches!(e, libsocial::Error::NotFound), "{e}"),
+    }
+    assert!(!c.team_members(team.id).await.unwrap().is_empty());
+    assert!(!c.team_chapters(team.id, 1).await.unwrap().items.is_empty());
+
+    let reviews = c
+        .reviews(&ReviewFilter {
+            title: Some((Site::MangaLib, 7965)),
+            page: 1,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert!(!reviews.items.is_empty());
+    let one = c.review(reviews.items[0].id).await.unwrap();
+    assert!(!one.text().plain_text().is_empty());
+
+    let voices = c
+        .manga_voices(Site::MangaLib, "6192--kusuriya-no-hitorigoto", 1)
+        .await
+        .unwrap();
+    assert!(!voices.items.is_empty());
+    if let Some(v) = voices.items.first() {
+        assert!(c.manga_voice_url(v, 720).await.unwrap().is_some());
     }
 }

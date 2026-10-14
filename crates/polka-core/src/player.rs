@@ -36,6 +36,9 @@ pub struct Track {
     pub player_id: Option<u64>,
     /// Плеер, команда и перевод для закладки. Без них сайт место не примет.
     pub choice: Option<libsocial::PlayerChoice>,
+    /// Отрезки, которые mpv пропустит сам: опенинг, эндинг и прочее, что выбрано
+    /// в настройках, по разметке команды.
+    pub skips: Vec<libsocial::models::Timecode>,
 }
 
 impl Track {
@@ -72,7 +75,7 @@ impl Playback {
             return;
         };
         if let Some(stream) = connect(&socket, &mut child).await {
-            watch(stream, |pos, duration| save(&track, pos, duration)).await;
+            watch(stream, &track.skips, |pos, duration| save(&track, pos, duration)).await;
             track.finish();
         }
         let _ = child.wait().await;
@@ -187,8 +190,9 @@ async fn connect(socket: &Path, child: &mut Child) -> Option<tokio::net::UnixStr
 
 /// Подписывается на позицию и длительность и читает события, пока mpv не закроет
 /// сокет. `save` получает позицию и длительность в секундах: раз в `SAVE_EVERY`
-/// и последний раз при закрытии.
-async fn watch<S>(stream: S, mut save: impl FnMut(f64, f64))
+/// и последний раз при закрытии. Попав в отрезок из `skips`, перематывает на его
+/// конец, каждый отрезок один раз: если зритель вернётся назад, мешать не будем.
+async fn watch<S>(stream: S, skips: &[libsocial::models::Timecode], mut save: impl FnMut(f64, f64))
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
@@ -204,6 +208,7 @@ where
     }
     let mut lines = BufReader::new(read).lines();
     let (mut pos, mut duration) = (None::<f64>, 0.0);
+    let mut skipped = vec![false; skips.len()];
     let mut saved_at = tokio::time::Instant::now();
     while let Ok(Some(line)) = lines.next_line().await {
         let Ok(event) = serde_json::from_str::<serde_json::Value>(&line) else {
@@ -218,7 +223,22 @@ where
             continue;
         };
         match event["name"].as_str() {
-            Some("time-pos") => pos = Some(value.max(0.0)),
+            Some("time-pos") => {
+                pos = Some(value.max(0.0));
+                // Секунда в запасе: без неё перемотка на самый конец отрезка могла
+                // бы сработать повторно от неточной позиции.
+                if let Some(i) = skips
+                    .iter()
+                    .enumerate()
+                    .position(|(i, s)| !skipped[i] && value >= s.from as f64 && value + 1.0 < s.to as f64)
+                {
+                    skipped[i] = true;
+                    let seek = format!("{{\"command\": [\"seek\", {}, \"absolute\"]}}\n", skips[i].to);
+                    if write.write_all(seek.as_bytes()).await.is_err() {
+                        break;
+                    }
+                }
+            }
             Some("duration") => duration = value,
             _ => continue,
         }
@@ -279,7 +299,7 @@ mod tests {
             request
         });
         let mut saved = Vec::new();
-        watch(ours, |pos, duration| saved.push((pos, duration))).await;
+        watch(ours, &[], |pos, duration| saved.push((pos, duration))).await;
         let request = server.await.unwrap();
         assert!(request.contains("time-pos") && request.contains("duration"));
         saved
@@ -305,6 +325,37 @@ mod tests {
         assert!(saved.is_empty());
     }
 
+    #[tokio::test]
+    async fn skips_opening_once() {
+        let (ours, mpv) = tokio::io::duplex(4096);
+        let (mpv_read, mut mpv_write) = tokio::io::split(mpv);
+        let skips = vec![libsocial::models::Timecode {
+            kind: "opening".into(),
+            from: 55,
+            to: 145,
+        }];
+        let server = tokio::spawn(async move {
+            for pos in [10.0, 60.0, 61.0] {
+                let event = format!("{{\"event\": \"property-change\", \"name\": \"time-pos\", \"data\": {pos}}}\n");
+                mpv_write.write_all(event.as_bytes()).await.unwrap();
+            }
+            // Закрываем свою сторону: слежение увидит конец и закроет свою.
+            mpv_write.shutdown().await.unwrap();
+            let mut lines = BufReader::new(mpv_read).lines();
+            let mut got = Vec::new();
+            while let Ok(Some(line)) = lines.next_line().await {
+                got.push(line);
+            }
+            got
+        });
+        watch(ours, &skips, |_, _| {}).await;
+        let got = server.await.unwrap();
+        // Две подписки и одна перемотка: опенинг пропускается один раз.
+        let seeks: Vec<&String> = got.iter().filter(|l| l.contains("\"seek\"")).collect();
+        assert_eq!(seeks.len(), 1, "{got:?}");
+        assert!(seeks[0].contains("145"));
+    }
+
     #[test]
     fn watched_near_the_end() {
         let db = Db::in_memory().unwrap();
@@ -319,6 +370,7 @@ mod tests {
             item_number: Some(1),
             player_id: Some(5),
             choice: None,
+            skips: Vec::new(),
         };
         save(&track, 700.0, 1440.0);
         let p = db.progress(Site::AnimeLib, "1--x", "e1").unwrap().unwrap();

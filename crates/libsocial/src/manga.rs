@@ -19,6 +19,17 @@ const MANGA_FIELDS: &[&str] = &[
     "releaseDate",
     "status_id",
     "manga_status_id",
+    "eng_name",
+    "background",
+    "views",
+    "publisher",
+    "franchise",
+    "metadata",
+    "metadata.count",
+    "metadata.close_comments",
+    "chap_count",
+    "translation_quality_rating",
+    "close_view",
 ];
 
 /// У аниме свой набор: `artists`, `format`, `status_id` сервер для него отвергает.
@@ -34,6 +45,17 @@ const ANIME_FIELDS: &[&str] = &[
     "anime_status_id",
     "episodes_count",
     "publisher",
+    "eng_name",
+    "background",
+    "views",
+    "franchise",
+    "metadata",
+    "metadata.count",
+    "metadata.close_comments",
+    "time",
+    "shiki_rate",
+    "episodesSchedule",
+    "close_view",
 ];
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

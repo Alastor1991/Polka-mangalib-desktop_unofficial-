@@ -10,6 +10,7 @@ mod client;
 pub mod comments;
 mod error;
 mod manga;
+pub mod media;
 pub mod mirrors;
 pub mod models;
 pub mod rich;
