@@ -1,0 +1,12 @@
+{"data": {
+  "title": {"type": "manga", "id": 14841, "name": "Название", "slug_url": "14841--novel", "model": "book", "site": 3,
+            "type_label": "Английский", "url": "/ru/book/14841--novel", "cover": {}},
+  "album": {"album_id": 1851, "name": "Название", "slug": "nazvanie", "type": "ranobe", "status": "collecting", "is_auto_generated": true, "cover": {}, "cover_site": 3},
+  "franchise": null,
+  "balance": {"amount_units": 1250, "amount": 125},
+  "albums": [], "progress": null,
+  "exchange_options": [
+    {"rank": "E", "cost_units": 1000, "cost": 100, "can_exchange": true, "duplicate": false, "missing_cards_count": 1, "total_cards_count": 1, "missing_shards": 0},
+    {"rank": "D", "cost_units": 3000, "cost": 300, "can_exchange": false, "duplicate": true, "missing_cards_count": 0, "total_cards_count": 1, "missing_shards": 175}
+  ]
+}}

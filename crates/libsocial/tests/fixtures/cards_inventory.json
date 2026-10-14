@@ -1,0 +1,17 @@
+{"data": [
+  {"id": 775420, "order": 0, "exchangeable": true, "metadata": null, "item_type": "card", "folder_id": 4, "locked": false,
+   "user_locked": true, "can_manage_user_lock": true,
+   "item": {"id": 550, "slug": "card-three", "slug_url": "550--card-three", "site_id": [1], "name": "Карта три",
+            "rank": {"id": "E", "name": "E", "value": "E", "label": "Обычная"}, "type": "normal",
+            "cover": {"default": "https://cover.cdnlibs.org/uploads/cards/550/f3.webp"}},
+   "card_stats": {"id": 775466, "item_user_id": 775420, "card_id": 550, "user_id": 111, "stat_version": 1,
+                  "element": {"value": "ice", "label": "Лёд"}, "role": {"value": "guardian", "label": "Защитник"},
+                  "quality": 74, "quality_tier": {"value": "good", "label": "Хорошая"},
+                  "hp": 31, "attack": 1, "defense": 1, "speed": 1, "power_score": 37, "frame_set_id": 1,
+                  "frame_url": "/static/images/ranks/legacy/e.png", "generated_at": "2026-08-24T04:48:08.000000Z",
+                  "first_previewed_at": null, "meta": {"rank": "E", "card_type": "normal", "title_type": "manga", "title_id": 182543}}},
+  {"id": 775421, "order": 1, "exchangeable": false, "folder_id": null, "locked": true, "user_locked": null,
+   "item": {"id": 551, "name": "Старая карта", "rank": {"id": "D"}}, "card_stats": null}
+],
+"links": {"first": "x?page=1", "last": "x?page=1", "prev": null, "next": null},
+"meta": {"current_page": 1, "last_page": 1, "per_page": 24, "total": 2, "hidden_site_cards_count": 5}}

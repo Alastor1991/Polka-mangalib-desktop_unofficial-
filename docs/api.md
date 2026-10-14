@@ -273,6 +273,74 @@ GET /api/user/{id}/comments                          что написал по�
 - В новом комментарии ответ задают `parent_comment`, `root_id` (корень родителя или сам родитель) и `comment_level` (уровень родителя плюс один).
 - Картинки и стикеры в комментариях доступны только с премиумом.
 
+## Ранобэ
+
+Код: `crates/libsocial/src/ranobe.rs` (текст главы), `exports.rs` (экспорт книг). Ранобэ живёт в том же API, что и манга, с `Site-Id: 3`: пути `/manga/...`, в ответах `model` равен `"manga"`. Слово `book` встречается только в адресах страниц сайта и в `model` внутри раздела карточек. `Site::RanobeLib` в крейте пока нет, поэтому запросы идут через `Client::ranobe_*` с явным заголовком.
+
+```http
+GET /api/manga/{slug_url}/chapters                                    Site-Id: 3
+GET /api/manga/{slug_url}/chapter?volume=1&number=0&branch_id=9824    Site-Id: 3
+POST /api/bookmarks   {"media_type": "manga", "media_slug": …, "bookmark": {"item_id": …, "progress": "17"}}
+GET /api/constants?fields[]=bookExportEnabled&fields[]=bookExportPremiumOnly&fields[]=bookExportFormats
+GET /api/book-exports?manga_id={id}              свои задачи, manga_id обязателен
+POST /api/book-exports   {"manga_id": …, "format": "epub"|"fb2", "branch_id": …|null, "volume": "1"|null}
+GET /api/book-exports/{id}                       опрос раз в poll_after секунд, 404 – задачу удалили
+DELETE /api/book-exports/{id}
+POST /api/book-exports/{id}/link?part={N}        {url, file_name}, дальше обычный GET
+GET /api/book-exports/{id}/segments/{N}?v={key}  при delivery = "segments", 410 – файл устарел
+```
+
+- У главы нет `pages`, есть `content`, и он двух видов в одном тайтле: старые главы (id примерно до 2 млн) приходят строкой HTML из `<p>` и `<img>`, новые документом ProseMirror. Клиент разбирает оба в `rich::Doc` (`RanobeChapter::doc`).
+- Картинки старых глав: `attachments[].url` строится по нынешнему slug тайтла, а файл лежит под старым, так что адрес даёт 404 (на `ranobelib.me` 500). Верный путь стоит в `src` внутри HTML. У новых глав путь строится по числовому id тайтла и рабочий, картинка в документе названа только именем вложения (`attrs.images[].image`), адрес ищется в `attachments`. Полный адрес – `https://ranobelib.me{url}`, `Referer` любого домена сети подходит.
+- У каждого абзаца есть номер, нумерация общая по документу, с единицы, включая абзацы в цитатах и списках. Для HTML он лежит в `data-paragraph-index`, для ProseMirror считается по порядку узлов `paragraph`. `Doc` номеров не хранит, поэтому `RanobeChapter::spans` идёт параллельно `doc.blocks`, а `block_of_paragraph(n)` ищет блок по номеру.
+- Закладка: автозакладка шлёт только `item_id` и `meta.item_number`, а `progress` для ранобэ не передаёт совсем. Закладка на абзац – тот же `POST /bookmarks` с `progress` равным номеру абзаца строкой (`RanobeChapter::bookmark_place`, `paragraph_from_progress`). Процент прокрутки на сервер не уходит, его Полка хранит у себя.
+- Внутри HTML-текста попадаются настоящие переводы строк, а не `<br>`: для показа они пробелы.
+- `branch_id` бывает `null` у всех глав тайтла, тогда параметр в запрос не кладут. Главы сортируют по `item_number`, потому что номер вроде `0.5` порядка не задаёт.
+- Экспорт книг не проверен вживую: он доступен только Premium (`bookExportPremiumOnly`). Схема ответов взята из скриптов сайта, разбор терпимый, `id` задачи хранится строкой. Сегменты скачиваются по порядку и склеиваются, итог сверяется с суммой `segments[].size`; части скачиваются по временным ссылкам с паузой в полсекунды.
+
+## Карточки
+
+Код: `crates/libsocial/src/cards.rs`. Коллекционная игра внутри сайтов сети; ответы почти не зависят от `Site-Id` (запросы идут с MangaLib), кроме скрытия карт, которых нет на сайте запроса (`hidden_site_cards_count`).
+
+```http
+GET /api/cards?media_id=7965&media_type=manga&rank=C&site_id=3&animated=1   каталог
+GET /api/cards/{id|slug_url}                         подробная карта: media, albums, owners, versions
+GET /api/cards/{id}/owners?available_for_exchange=1
+GET /api/user/{id}/inventory?element=ice&locked=0&sort_by=power_score        чужой читается, пока профиль открыт
+GET /api/user/{id}/card-folders
+GET /api/cards/statistics/{id}                       без обёртки data
+GET /api/cards/albums?site_id=3&sort=updated_at&direction=desc               24 на страницу
+GET /api/cards/albums/{id}?status=owned_now&version=animated&per_page=…      альбом и слоты data.slots
+GET /api/user/{id}/card-albums, …/card-albums/info?site_id=…
+GET /api/cards/collection/title/{manga|anime}/{titleId}
+GET /api/cards/shards/title/{manga|anime}/{titleId}                          вход нужен
+GET /api/profile/cards/shards?user_id=…&sort_by=amount                       meta.weekly_limits
+GET /api/cards/collectors/title/{manga|anime}/{titleId}
+GET /api/cards/trade-market?tab=buy|sell|my|offers   пагинация в data.pagination
+GET /api/cards/trade-market/cards/{id}?tab=offers|wants|mine, /lots/{id}, /api/cards/trade-orders/{id}
+GET /api/trade-orders?type=direct_exchange&participant_user_id=…&section=active|history, /trade-orders/summary
+GET /api/cards/chaos-exchange, /chaos-exchange/cards?recipe=…               вход нужен
+GET /api/cards/creator-top?type=normal|animated&period=current|previous
+GET /api/card-packs, /api/card-packs/{id}
+POST|DELETE /api/user/inventory/{item_user_id}/lock
+POST /api/user/card-folders, PUT …/{id}, DELETE …/{id}, PUT …/order {folder_ids}, PUT …/move {item_user_ids, folder_id}
+POST /api/cards/shards/title/{type}/{id}/exchange {rank}
+POST /api/user/{id}/card-albums/{albumId}/claim
+POST /api/cards/chaos-exchange {recipe, item_user_ids}
+POST /api/trade-orders {type: "direct_exchange", target_user_id, message, groups}, …/{id}/accept|decline|cancel
+POST /api/cards/trade-orders          лот «хочу» (direction: buy) или «отдаю» (direction: sell)
+POST /api/cards/trade-market/lots/{id}/accept, /api/cards/trade-orders/{id}/offers|cancel, /api/cards/trade-offers/{id}/accept|decline
+POST /api/cards/{id}/receive-preview {card_instance_stat_id}
+```
+
+- Ранги: `E` Обычная, `D` Необычная, `C` Редкая, `B` Эпическая, `A` Легендарная, `S` Мифическая. Ранг S за осколки не выдаётся.
+- `type` тайтла в путях и параметрах равен `manga` для манги, ранобэ и слэша, `anime` для аниме. В ответе осколков у ранобэ `model` равен `"book"`, брать надо `type`.
+- Id элемента инвентаря – `item_user_id`, не id карты: его принимают блокировка, папки, обмены. `locked` значит «занят в лоте или обмене», `user_locked` – ручная блокировка владельцем. `card_stats` у старых карт может быть `null`.
+- Осколки считаются по тайтлу и хранятся в десятых долях (`amount_units`). Недельный лимит ограничивает чтение (750) и прочие действия (250) для обычного аккаунта.
+- Параметры `all` в query слать нельзя (422), поиск `q` принимается от двух символов и кириллицу надо кодировать.
+- Без входа читаются каталог, карта, владельцы, чужой открытый инвентарь, альбомы, рынок, лоты, топ. Осколки, хаос-обмен и прямые обмены требуют входа, а прямые обмены ещё и только свои.
+- Запросы на запись и разбор их ответов не проверены вживую: они взяты из скриптов сайта. Платные действия (покупка и открытие паков, платежи, покупка глав) в клиент не входят.
+
 ## Ограничения
 
 Сервис не публикует лимиты. Полка держится в таких рамках:

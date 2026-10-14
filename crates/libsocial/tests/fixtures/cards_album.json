@@ -1,0 +1,21 @@
+{"data": {
+  "album": {"album_id": 3506, "franchise_id": null, "franchise_name": null, "name": "Альбом", "slug": "albom", "type": "manga",
+            "status": "active", "is_auto_generated": true, "cover": {"default": "https://cover.cdnlibs.org/c.jpg"}, "cover_site": 1},
+  "franchise": null, "source_titles": [{"source_id": 3102, "album_id": 3506, "media_type": "manga", "media_id": 7965}],
+  "cards_count": 7, "sources_count": 1, "likes_count": 2, "is_liked_by_me": false,
+  "progress": null, "shard_balance": {"amount_units": 240, "amount": 24}, "duplicates_count": 1, "has_duplicates": true,
+  "can_claim": true, "claim_cost": null, "missing_count": 6, "is_completed": false, "badges": [],
+  "actions": {"show_url": "/cards/albums/3506", "can_exchange": false, "can_claim": true},
+  "empty_state": null,
+  "slots": {"data": [
+    {"slot_id": 738, "card_id": 903, "local_number": 1, "global_number": 903, "card_name": "Карта", "rank": "B", "rank_label": "Эпическая",
+     "type": "normal", "type_label": "Обычная", "base_card_id": null, "element": null, "role": null,
+     "image": {"filename": "i", "default": "https://cover.cdnlibs.org/uploads/cards/903/i.webp", "extension": "webp", "sm": "s"},
+     "frame": {"front": {"orig": "/static/images/ranks/legacy/b.png"}}, "frame_url": "/static/images/ranks/legacy/b.png",
+     "is_spoiler": false, "spoiler_hidden": false, "site_restricted_hidden": false,
+     "status": "owned_now", "status_label": "Есть сейчас", "owned_count": 2, "owned_now": true, "collected_before": true,
+     "versions": [{"id": 738, "card_id": 903, "type": "normal", "label": "Обычная", "state": "owned", "count": 2}],
+     "cards": [], "source_titles": [], "card": {"id": 903, "slug": "karta", "slug_url": "903--karta", "name": "Карта"}}
+  ], "pagination": {"current_page": 1, "last_page": 4, "per_page": 2, "total": 7, "has_next_page": true, "has_prev_page": false}},
+  "filters": [], "meta": {"sorts": [{"id": "local_number", "name": "По номеру"}]}
+}}
