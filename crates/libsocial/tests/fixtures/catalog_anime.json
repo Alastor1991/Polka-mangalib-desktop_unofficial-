@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "id": 246, "name": "Bleach", "rus_name": "Блич", "eng_name": "Bleach",
+      "model": "anime", "slug": "bleach-anime", "slug_url": "246--bleach-anime",
+      "cover": {"filename": "c", "thumbnail": "https://cover.cdnlibs.org/t3.jpg", "default": "https://cover.cdnlibs.org/d3.jpg", "md": "https://cover.cdnlibs.org/m3.jpg"},
+      "ageRestriction": {"id": 2, "label": "PG-13"}, "site": 5,
+      "type": {"id": 16, "label": "TV Сериал"}, "releaseDate": "2004-10-05",
+      "rating": {"average": "9.08", "averageFormated": "9.1", "votes": 4939, "votesFormated": "4.9 K", "user": 0},
+      "content_marking": [], "status": {"id": 2, "label": "Завершён"}, "releaseDateString": "05 октября 2004 г.",
+      "anilist_id": null, "shiki_rate": null
+    }
+  ],
+  "links": {"first": "http://api.cdnlibs.org/api/anime?page=1", "last": null, "prev": null, "next": "http://api.cdnlibs.org/api/anime?page=2"},
+  "meta": {"current_page": 1, "from": 1, "path": "http://api.cdnlibs.org/api/anime", "per_page": 60, "to": 60, "seed": "742cd40fd371b7b5752f70921a41d643"}
+}

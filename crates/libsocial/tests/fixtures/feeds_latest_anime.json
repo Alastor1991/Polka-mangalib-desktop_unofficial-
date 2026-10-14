@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "id": 10818, "name": "Prince of Stride: Alternative", "rus_name": "Принц страйда: Альтернатива", "eng_name": "Prince of Stride: Alternative",
+      "model": "anime", "slug": "prince-of-stride-alternative-anime", "slug_url": "10818--prince-of-stride-alternative-anime",
+      "cover": {"filename": "f", "thumbnail": "t", "default": "d", "md": "m"},
+      "ageRestriction": {"id": 2, "label": "PG-13"}, "site": 5, "type": {"id": 16, "label": "TV Сериал"},
+      "rating": {"average": "0", "averageFormated": "0", "votes": 0, "votesFormated": "0", "user": 0},
+      "last_item_at": "2026-10-13T21:05:37.000000Z", "content_marking": [],
+      "metadata": {"latest_items": {"count": 8, "items": [
+        {"id": 66347, "model": "episodes", "name": "", "number": "11", "number_secondary": "1", "season": "1",
+         "status": {"id": "default", "label": "Полноценный эпизод", "abbr": null}, "anime_id": 10818, "created_at": "2022-09-30T08:18:02.000000Z",
+         "players": [{"id": 673167, "episode_id": 66347, "player": "Animelib", "translation_type": {"id": 2, "label": "Озвучка"},
+                      "team": {"id": 32412, "slug": "team1", "slug_url": "32412--team1", "model": "team", "name": "Команда 1"},
+                      "created_at": "2026-10-13T19:07:34.000000Z", "views": 0, "video_domain": "main"}],
+         "item_number": 1, "type": "episodes"}
+      ]}},
+      "status": {"id": 2, "label": "Завершён"}, "items_count": {"uploaded": null, "total": 12}, "releaseDateString": "",
+      "anilist_id": 21330, "anilist_href": "https://anilist.co/anime/21330", "shiki_rate": null
+    }
+  ],
+  "links": {"first": "http://hapi.hentaicdn.org/api/latest-updates?page=1", "last": null, "prev": null, "next": "http://hapi.hentaicdn.org/api/latest-updates?page=2"},
+  "meta": {"current_page": 1, "from": 1, "path": "http://hapi.hentaicdn.org/api", "per_page": 15, "to": 15}
+}

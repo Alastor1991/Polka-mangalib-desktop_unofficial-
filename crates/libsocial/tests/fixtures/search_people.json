@@ -1,0 +1,15 @@
+{
+  "data": [
+    {"id": 113727, "slug": "junji-itou", "slug_url": "113727--junji-itou", "model": "people", "name": "Junji Itou", "rus_name": "Дзюндзи Ито", "alt_name": "Ито Дзюндзи\nJunji Ito",
+     "cover": {"filename": "f", "thumbnail": "t", "default": "d", "md": "m"},
+     "subscription": {"is_subscribed": false, "source_type": "people", "source_id": 113727, "relation": null},
+     "confirmed": false, "user_id": 7196823,
+     "titles_count_details": {"1": 48, "3": 0, "2": 1, "4": 0, "5": 3},
+     "stats": [
+       {"value": 52, "formated": "52", "short": "52", "label": "Тайтла", "tag": "titles"},
+       {"value": 38666, "formated": "38 666", "short": "38.7 K", "label": "Подписчиков", "tag": "subscribes"}
+     ]}
+  ],
+  "links": {"first": "http://api.cdnlibs.org/api/people?page=1", "last": null, "prev": null, "next": "http://api.cdnlibs.org/api/people?page=2"},
+  "meta": {"current_page": 1, "from": 1, "path": "http://api.cdnlibs.org/api/people", "per_page": 50, "to": 50}
+}

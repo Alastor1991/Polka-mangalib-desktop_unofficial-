@@ -1,0 +1,17 @@
+{
+  "data": [
+    {"id": 109850, "slug": "", "slug_url": "109850--", "model": "character",
+     "cover": {"filename": "f", "thumbnail": "t", "default": "d", "md": "m"},
+     "name": "노아 오스틴", "rus_name": "Нао", "alt_name": "",
+     "dsc": {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Приехала в Корею"}]}, {"type": "paragraph"}]},
+     "subscription": {"is_subscribed": false, "source_type": "character", "source_id": 109850, "relation": null},
+     "stats": [
+       {"value": 0, "formated": "0", "short": "0", "label": "Тайтлов", "tag": "titles"},
+       {"value": 0, "formated": "0", "short": "0", "label": "Подписчиков", "tag": "subscribes"}
+     ],
+     "titles_count_details": {"1": 0, "3": 0, "2": 0, "4": 0, "5": 0}}
+  ],
+  "links": {"first": "http://api.cdnlibs.org/api/character?page=1", "last": "http://api.cdnlibs.org/api/character?page=35936", "prev": null, "next": "http://api.cdnlibs.org/api/character?page=2"},
+  "meta": {"current_page": 1, "from": 1, "last_page": 35936, "per_page": 3, "to": 3, "total": 107806, "path": "http://api.cdnlibs.org/api/character",
+           "links": [{"url": null, "label": "&laquo; Previous", "active": false}, {"url": "http://api.cdnlibs.org/api/character?page=2", "label": "Next &raquo;", "active": false}]}
+}

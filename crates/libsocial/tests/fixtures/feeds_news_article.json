@@ -1,0 +1,20 @@
+{
+  "data": {
+    "id": 308, "slug": "versiia-204", "slug_url": "308--versiia-204", "title": "Версия 2.0.4", "created_at": "2026-09-10T14:03:11.000000Z",
+    "status": {"id": 1, "label": "Опубликовано"}, "platform": {"id": "android", "label": "Android"}, "visible_for": {"id": "all", "label": "Для всех"},
+    "type": {"id": "changelog", "label": "Обновление"}, "version_name": "2.0.4", "metadata": {"comments": "disabled", "contentVersion": "0"},
+    "content": {"type": "doc", "content": [
+      {"type": "paragraph", "attrs": {"textAlign": "center"}, "content": [{"type": "text", "marks": [{"type": "bold"}], "text": "Новый режим чтения"}]},
+      {"type": "image", "attrs": {"description": null, "images": [{"image": "ec5f957d-a5e7-4210-a4b1-e0f8192db049"}]}},
+      {"type": "bulletList", "content": [
+        {"type": "listItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Читалка переписана"}]}]}
+      ]}
+    ]},
+    "attachments": [
+      {"filename": "ec5f957d-a5e7-4210-a4b1-e0f8192db049.gif", "name": "ec5f957d-a5e7-4210-a4b1-e0f8192db049", "extension": "gif", "width": 800, "height": 1040,
+       "url": "/uploads/news/308/ec5f957d-a5e7-4210-a4b1-e0f8192db049.gif", "previewUrl": "/uploads/news/308/ec5f957d-a5e7-4210-a4b1-e0f8192db049.gif", "originalUrl": "/uploads/news/308/ec5f957d-a5e7-4210-a4b1-e0f8192db049.gif"}
+    ],
+    "user": {"id": 5678751, "username": "user1", "avatar": {"filename": null, "url": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"},
+             "last_online_at": null, "can_view_profile": true, "premium": {"enabled": false}}
+  }
+}
