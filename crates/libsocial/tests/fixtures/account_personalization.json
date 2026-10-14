@@ -1,0 +1,36 @@
+{
+  "data": {
+    "latest_updates": "notification",
+    "bottom_menu_visible": "enabled",
+    "grid_cards_count": "auto",
+    "start_page": "home",
+    "start_page_blocks": [
+      {
+        "id": "popular-updates",
+        "visible": true
+      },
+      {
+        "id": "latest-views",
+        "visible": false
+      }
+    ],
+    "media_info_variant": "standard",
+    "media_info_tooltip": "catalog_page",
+    "bottom_menu_order": [
+      "bookmarks",
+      "catalog",
+      "home",
+      "notifications",
+      "menu"
+    ],
+    "bottom_menu_button_variant": "initial",
+    "media_bottom_navigation_catalog_visible": "enabled",
+    "media_bottom_navigation_catalog_close_action": "navigate_to_catalog",
+    "login_streak_comments_hidden": false,
+    "login_streak_light_icon_style": "light-orange",
+    "login_streak_dark_icon_style": "dark-ember",
+    "login_streak_theme": "auto",
+    "login_streak_others_personalization_disabled": false,
+    "disable_autobookmark": false
+  }
+}

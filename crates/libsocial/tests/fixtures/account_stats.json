@@ -1,0 +1,51 @@
+{
+  "data": {
+    "genres": [
+      {
+        "value": 12,
+        "formated": "12",
+        "short": "12",
+        "label": "Фэнтези",
+        "percent": 25.5
+      }
+    ],
+    "tags": [
+      {
+        "value": 5,
+        "formated": "5",
+        "short": "5",
+        "label": "Тег",
+        "percent": 10.0
+      }
+    ],
+    "manga_added": {
+      "value": 20,
+      "formated": "20",
+      "short": "20",
+      "label": "Тайтлов",
+      "tag": "manga_added"
+    },
+    "chapters_added": {
+      "value": 0,
+      "formated": "0",
+      "short": "0",
+      "label": "Глав",
+      "tag": "chapters_added"
+    },
+    "comments": {
+      "value": 74,
+      "formated": "74",
+      "short": "74",
+      "label": "Комментариев"
+    },
+    "reviews": {
+      "type": [],
+      "evaluation": {
+        "neutral": 0,
+        "positive": 0,
+        "negative": 0,
+        "all": 0
+      }
+    }
+  }
+}

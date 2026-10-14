@@ -1,0 +1,18 @@
+{
+  "data": {
+    "id": 1002,
+    "username": "user2",
+    "avatar": {
+      "filename": null,
+      "url": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+    },
+    "last_online_at": null,
+    "can_view_profile": false,
+    "can_view_statistics": false,
+    "viewable_statistics_site_ids": [],
+    "can_view_previous_usernames": false,
+    "login_streak": {
+      "last_login_at": null
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "data": [
+    {
+      "id": 3001,
+      "item": {
+        "type": "chapter",
+        "id": 1766671
+      },
+      "number": {
+        "first": "1",
+        "secondary": "1"
+      },
+      "notes": [
+        {
+          "position": 5,
+          "text": "текст"
+        },
+        {
+          "position": "7",
+          "text": "ещё"
+        }
+      ]
+    }
+  ],
+  "links": {
+    "next": null
+  },
+  "meta": {
+    "per_page": 60
+  }
+}

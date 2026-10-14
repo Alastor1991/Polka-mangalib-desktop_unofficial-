@@ -1,0 +1,66 @@
+{
+  "data": [
+    {
+      "view_at": "2026-10-13T17:03:02.000000Z",
+      "media": {
+        "id": 16133,
+        "name": "Chainsaw Man",
+        "rus_name": "Человек-бензопила",
+        "eng_name": "Chainsaw Man",
+        "model": "anime",
+        "slug": "chainsaw-man",
+        "slug_url": "16133--jujutsu-kaisen-anime",
+        "cover": {
+          "filename": "x",
+          "thumbnail": "https://cover.cdnlibs.org/t.jpg",
+          "default": "https://cover.cdnlibs.org/d.jpg",
+          "md": "https://cover.cdnlibs.org/m.jpg"
+        },
+        "ageRestriction": {
+          "id": 0,
+          "label": "Нет"
+        },
+        "site": 5,
+        "type": {
+          "id": 5,
+          "label": "ТВ"
+        },
+        "content_marking": [],
+        "status": {
+          "id": 2,
+          "label": "Онгоинг"
+        },
+        "releaseDateString": "2018",
+        "is_licensed": false
+      },
+      "item": {
+        "id": 41924,
+        "model": "episode",
+        "name": "Название",
+        "number": "1",
+        "number_secondary": "1",
+        "season": "1",
+        "status": {
+          "id": "1",
+          "label": "Вышел",
+          "abbr": null
+        },
+        "anime_id": 16133,
+        "type": "episode",
+        "players": [
+          {
+            "id": 5371,
+            "episode_id": 41924,
+            "player": "Animelib"
+          }
+        ]
+      }
+    }
+  ],
+  "links": {
+    "next": null
+  },
+  "meta": {
+    "current_page": 1
+  }
+}

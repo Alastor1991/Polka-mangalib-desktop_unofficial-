@@ -1,0 +1,79 @@
+{
+  "data": {
+    "id": 1001,
+    "username": "user1",
+    "avatar": {
+      "filename": "x.jpg",
+      "url": "https://cover.cdnlibs.org/uploads/users/1001/x.jpg"
+    },
+    "last_online_at": "2026-10-13T17:29:58.000000Z",
+    "can_view_profile": true,
+    "can_view_statistics": true,
+    "viewable_statistics_site_ids": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "can_view_previous_usernames": true,
+    "login_streak": {
+      "last_login_at": "2026-10-13 03:54:30",
+      "login_streak": 8,
+      "max_login_streak": 21
+    },
+    "login_streak_preferences": {
+      "login_streak_light_icon_style": "light-orange",
+      "login_streak_dark_icon_style": "dark-ember",
+      "login_streak_theme": "auto"
+    },
+    "premium": {
+      "enabled": false
+    },
+    "background": {
+      "filename": "bg.jpg",
+      "url": "https://cover.cdnlibs.org/bg.jpg"
+    },
+    "about": "Текст о себе",
+    "gender": {
+      "id": 2,
+      "label": "Мужской"
+    },
+    "created_at": "2020-01-01T00:00:00.000000Z",
+    "ban_info": [],
+    "points_info": {
+      "top": null,
+      "total_points": 3365,
+      "level": 8,
+      "max_level_points": 792,
+      "current_level_points": 593,
+      "point_percent_progress": 74.9
+    },
+    "teams": [
+      {
+        "id": 1,
+        "slug": "t",
+        "slug_url": "1--t",
+        "model": "team",
+        "name": "Команда",
+        "cover": {
+          "filename": "x",
+          "thumbnail": "https://cover.cdnlibs.org/t.jpg",
+          "default": "https://cover.cdnlibs.org/d.jpg",
+          "md": "https://cover.cdnlibs.org/m.jpg"
+        },
+        "stats": [
+          {
+            "value": 10,
+            "formated": "10",
+            "short": "10",
+            "label": "Глав",
+            "tag": "chapters"
+          }
+        ]
+      }
+    ],
+    "roles": [],
+    "previous_usernames": []
+  }
+}
