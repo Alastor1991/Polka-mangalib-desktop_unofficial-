@@ -23,10 +23,6 @@ use crate::models::TitleShort;
 use crate::serde_util::{lenient_vec, opt_string_lenient, opt_u64_lenient};
 use crate::site::Site;
 
-/// Номер сайта RanobeLib. В `Site` его нет: отдельного эндпоинта у ранобэ тоже нет,
-/// это тот же `/manga`, который отбирается по `site_id[]=3`.
-pub const SITE_RANOBELIB: u8 = 3;
-
 /// Размер страницы каталога.
 pub const CATALOG_PAGE_SIZE: u32 = 60;
 
@@ -816,7 +812,7 @@ mod tests {
     fn lists_flags_and_bounds() {
         let filter = CatalogFilter {
             text: "  берсерк ".into(),
-            site_ids: vec![1, SITE_RANOBELIB],
+            site_ids: vec![1, Site::RanobeLib.id()],
             sort: CatalogSort::Views,
             order: SortOrder::Ascending,
             genres: vec![34, 47],

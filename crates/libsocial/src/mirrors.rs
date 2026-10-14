@@ -22,6 +22,7 @@ pub fn web(site: Site) -> &'static [&'static str] {
     match site {
         Site::MangaLib => &["https://mangalib.org", "https://mangalib.me"],
         Site::SlashLib => &["https://slashlib.me", "https://v2.slashlib.me"],
+        Site::RanobeLib => &["https://ranobelib.me"],
         Site::HentaiLib => &["https://hentailib.me"],
         Site::AnimeLib => &["https://animelib.org", "https://v3.animelib.org", "https://anilib.me"],
     }

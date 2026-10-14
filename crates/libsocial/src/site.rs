@@ -5,17 +5,26 @@ use serde::{Deserialize, Serialize};
 pub enum Site {
     MangaLib,
     SlashLib,
+    /// Ранобэ: главы текстом, а не картинками. API тот же, что у манги.
+    RanobeLib,
     HentaiLib,
     AnimeLib,
 }
 
 impl Site {
-    pub const ALL: [Site; 4] = [Site::MangaLib, Site::SlashLib, Site::HentaiLib, Site::AnimeLib];
+    pub const ALL: [Site; 5] = [
+        Site::MangaLib,
+        Site::SlashLib,
+        Site::RanobeLib,
+        Site::HentaiLib,
+        Site::AnimeLib,
+    ];
 
     pub fn id(self) -> u8 {
         match self {
             Site::MangaLib => 1,
             Site::SlashLib => 2,
+            Site::RanobeLib => 3,
             Site::HentaiLib => 4,
             Site::AnimeLib => 5,
         }
@@ -30,6 +39,7 @@ impl Site {
         match self {
             Site::MangaLib => "mangalib.me",
             Site::SlashLib => "slashlib.me",
+            Site::RanobeLib => "ranobelib.me",
             Site::HentaiLib => "hentailib.me",
             Site::AnimeLib => "anilib.me",
         }
@@ -43,6 +53,7 @@ impl Site {
         match self {
             Site::MangaLib => "MangaLib",
             Site::SlashLib => "SlashLib",
+            Site::RanobeLib => "RanobeLib",
             Site::HentaiLib => "HentaiLib",
             Site::AnimeLib => "AnimeLib",
         }
@@ -53,6 +64,7 @@ impl Site {
         match self {
             Site::MangaLib => "mangalib",
             Site::SlashLib => "slashlib",
+            Site::RanobeLib => "ranobelib",
             Site::HentaiLib => "hentailib",
             Site::AnimeLib => "animelib",
         }
@@ -64,6 +76,11 @@ impl Site {
 
     pub fn is_anime(self) -> bool {
         self == Site::AnimeLib
+    }
+
+    /// Главы текстом, а не картинками.
+    pub fn is_ranobe(self) -> bool {
+        self == Site::RanobeLib
     }
 
     /// Раздел каталога в API: `manga` или `anime`.

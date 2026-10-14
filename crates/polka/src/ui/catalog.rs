@@ -169,7 +169,9 @@ impl Catalog {
     }
 
     pub fn view<'a>(&'a self, images: &'a Images) -> Element<'a, Msg> {
-        let sites = row(Site::ALL.into_iter().map(|site| {
+        // Ранобэ в окне iced не читается: его читалка умеет только картинки. Ядро
+        // ранобэ знает, показывать его будет интерфейс на Slint.
+        let sites = row(Site::ALL.into_iter().filter(|s| !s.is_ranobe()).map(|site| {
             button(text(site.name()).size(14))
                 .padding([6, 12])
                 .style(if site == self.site {

@@ -21,7 +21,9 @@
 //! - запросы идут с явным `Site-Id: 3`, потому что `Site::RanobeLib` в крейте пока нет.
 
 use reqwest::Method;
-use reqwest::header::{HeaderMap, HeaderValue, ORIGIN, REFERER};
+use reqwest::header::HeaderMap;
+
+use crate::site::Site;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -33,22 +35,12 @@ use crate::models::{Branch, Chapter, Data, Team};
 use crate::rich::{Block, Doc, Inline, Picture};
 use crate::serde_util::{lenient_vec, null_default, opt_u64_lenient, string_lenient, u64_lenient};
 
-/// Значение `Site-Id` для RanobeLib.
-pub(crate) const RANOBE_SITE_ID: u16 = 3;
 /// Домен сайта. Картинки глав лежат на нём же, а `Referer` у них проверяет любой домен сети.
 pub const RANOBE_ORIGIN: &str = "https://ranobelib.me";
 
 /// Заголовки сайта RanobeLib: `Site-Id`, `Referer`, `Origin`.
 pub(crate) fn ranobe_headers() -> HeaderMap {
-    let mut headers = HeaderMap::new();
-    headers.insert("Site-Id", HeaderValue::from(RANOBE_SITE_ID));
-    if let Ok(v) = HeaderValue::from_str(&format!("{RANOBE_ORIGIN}/")) {
-        headers.insert(REFERER, v);
-    }
-    if let Ok(v) = HeaderValue::from_str(RANOBE_ORIGIN) {
-        headers.insert(ORIGIN, v);
-    }
-    headers
+    Client::site_headers(Site::RanobeLib)
 }
 
 /// В каком виде сервер прислал текст главы.

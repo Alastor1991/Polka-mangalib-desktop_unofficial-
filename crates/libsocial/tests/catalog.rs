@@ -8,9 +8,7 @@
 
 use std::time::Duration;
 
-use libsocial::catalog::{
-    Bounds, CatalogFilter, CatalogSort, RandomCursor, SITE_RANOBELIB, SortOrder, Target, TargetModel,
-};
+use libsocial::catalog::{Bounds, CatalogFilter, CatalogSort, RandomCursor, SortOrder, Target, TargetModel};
 use libsocial::feeds::{NewsFilter, NewsKind, TopGroup, TopTime};
 use libsocial::rich::Block;
 use libsocial::search::{EntityKind, EntityQuery, EntitySort, UserFilter, UserQuery};
@@ -69,7 +67,7 @@ async fn manga_catalog_sends_filter_and_parses_page() {
         genres: vec![34],
         genres_exclude: vec![5],
         genres_any: true,
-        site_ids: vec![SITE_RANOBELIB],
+        site_ids: vec![Site::RanobeLib.id()],
         sort: CatalogSort::Views,
         ..Default::default()
     };

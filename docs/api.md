@@ -12,7 +12,7 @@
 |---|---|---|
 | MangaLib | 1 | mangalib.me, mangalib.org |
 | SlashLib | 2 | slashlib.me, v2.slashlib.me |
-| RanobeLib | 3 | ranobelib.me (в Полке пока не поддерживается) |
+| RanobeLib | 3 | ranobelib.me (клиент API и ядро знают, окно iced пока нет) |
 | HentaiLib | 4 | hentailib.me |
 | AnimeLib | 5 | anilib.me, animelib.org, v3.animelib.org |
 
