@@ -137,7 +137,8 @@ async fn comments_flow() {
 #[tokio::test]
 #[ignore]
 async fn title_extras() {
-    use libsocial::media::{CharacterRole, EntityKind, ReviewFilter, TeamSort};
+    use libsocial::media::{CharacterRole, ReviewFilter, TeamSort};
+    use libsocial::search::EntityKind;
 
     let c = client();
     let slug = "7965--chainsaw-man";
@@ -158,7 +159,7 @@ async fn title_extras() {
     let author = &title.authors[0];
     // Страница человека гостю закрыта: сервер отвечает 404.
     match c.entity(EntityKind::People, author.slug_url.as_deref().unwrap()).await {
-        Ok(person) => assert!(!person.sites().is_empty()),
+        Ok(person) => assert!(person.titles_on(Site::MangaLib.id()) > 0),
         Err(e) => assert!(matches!(e, libsocial::Error::NotFound), "{e}"),
     }
 

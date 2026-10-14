@@ -17,6 +17,7 @@ use crate::comments::{Vote, Votes};
 use crate::error::Result;
 use crate::models::{Cover, Label, ListPage, Rating, RawList, TitleShort, TranslationRating, Video};
 use crate::rich::Doc;
+use crate::search::{EntityCard, EntityKind};
 use crate::serde_util::{null_default, opt_string_lenient, opt_u64_lenient, u64_lenient};
 use crate::site::Site;
 
@@ -149,80 +150,14 @@ pub struct EntityStat {
     pub tag: String,
 }
 
-/// Человек, персонаж, франшиза или издатель: шапка страницы.
+/// Персонаж тайтла: карточка и его роль в этом тайтле.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Entity {
-    #[serde(deserialize_with = "u64_lenient")]
-    pub id: u64,
-    #[serde(default)]
-    pub slug_url: Option<String>,
-    #[serde(default, deserialize_with = "null_default")]
-    pub model: String,
-    #[serde(default, deserialize_with = "null_default")]
-    pub name: String,
-    #[serde(default)]
-    pub rus_name: Option<String>,
-    #[serde(default)]
-    pub alt_name: Option<String>,
-    #[serde(default)]
-    pub cover: Option<Cover>,
-    /// Описание: строка или документ ProseMirror.
-    #[serde(default)]
-    pub dsc: Option<Value>,
-    #[serde(default)]
-    pub subscription: Option<Favorite>,
-    /// Число тайтлов по сайтам: ключ – `Site-Id` строкой.
-    #[serde(default, deserialize_with = "null_default")]
-    pub titles_count_details: HashMap<String, u64>,
-    #[serde(default, deserialize_with = "null_default")]
-    pub stats: Vec<EntityStat>,
-    /// У персонажа в тайтле: роль и порядок.
+pub struct TitleCharacter {
+    #[serde(flatten)]
+    pub card: EntityCard,
+    /// Роль и порядок: `{"order": 0, "position": {"id": "Main", "label": "Главный"}}`.
     #[serde(default)]
     pub details: Option<Value>,
-}
-
-impl Entity {
-    pub fn display_name(&self) -> &str {
-        self.rus_name.as_deref().filter(|s| !s.is_empty()).unwrap_or(&self.name)
-    }
-
-    pub fn description(&self) -> Doc {
-        self.dsc.as_ref().map(Doc::from_prosemirror).unwrap_or_default()
-    }
-
-    /// Сайты, где у человека или франшизы есть тайтлы, по убыванию числа.
-    pub fn sites(&self) -> Vec<(Site, u64)> {
-        let mut out: Vec<(Site, u64)> = self
-            .titles_count_details
-            .iter()
-            .filter_map(|(k, n)| Some((Site::from_id(k.parse().ok()?)?, *n)))
-            .filter(|(_, n)| *n > 0)
-            .collect();
-        out.sort_by_key(|s| std::cmp::Reverse(s.1));
-        out
-    }
-}
-
-/// Чья страница: для запросов и подписки.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EntityKind {
-    People,
-    Character,
-    Franchise,
-    Publisher,
-    Team,
-}
-
-impl EntityKind {
-    pub fn model(self) -> &'static str {
-        match self {
-            EntityKind::People => "people",
-            EntityKind::Character => "character",
-            EntityKind::Franchise => "franchise",
-            EntityKind::Publisher => "publisher",
-            EntityKind::Team => "team",
-        }
-    }
 }
 
 /// Карточка команды переводчиков.
@@ -492,7 +427,7 @@ impl Client {
         title_id: u64,
         role: Option<CharacterRole>,
         page: u32,
-    ) -> Result<ListPage<Entity>> {
+    ) -> Result<ListPage<TitleCharacter>> {
         let mut query = vec![
             ("media_id", title_id.to_string()),
             ("media_type", site.catalog_path().to_string()),
@@ -502,16 +437,8 @@ impl Client {
         if let Some(role) = role {
             query.push(("position", role.param().to_string()));
         }
-        let raw: RawList<Entity> = self.get_json(site, "character", &query).await?;
+        let raw: RawList<TitleCharacter> = self.get_json(site, "character", &query).await?;
         Ok(raw.into())
-    }
-
-    /// Шапка страницы человека, персонажа, франшизы или издателя. Их тайтлы – это
-    /// каталог с отбором по `target_model` и `target_id`. Нужен `slug_url`, а
-    /// страница человека открывается только вошедшему: гостю сервер отвечает 404.
-    pub async fn entity(&self, kind: EntityKind, slug_url: &str) -> Result<Entity> {
-        self.get_data(Site::MangaLib, &format!("{}/{slug_url}", kind.model()), &())
-            .await
     }
 
     /// Состояние подписки-звёздочки.
@@ -794,18 +721,6 @@ impl Client {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn entity_sites_by_count() {
-        let e: Entity = serde_json::from_value(json!({
-            "id": 1, "name": "X", "titles_count_details": {"1": 20, "2": 1, "4": 0, "5": 6}
-        }))
-        .unwrap();
-        assert_eq!(
-            e.sites(),
-            vec![(Site::MangaLib, 20), (Site::AnimeLib, 6), (Site::SlashLib, 1)]
-        );
-    }
 
     #[test]
     fn stats_with_mixed_ids() {

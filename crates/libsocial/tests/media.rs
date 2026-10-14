@@ -3,8 +3,9 @@
 use std::time::Duration;
 
 use libsocial::comments::Vote;
-use libsocial::media::{EntityKind, ReviewDraft, SimilarBy, TeamScore, TranslationScore, VoiceSubscription};
+use libsocial::media::{ReviewDraft, SimilarBy, TeamScore, TranslationScore, VoiceSubscription};
 use libsocial::rich::Doc;
+use libsocial::search::EntityKind;
 use libsocial::{Client, ClientConfig, Site};
 use serde_json::json;
 use wiremock::matchers::{body_partial_json, method, path};
