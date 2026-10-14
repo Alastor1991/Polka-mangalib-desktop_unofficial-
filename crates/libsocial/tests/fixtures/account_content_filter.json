@@ -1,0 +1,19 @@
+{
+  "data": [
+    {
+      "site_id": 1,
+      "type": "tag",
+      "value": 123
+    },
+    {
+      "site_id": 1,
+      "type": "genre",
+      "value": 5
+    },
+    {
+      "site_id": 2,
+      "type": "что-то",
+      "value": 1
+    }
+  ]
+}

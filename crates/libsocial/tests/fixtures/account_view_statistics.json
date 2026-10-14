@@ -1,0 +1,130 @@
+{
+  "data": {
+    "site_ids": [
+      1
+    ],
+    "totals": {
+      "manga_chapters": 15,
+      "ranobe_chapters": 0,
+      "anime_episodes": 0
+    },
+    "time": {
+      "manga_minutes": 105,
+      "ranobe_minutes": 0,
+      "anime_minutes": 0,
+      "total_minutes": 105,
+      "manga": "1 час 45 минут",
+      "ranobe": "0 минут",
+      "anime": "0 минут",
+      "total": "1 час 45 минут"
+    },
+    "periods": {
+      "last_7_days": {
+        "totals": {
+          "manga_chapters": 15,
+          "ranobe_chapters": 0,
+          "anime_episodes": 0
+        },
+        "time": {
+          "manga_minutes": 105,
+          "ranobe_minutes": 0,
+          "anime_minutes": 0,
+          "total_minutes": 105,
+          "manga": "1 час 45 минут",
+          "ranobe": "0 минут",
+          "anime": "0 минут",
+          "total": "1 час 45 минут"
+        }
+      },
+      "last_30_days": {
+        "totals": {
+          "manga_chapters": 15,
+          "ranobe_chapters": 0,
+          "anime_episodes": 0
+        },
+        "time": {
+          "manga_minutes": 105,
+          "ranobe_minutes": 0,
+          "anime_minutes": 0,
+          "total_minutes": 105,
+          "manga": "1 час 45 минут",
+          "ranobe": "0 минут",
+          "anime": "0 минут",
+          "total": "1 час 45 минут"
+        }
+      },
+      "last_365_days": {
+        "totals": {
+          "manga_chapters": 15,
+          "ranobe_chapters": 0,
+          "anime_episodes": 0
+        },
+        "time": {
+          "manga_minutes": 105,
+          "ranobe_minutes": 0,
+          "anime_minutes": 0,
+          "total_minutes": 105,
+          "manga": "1 час 45 минут",
+          "ranobe": "0 минут",
+          "anime": "0 минут",
+          "total": "1 час 45 минут"
+        }
+      },
+      "all_time": {
+        "totals": {
+          "manga_chapters": 15,
+          "ranobe_chapters": 0,
+          "anime_episodes": 0
+        },
+        "time": {
+          "manga_minutes": 105,
+          "ranobe_minutes": 0,
+          "anime_minutes": 0,
+          "total_minutes": 105,
+          "manga": "1 час 45 минут",
+          "ranobe": "0 минут",
+          "anime": "0 минут",
+          "total": "1 час 45 минут"
+        }
+      }
+    },
+    "charts": {
+      "last_7_days": {
+        "labels": [
+          "07.10",
+          "08.10"
+        ],
+        "manga": [
+          0,
+          3
+        ],
+        "ranobe": [
+          0,
+          0
+        ],
+        "anime": [
+          0,
+          0
+        ],
+        "datasets": [
+          {
+            "key": "manga",
+            "label": "Манга",
+            "color": "#ff9b40",
+            "data": [
+              0,
+              3
+            ]
+          }
+        ]
+      },
+      "last_30_days": {},
+      "last_365_days": {}
+    },
+    "minutes_per_item": {
+      "manga": 7,
+      "ranobe": 7,
+      "anime": 20
+    }
+  }
+}

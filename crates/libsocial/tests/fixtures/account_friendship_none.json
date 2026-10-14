@@ -1,0 +1,13 @@
+{
+  "data": {
+    "id": null,
+    "user": null,
+    "comment": null,
+    "created_at": null,
+    "status": {
+      "is_requested": false,
+      "is_awaiting_confirmation": false,
+      "is_friend": false
+    }
+  }
+}

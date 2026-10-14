@@ -1,0 +1,65 @@
+{
+  "data": [
+    {
+      "view_at": "2026-10-13T17:03:02.000000Z",
+      "media": {
+        "id": 7965,
+        "name": "Chainsaw Man",
+        "rus_name": "Человек-бензопила",
+        "eng_name": "Chainsaw Man",
+        "model": "manga",
+        "slug": "chainsaw-man",
+        "slug_url": "7965--chainsaw-man",
+        "cover": {
+          "filename": "x",
+          "thumbnail": "https://cover.cdnlibs.org/t.jpg",
+          "default": "https://cover.cdnlibs.org/d.jpg",
+          "md": "https://cover.cdnlibs.org/m.jpg"
+        },
+        "ageRestriction": {
+          "id": 0,
+          "label": "Нет"
+        },
+        "site": 1,
+        "type": {
+          "id": 1,
+          "label": "Манга"
+        },
+        "content_marking": [],
+        "status": {
+          "id": 2,
+          "label": "Онгоинг"
+        },
+        "releaseDateString": "2018"
+      },
+      "item": {
+        "id": 1766671,
+        "model": "chapter",
+        "volume": "1",
+        "number": "1",
+        "number_secondary": "1",
+        "name": null,
+        "slug": 1,
+        "branch_id": null,
+        "manga_id": 7965,
+        "type": "chapter"
+      }
+    },
+    {
+      "broken": true
+    }
+  ],
+  "links": {
+    "first": "u?page=1",
+    "last": null,
+    "prev": null,
+    "next": "u?page=2"
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "to": 40,
+    "per_page": 40,
+    "path": "u"
+  }
+}

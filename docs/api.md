@@ -362,6 +362,132 @@ GET /api/user?q=…&filter=weekly-top|points|moderators|daily-streak|weekly-view
 - У издателя слаг бывает пустым, тогда `slug_url` выглядит как `6848--` и всё равно годится как путь. Голый id принимают люди и персонажи, команды нет.
 - `/user` с `filter=points` и `moderators` отдаёт всех сразу, без `meta` и `links`; у модераторов есть `roles`, у `weekly-top` и `points` есть `points_info`.
 
+## Аккаунт и общение
+
+Код: `notifications.rs`, `users.rs`, `social.rs`, `collections.rs`, `bookmarks_ext.rs` в `crates/libsocial/src`, общие страницы списков в `listing.rs`. Почти всё требует входа. Запросы записи сняты со скриптов сайта и вживую не проверялись. Websocket и мини-чат клиент не умеет: для них нужен пакет с поддержкой Pusher.
+
+Списки пагинируются по-разному. Следующая страница есть, если `meta.has_next_page` истинно или `links.next` не `null`; `last_page` и `total` бывают не у всех, а у коротких ответов (сообщения малого диалога, общие друзья, топ-100) нет ни `meta`, ни `links`. Значение фильтра «все» в запрос не передают: `all` в `filter` и `post_type` сервер отвергает с 422.
+
+### Уведомления
+
+```http
+GET    /api/notifications/count
+GET    /api/notifications?notification_type=all&read_type=all&sort_type=desc&page=1&q=…&type=…
+PUT    /api/notifications/{id}                          без тела
+PUT    /api/notifications/bulk   {"notification_type": "all"}
+DELETE /api/notifications/{id}
+DELETE /api/notifications/bulk   {"notification_type": "all", "is_read": null}
+```
+
+- Без `notification_type` и `read_type` список отвечает 422, без `sort_type` падает с 500. Клиент шлёт все три всегда. По 20 записей, `per_page` сервер игнорирует.
+- Приходят уведомления всех сайтов сети, сайт записи лежит в `data.site_id` или `data.media.site`.
+- Поле `is_read` в записях не встречалось. Прочитанность определяется выбранным `read_type`.
+- Типов записей больше, чем разобрано в `NotificationEvent`; для остальных всегда есть готовый текст в `content` (документ ProseMirror).
+- Для `is_read` в массовом удалении `null` значит «все», `true` прочитанные, `false` непрочитанные.
+
+### Профиль, статистика, история
+
+```http
+GET /api/user/{id}?fields[]=about&fields[]=points&…
+GET /api/user/{id}/stats
+GET /api/user/{id}/view-statistics?site_ids[]=1
+GET /api/user/chapters/history?page=1           манга и ранобэ, по Site-Id
+GET /api/user/chapters/players/history?page=1   озвучка манги
+GET /api/user/players/history?page=1            аниме, Site-Id: 5
+GET /api/user?page=1&filter=points&q=…&sort_by=id&sort_type=desc
+```
+
+- Без `fields[]` приходит только карточка пользователя. Закрытый профиль отдаёт урезанный набор полей, неизвестный `fields[]` вызывает 422, несуществующий пользователь – 404.
+- `login_streak.last_login_at` пишется без `T` (`2026-10-13 03:54:30`), `avatar.filename` у аватара-заглушки равен `null`.
+- Закрытая статистика просмотров отвечает 403. Минуты в ней прикидочные: число глав и серий, умноженное на `minutes_per_item`.
+- История идёт по 40 записей без `total` и `last_page`, листать надо по `links.next`.
+- В списке пользователей `filter` принимает `weekly-top`, `points` (все сто записей за раз), `moderators`, `daily-streak`, `weekly-views`. Для общего списка параметр опускают.
+
+### Настройки
+
+```http
+GET|PUT  /api/user/settings/privacy
+GET|PUT  /api/user/settings/notifications
+GET|POST /api/user/{id}/content-filter          {"filters": [{"value": 123, "type": "tag", "site_id": 1}]}
+GET|POST /api/user/{id}/personalization-settings
+```
+
+- Сохранять надо объект целиком, а не изменённые поля. Поля, которых клиент не знает, модели хранят в `extra` и возвращают обратно.
+- `disable_old_comments_notif` приходит как `false` или число дней (7, 14, 30, 180, 360), а сайт отправляет `0`, когда выключено.
+- `disable_friends_notif` – инверсия: `true` значит оповещения о заявках отключены.
+- Видимость: `0` публичный, `1` для друзей, `2` для всех, кроме игнор-листа, `3` приватный. У старых ников значения `2` нет. В `statistics_site_ids` числа бывают строками.
+- Фильтр контента заменяется целиком и действует на каталог с задержкой 10–20 минут.
+
+### Друзья, игнор, сообщения
+
+```http
+GET /api/friendship?user_id={id}&status=1&page=1                друзья
+GET /api/friendship?user_id={свой}&status=0&sender=0|1          входящие | отправленные заявки
+GET /api/friendship/{id}/mutual?page=1
+GET /api/friendship/{id}                                        флаги дружбы с пользователем
+PUT /api/friendship/bulk   {"status": 1}                        принять все входящие; 2 – отклонить все
+GET    /api/ignore?sourceable_type=user&sourceable_id={свой}&page=1
+GET    /api/ignore/{id пользователя}
+POST   /api/ignore   {"sourceable_id": …, "sourceable_type": "user", "user_id": …, "comment": "…"}
+PUT    /api/ignore/{id записи}   {"comment": "…"}
+DELETE /api/ignore/{id записи}
+GET  /api/messenger/threads?page=1&archived=0&q=…
+GET  /api/messenger/threads/{id}
+GET  /api/messenger/threads/find/{id пользователя}
+GET  /api/messenger/threads/{id}/messages?page=1
+POST /api/messenger/threads   {"participants": [id]}
+POST /api/messenger/threads/{id}/messages   {"body": "…"}
+PUT  /api/messenger/threads/{id}/messages/{message}   {"body": "…"}
+DELETE /api/messenger/threads/{id}/messages   {"messages": [id, …]}
+POST /api/chat/check-online   {"users": [id, …]}
+```
+
+- Запросов «отправить, принять, отозвать, удалить дружбу» в доступных скриптах нет, они лежат в общем куске `shared/UserProfileWrap/user-profile-mnoF2eqC.js`. Клиент их не содержит.
+- Друзья идут по 42 записи, `links.last` равен `null`. `GET /ignore` без `sourceable_type` отвечает 422; для игнора от имени команды (`team`) или автора (`people`) комментарий обязателен.
+- Диалогов по 15 на страницу, `find` отвечает 404, если диалога нет, и находит архивные диалоги. Сообщения идут новыми сверху. Отдельного запроса «прочитано» нет, счётчик обнуляет сам запрос сообщений.
+- Текст сообщения простой (до 2000 символов), но сайт вставляет его как HTML, при показе его надо экранировать.
+- Ответ `check-online` – словарь `{"1001": "online"}`; клиент принимает его и с обёрткой `data`, и без.
+
+### Подборки
+
+```http
+GET    /api/collections?limit=12&page=1&sort_by=popular&sort_type=desc&q=…&user_id=…&subscriptions=0|1&site_ids[]=1&type=titles
+GET    /api/collections/{id}
+POST   /api/collections
+PUT    /api/collections/{id}
+DELETE /api/collections/{id}
+POST   /api/collection/{id}/vote   {"vote": 1}
+```
+
+- `limit` допускает только 12–24, иначе 422; клиент подгоняет значение. `sort_by` принимает `newest` и `popular`, остальное вызывает 422.
+- `subscriptions=1` вместе с `user_id` отдаёт избранные подборки, `0` свои. Несуществующая и закрытая подборка отвечают 404.
+- Описание – документ ProseMirror или `null`; сайт отправляет `null`, если текст короче двух символов. У блока клиент сам задаёт `uuid`, а `order` элементов считается с единицы.
+- Голос «против» у подборок вживую не снимали: клиент шлёт то же значение, что для комментариев (`0`), а читает и `0`, и `-1`.
+
+### Закладки: расширения
+
+```http
+GET    /api/bookmarks?user_id=…&status=0&sort_by=updated_at&sort_type=desc&q=…&page=1
+POST   /api/bookmarks/folder                    {"name": "…"}
+PUT    /api/bookmarks/folder/{id}               {"name": "…", "color": "#aabbcc", "notify": true, "public": true}
+DELETE /api/bookmarks/folder/{id}               {"move_to": 1}
+PUT    /api/bookmarks/folder/order              {"order": [1, 2, 51]}
+PUT    /api/bookmarks/folder/notifications      {"folders": [{"id": 1, "notify": true}]}
+POST   /api/bookmarks/bulk/store                {"media_type": "manga", "media_ids": [7965], "status": 2}
+PUT    /api/bookmarks/bulk                      то же, перенос в другую папку
+DELETE /api/bookmarks/bulk                      {"media_type": "manga", "media_ids": [7965]}
+GET    /api/bookmarks/note?bookmark_id=…&bookmark_type=manga_bookmark&page=1
+GET    /api/bookmarks/note/chapter-{id закладки}?number_first=…&number_secondary=…
+POST   /api/bookmarks/note
+DELETE /api/bookmarks/note/{id заметки}         {"bookmark_id": …, "bookmark_type": "manga_bookmark"}
+```
+
+- `user_id` в списке обязателен (422 без него), `status=0` значит «все папки». `sort_by` у аниме для даты выхода называется `last_episode_at`, у манги `last_chapter_at`. `meta.per_page` приходит массивом, размер страницы лучше не фиксировать.
+- Поле `meta` закладки заполнено по-разному: у закладки без места `comment` бывает `false`, а числа `null`.
+- Менять и удалять можно только папки с `id` больше 50. Что сервер делает с закладками при удалении папки без `move_to`, неизвестно.
+- Заметка – до 15 записей на главу или серию, сохраняется целиком. Если заметки нет, `GET` по составному идентификатору отвечает 404.
+- Комментарий и история пересмотров правятся тем же `POST /bookmarks`, что и папка, через поле `meta` (`comment`, `rewatches_history`). Место чтения остаётся прежним, если не передавать `item_id` и `progress`.
+
 ## Ограничения
 
 Сервис не публикует лимиты. Полка держится в таких рамках:

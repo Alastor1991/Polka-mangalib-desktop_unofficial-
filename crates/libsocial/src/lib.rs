@@ -6,20 +6,26 @@
 mod anime;
 pub mod auth;
 pub mod bookmarks;
+pub mod bookmarks_ext;
 pub mod catalog;
 pub mod catalog_constants;
 mod client;
+pub mod collections;
 pub mod comments;
 mod error;
 pub mod feeds;
+pub mod listing;
 mod manga;
 pub mod media;
 pub mod mirrors;
 pub mod models;
+pub mod notifications;
 pub mod rich;
 pub mod search;
 mod serde_util;
 mod site;
+pub mod social;
+pub mod users;
 
 pub use anime::{ResolvedSubtitle, ResolvedVideo};
 pub use auth::{AuthSession, Token};

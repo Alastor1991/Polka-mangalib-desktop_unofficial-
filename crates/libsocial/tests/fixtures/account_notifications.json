@@ -1,0 +1,177 @@
+{
+  "data": [
+    {
+      "id": 129000001,
+      "type": "chapter",
+      "category": "chapter",
+      "data": {
+        "user": {
+          "id": 1001,
+          "username": "user1",
+          "avatar": {
+            "filename": null,
+            "url": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          }
+        },
+        "chapter": {
+          "id": 4000001,
+          "model": "chapter",
+          "volume": "1",
+          "number": "216",
+          "name": "Название",
+          "branch_id": null,
+          "manga_id": 131826,
+          "expired_at": null
+        },
+        "media": {
+          "id": 131826,
+          "name": "Title",
+          "rus_name": "Название",
+          "eng_name": "Title",
+          "model": "manga",
+          "slug": "131826-title",
+          "slug_url": "131826--title",
+          "cover": {
+            "filename": "x",
+            "thumbnail": "https://cover.cdnlibs.org/t.jpg",
+            "default": "https://cover.cdnlibs.org/d.jpg",
+            "md": "https://cover.cdnlibs.org/m.jpg"
+          },
+          "site": 2
+        },
+        "teams": [
+          {
+            "id": 28853,
+            "slug": "t",
+            "slug_url": "28853--t",
+            "model": "team",
+            "name": "Команда"
+          }
+        ],
+        "count": 3,
+        "is_new": true
+      },
+      "yaoi": false,
+      "content": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "Вышла новая глава"
+              }
+            ]
+          }
+        ]
+      },
+      "created_at": "2026-10-12T07:16:57.000000Z"
+    },
+    {
+      "id": 129000002,
+      "type": "comment",
+      "category": "comments",
+      "data": {
+        "comment": {
+          "id": 300000001,
+          "parent_comment": null,
+          "root_id": null,
+          "post_page": null,
+          "relation_type": "chapter",
+          "relation_id": 4014248
+        },
+        "user": {
+          "id": 1002,
+          "username": "user2",
+          "avatar": {
+            "filename": null,
+            "url": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          }
+        },
+        "count": 1,
+        "site_id": 1
+      },
+      "yaoi": false,
+      "content": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "Ответ на комментарий"
+              }
+            ]
+          }
+        ]
+      },
+      "created_at": "2026-10-12T06:00:00.000000Z"
+    },
+    {
+      "id": 129000003,
+      "type": "friend_request",
+      "category": "other",
+      "data": {
+        "friendship": {
+          "id": 5000001,
+          "status": 0
+        },
+        "user": {
+          "id": 1003,
+          "username": "user3",
+          "avatar": {
+            "filename": null,
+            "url": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"
+          }
+        },
+        "site_id": 1
+      },
+      "yaoi": false,
+      "content": {
+        "type": "doc",
+        "content": [
+          {
+            "type": "paragraph",
+            "content": [
+              {
+                "type": "text",
+                "text": "Заявка в друзья"
+              }
+            ]
+          }
+        ]
+      },
+      "created_at": "2026-10-11T06:00:00.000000Z"
+    },
+    {
+      "id": 129000004,
+      "type": "что_то_новое",
+      "category": "other",
+      "data": null,
+      "yaoi": false,
+      "content": null,
+      "created_at": "2026-10-10T06:00:00.000000Z"
+    },
+    {
+      "category": "other",
+      "type": "без_id"
+    }
+  ],
+  "links": {
+    "first": "https://api.example/api/notifications?page=1",
+    "last": null,
+    "prev": null,
+    "next": "https://api.example/api/notifications?page=2"
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "to": 20,
+    "last_page": 3,
+    "per_page": 20,
+    "total": 52,
+    "path": "https://api.example/api/notifications"
+  }
+}

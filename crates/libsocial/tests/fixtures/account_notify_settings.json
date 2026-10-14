@@ -1,0 +1,22 @@
+{
+  "data": {
+    "user_id": 1001,
+    "manga": false,
+    "disable_friends_notif": false,
+    "media_status_finished": false,
+    "disable_old_comments_notif": false,
+    "disable_chapter_early_access_notif": false,
+    "disable_card_drop_notif": false,
+    "reading": true,
+    "plan_read": false,
+    "on_hold": false,
+    "completed": false,
+    "favourites": false,
+    "push_chapter": true,
+    "push_comments": true,
+    "push_episode": true,
+    "push_forum": true,
+    "push_messages": true,
+    "notify_anime": true
+  }
+}
