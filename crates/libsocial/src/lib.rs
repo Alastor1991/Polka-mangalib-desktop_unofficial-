@@ -1,7 +1,14 @@
-//! Неофициальный клиент API сервисов lib.social: MangaLib, SlashLib, HentaiLib, AnimeLib.
+//! Неофициальный клиент API сервисов lib.social: MangaLib, SlashLib, RanobeLib,
+//! HentaiLib, AnimeLib.
 //!
 //! Крейт ничего не знает об интерфейсе и хранилище. Он умеет ходить в API аккуратно
-//! (ограничение частоты, повторы, обновление токена) и разбирать ответы в типы.
+//! (ограничение частоты, повторы, обновление токена, зеркала) и разбирать ответы в
+//! типы. Каждая область сервиса – свой модуль: каталог и поиск (`catalog`, `feeds`,
+//! `search`), тайтл и главы (`manga`, `anime`, `media`, `ranobe`), закладки
+//! (`bookmarks`, `bookmarks_ext`), комментарии (`comments`), аккаунт и общение
+//! (`notifications`, `users`, `social`, `collections`), карточки (`cards`), экспорт
+//! книг (`exports`). Форматированный текст сервиса разбирает `rich`. Карта модулей и
+//! правила – в `docs/architecture.md`, протокол – в `docs/api.md`.
 
 mod anime;
 pub mod auth;

@@ -19,6 +19,11 @@ pub async fn download(args: &[String]) -> Result<()> {
         bail!("использование: polka download <mangalib|slashlib|hentailib|animelib> <slug> [от-до]");
     };
     let site = Site::from_key(site).with_context(|| format!("неизвестный сайт {site}"))?;
+    if site.is_ranobe() {
+        // Загрузчик пока умеет только главы-картинки и серии. Текст ранобэ клиент API
+        // уже разбирает, задание для него ещё не написано (docs/roadmap.md).
+        bail!("скачивание ранобэ пока не поддерживается");
+    }
     let range = rest.first().map(|r| parse_range(r)).transpose()?;
 
     let config = Config::load()?;

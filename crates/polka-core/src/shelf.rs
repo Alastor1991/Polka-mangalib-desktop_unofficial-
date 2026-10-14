@@ -39,8 +39,9 @@ fn local_item(core: &Core, r: &TitleRow) -> ShelfItem {
     }
 }
 
-/// Сайты, на которых есть папка: у манги их три (MangaLib, SlashLib, HentaiLib),
-/// у аниме один. Список закладок сервер отдаёт по каждому сайту отдельно.
+/// Сайты, на которых есть папка: у папок манги это MangaLib, SlashLib, RanobeLib и
+/// HentaiLib, у аниме один AnimeLib. Список закладок сервер отдаёт по каждому сайту
+/// отдельно.
 pub fn folder_sites(core: &Core, folder: u64) -> Vec<Site> {
     let Some(f) = core.folders.iter().find(|f| f.id == folder) else {
         return Vec::new();

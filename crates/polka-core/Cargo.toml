@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Ядро Полки без интерфейса: база, загрузчик, библиотека, синхронизация с аккаунтом"
+description = "Ядро Полки без интерфейса: база, загрузчик, библиотека, синхронизация с аккаунтом, логика экранов"
 
 [dependencies]
 anyhow = "1.0.104"

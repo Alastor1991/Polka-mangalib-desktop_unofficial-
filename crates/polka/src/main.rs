@@ -47,7 +47,7 @@ fn main() -> Result<()> {
 
 fn print_help() {
     println!(
-        "Полка – неофициальный клиент MangaLib и AnimeLib\n\n\
+        "Полка – неофициальный клиент сервисов lib.social\n\n\
          polka                      открыть приложение\n\
          polka login                войти в аккаунт lib.social в окне приложения\n\
          polka login --mirror 2     то же через запасной сервер авторизации\n\
@@ -55,7 +55,9 @@ fn print_help() {
          polka logout               выйти и удалить сохранённый токен\n\
          polka whoami               показать, под кем выполнен вход\n\
          polka doctor               проверить доступ к API, картинкам и видео\n\
-         polka download <сайт> <slug> [от-до]  скачать главы или серии\n\n\
+         polka download <сайт> <slug> [от-до]  скачать главы или серии\n\
+         \x20                          сайты: mangalib, slashlib, hentailib, animelib\n\
+         polka dev-get <сайт> <путь> [ключ=значение…]  сырой ответ API, для отладки\n\n\
          Переменные окружения:\n  \
          POLKA_INTERFACE  сетевой интерфейс для запросов (например enp4s0)\n  \
          POLKA_PROXY      прокси для запросов (socks5h://127.0.0.1:1080)"

@@ -134,6 +134,8 @@ impl LibraryView {
                             }
                             self.cards
                                 .extend(found.bookmarks.iter().filter_map(|b| shelf::bookmark_item(site, b)));
+                            // Ранобэ окно не читает: его читалка умеет только картинки.
+                            self.cards.retain(|c| !c.site.is_ranobe());
                         }
                         Err(e) => errors.push(format!("{}: {e}", site.name())),
                     }

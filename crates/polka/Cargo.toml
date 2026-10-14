@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Полка: неофициальный десктопный клиент MangaLib и AnimeLib"
+description = "Полка: неофициальный десктопный клиент сервисов lib.social"
 
 [dependencies]
 anyhow = "1.0.104"

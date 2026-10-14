@@ -152,6 +152,7 @@ impl Downloader {
     /// чтобы библиотека открывалась без сети. Возвращает `false`, если задание уже
     /// скачано, качается или ждёт в очереди.
     pub fn enqueue(&self, title: &TitleRow, label: &str, job: Job) -> Result<bool> {
+        refuse_ranobe(title.site)?;
         self.db.upsert_title(title)?;
         let meta = self.library.title_dir(title.site, &title.slug).join("title.json");
         if !meta.is_file()
@@ -194,6 +195,7 @@ impl Downloader {
     /// Ставит пачку заданий одного тайтла одной транзакцией. Возвращает, сколько
     /// добавлено. Вызывать вне потока интерфейса: запись идёт синхронно.
     pub fn enqueue_many(&self, title: &TitleRow, jobs: Vec<(String, Job)>) -> Result<usize> {
+        refuse_ranobe(title.site)?;
         self.db.upsert_title(title)?;
         let meta = self.library.title_dir(title.site, &title.slug).join("title.json");
         if !meta.is_file()
@@ -716,6 +718,15 @@ fn subtitle_ext(format: &str) -> &str {
     }
 }
 
+/// Главы ранобэ – текст, а задание на главу качает картинки страниц. Пока задания
+/// для текста нет (docs/roadmap.md), такое задание упало бы на запросе страниц.
+fn refuse_ranobe(site: Site) -> Result<()> {
+    if site.is_ranobe() {
+        anyhow::bail!("скачивание ранобэ пока не поддерживается");
+    }
+    Ok(())
+}
+
 /// Ошибка говорит о самом файле субтитров, а не о сбое сети или сервера.
 fn subtitle_missing(e: &libsocial::Error) -> bool {
     match e {
@@ -1031,6 +1042,17 @@ mod job_tests {
             .map(|r| r.headers.get("range").map(|v| v.to_str().unwrap().to_string()))
             .filter(|r| r.as_deref() != Some("bytes=0-0"))
             .collect()
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn ranobe_is_refused() {
+        let e = env("ranobe").await;
+        let err = e
+            .downloader
+            .enqueue(&title(Site::RanobeLib, MANGA), "Глава 1", chapter_job())
+            .unwrap_err();
+        assert!(err.to_string().contains("ранобэ"), "{err}");
+        assert!(e.db.downloads().unwrap().is_empty());
     }
 
     #[tokio::test(flavor = "multi_thread")]
