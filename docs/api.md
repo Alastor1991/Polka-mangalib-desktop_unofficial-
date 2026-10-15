@@ -607,6 +607,8 @@ POST   /api/reports   {"reason": …, "metadata": {"comment": …}, …цель}
 POST   /api/tickets   {"ticket_type": …, "media_id", "media_type", "genre_mismatch", "genre_missing", "tags_mismatch", "tags_missing", …}   сообщить об ошибке в карточке тайтла
 GET    /api/user/{id}/chapters|cards|characters?moderated=0|1   что пользователь залил: вкладка «Контент» профиля
 GET    /api/chapters/players/{id}                   одна озвучка манги (список у клиента есть)
+GET    /api/faq/category                            справка: разделы и статьи (есть и в Android-приложении)
+GET    /api/faq/articles/{slug}
 GET    /api/card-instances/{id}/history             история экземпляра карточки
 GET    /api/user/{id}/cards/history?sort=latest&per_page=18&rank=all&…   история карточек пользователя
 GET    /api/cards/albums/merge/search, POST /api/cards/albums/{id}/merge/preview, POST /api/cards/albums/{id}/merge   объединение альбомов
@@ -626,7 +628,11 @@ POST /api/forum/discussion/{id}/action             действия модера
 POST /api/discussion/{id}/vote   {"vote": 1}       лайк темы
 ```
 
-Комментарии к теме идут через общие комментарии с целью `discussion`, они в клиенте есть. Мини-чат (`POST /chat`, `DELETE /chat/{id}`, websocket) описан в roadmap.
+Комментарии к теме идут через общие комментарии с целью `discussion`, они в клиенте есть.
+
+С Android-приложением lib.social 2.0.4 клиент сверен тем же способом 15 октября: приложение разобрано jadx, из его кода взяты все пути API (87 строк) и проверены по коду `libsocial`. Приложение умеет заметно меньше сайта. Сверх сайтового списка у него только справка (`/faq`), проверка своей версии (`GET /app/version`), просмотр банов в команде (`/bans`) и платёжные запросы (`/payment/subscription-plans`, `/payment/balancelog`, `/premium/backgrounds`, `/user/{id}/premium`). Заявки в друзья приложение только принимает, отклоняет и удаляет (`PUT` и `DELETE /api/friendship/{id}`), отправлять их не умеет. Выход в приложении, как и на сайте, отзывает токен (`DELETE /auth/oauth/token`).
+
+Как устроена сеть приложения, чтобы повторить сверку на новой версии. Код обфусцирован, имена ниже из версии 2.0.4 и в следующей будут другими, но устройство то же. Все запросы идут через интерфейс `ru.libapp.core.remote.api.a` (реализация в `…api.c` на OkHttp, адрес собирается как `https://` + хост API + путь). Метод запроса виден по реализации: в 2.0.4 `i` и `e` – GET, `a`, `c`, `j` и `g` – POST (`g` – multipart с файлом), `h` и `f` – PUT, `b` и `d` – DELETE. Часть запросов строится лямбдой с параметром `$this$get`, `$this$post`, `$this$put`, `$this$delete` над построителем `…api.h`: метод назван в имени параметра, путь задаётся его методами (целиком или по сегментам), параметры запроса – парами значение и имя. Проще всего собрать все строки, начинающиеся с `/`, в пакетах `ru.libapp` и `ru.libappc` и проверить каждую по коду клиента. Мини-чат (`POST /chat`, `DELETE /chat/{id}`, websocket) описан в roadmap.
 
 Сознательно вне клиента: модерация и админка (`/admin`, `/moderation`, `/permissions`, `/roles`, `/bans`, `/changelog`, `/export-reports`, правка справочников и сущностей), заливка и правка глав, серий, плееров, субтитров и тайтлов (идёт на отдельный адрес `https://api.novelslib.me/api`), управление командой и её реквизитами, создание карточек и паков, платежи и донаты (`/payment`, `/foreign-service-pay`, `/teams/{id}/donats`, `/manga/{id}/bundles`), закрепление комментария командой. `GET /policy/manga/{slug}` говорит только, можно ли пользователю заливать главы и озвучку. `GET /geo` и `GET /translations` нужны интерфейсу сайта (страна для способа входа, строки интерфейса).
 
@@ -665,7 +671,7 @@ POST /api/discussion/{id}/vote   {"vote": 1}       лайк темы
 ## Источники
 
 - скрипты сайта mangalib.me (вход, адрес возврата). В октябре 2026 года разобраны 49 скриптов сборки главной страницы (`/build/assets/*.js`; у сети две сборки с одинаковым набором запросов, см. ниже): из них взяты пути и тела запросов закладок, отметок, комментариев, каталога, аккаунта, ранобэ и карточек. 15 октября сборка скачана целиком, с подгружаемыми кусками (72 файла), и сверена с клиентом, см. [запросы сайта, которых нет в клиенте](#запросы-сайта-которых-нет-в-клиенте);
-- официальное Android-приложение lib.social версии 2.0.4, разобранное jadx (адреса, клиенты OAuth, разбор плееров);
+- официальное Android-приложение lib.social версии 2.0.4, разобранное jadx (адреса, клиенты OAuth, разбор плееров); 15 октября разобрано заново и сверено с клиентом, см. [запросы сайта, которых нет в клиенте](#запросы-сайта-которых-нет-в-клиенте);
 - расширение для Mihon: [keiyoushi/extensions-source](https://github.com/keiyoushi/extensions-source), `lib-multisrc/libgroup`;
 - [vypivshiy/anicli-api](https://github.com/vypivshiy/anicli-api) и [Fazer000/AnimeLib-Mobile](https://github.com/Fazer000/AnimeLib-Mobile) (плеер Animelib);
 - Telegram-канал [@mangalib_social](https://t.me/mangalib_social).
