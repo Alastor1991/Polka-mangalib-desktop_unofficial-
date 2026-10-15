@@ -3,7 +3,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::serde_util::{f32_lenient, null_default, string_lenient, u64_lenient};
+use crate::bookmarks::Bookmark;
+use crate::serde_util::{f32_lenient, null_default, opt_string_lenient, string_lenient, u64_lenient};
 use crate::site::Site;
 
 /// Почти все ответы завёрнуты в `{"data": ...}`.
@@ -57,6 +58,12 @@ pub struct Rating {
     /// Своя оценка 1–10. `0` или нет поля – не оценивал. Приходит только вошедшему.
     #[serde(default, deserialize_with = "u64_lenient")]
     pub user: u64,
+    /// Средняя оценка, как её пишет сайт: `9.4`.
+    #[serde(default, rename = "averageFormated", deserialize_with = "opt_string_lenient")]
+    pub average_formatted: Option<String>,
+    /// Число оценок, как его пишет сайт: `93.8 K`.
+    #[serde(default, rename = "votesFormated", deserialize_with = "opt_string_lenient")]
+    pub votes_formatted: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -111,6 +118,27 @@ pub struct TitleShort {
     pub release_date: Option<String>,
     #[serde(default, deserialize_with = "null_default")]
     pub is_licensed: bool,
+    /// `manga` или `anime`. У ранобэ тоже `manga`.
+    #[serde(default, deserialize_with = "null_default")]
+    pub model: String,
+    /// `slug_url` без числа в начале: `chainsaw-man`.
+    #[serde(default, deserialize_with = "null_default")]
+    pub slug: String,
+    /// Пометки о содержании: «Содержит нецензурную брань» и подобные.
+    #[serde(default, deserialize_with = "crate::serde_util::lenient_vec")]
+    pub content_marking: Vec<Label>,
+    /// Аниме: оценка на Shikimori.
+    #[serde(default, deserialize_with = "crate::serde_util::opt_f32_lenient")]
+    pub shiki_rate: Option<f32>,
+    /// Закладка вошедшего пользователя на этот тайтл: в какой он папке и где
+    /// остановились. Приходит в каталоге с `fields[]=userBookmark`, у гостя и у
+    /// тайтла без закладки `None`. Тайтла (`media`) в ней нет.
+    #[serde(
+        default,
+        rename = "userBookmark",
+        deserialize_with = "crate::serde_util::opt_lenient"
+    )]
+    pub user_bookmark: Option<Box<Bookmark>>,
 }
 
 impl TitleShort {
@@ -156,8 +184,6 @@ pub struct TitleDetails {
     pub publisher: Vec<EntityRef>,
     #[serde(default, deserialize_with = "null_default")]
     pub franchise: Vec<EntityRef>,
-    #[serde(default, deserialize_with = "null_default")]
-    pub content_marking: Vec<Label>,
     #[serde(default)]
     pub metadata: Option<TitleMetadata>,
     #[serde(default)]
@@ -167,9 +193,6 @@ pub struct TitleDetails {
     /// Аниме: длительность серии, `{value, formated}`.
     #[serde(default)]
     pub time: Option<Value>,
-    /// Аниме: оценка на Shikimori.
-    #[serde(default)]
-    pub shiki_rate: Option<f32>,
     /// Аниме: расписание выхода серий.
     #[serde(default, deserialize_with = "null_default")]
     pub episodes_schedule: Vec<Value>,

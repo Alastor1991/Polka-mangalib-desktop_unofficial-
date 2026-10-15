@@ -67,3 +67,23 @@ where
         .filter_map(|v| serde_json::from_value(v).ok())
         .collect())
 }
+
+/// Число, строка с числом или `null`. Пустая или нечисловая строка – `None`.
+pub fn opt_f32_lenient<'de, D: Deserializer<'de>>(d: D) -> Result<Option<f32>, D::Error> {
+    Ok(match Value::deserialize(d)? {
+        Value::Number(n) => n.as_f64().map(|n| n as f32),
+        Value::String(s) => s.trim().parse().ok(),
+        _ => None,
+    })
+}
+
+/// Вложенный объект, который не обязан разобраться: если он не подходит под тип,
+/// поле остаётся `None`, а не роняет весь объект вокруг. Нужен там, где из-за
+/// второстепенного поля иначе пропал бы целый элемент списка.
+pub fn opt_lenient<'de, D, T>(d: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    Ok(serde_json::from_value(Value::deserialize(d)?).ok())
+}

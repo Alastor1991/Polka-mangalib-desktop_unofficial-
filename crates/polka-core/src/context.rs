@@ -3,6 +3,7 @@
 use anyhow::Result;
 use libsocial::{BookmarkFolder, Client, Site};
 
+use crate::catalog::Constants;
 use crate::config::Config;
 use crate::db::Db;
 use crate::downloads::Downloader;
@@ -25,6 +26,8 @@ pub struct Core {
     pub user_id: Option<u64>,
     /// Папки закладок пользователя. Пусто у гостя и без сети.
     pub folders: Vec<BookmarkFolder>,
+    /// Справочник формы каталога, общий для всех экранов.
+    pub constants: Constants,
 }
 
 impl Core {
@@ -54,6 +57,7 @@ impl Core {
             store,
             user_id: None,
             folders: Vec::new(),
+            constants: Constants::new(),
         })
     }
 
@@ -92,6 +96,7 @@ impl Core {
             store: TokenStore::File(dir.join("token.json")),
             user_id: None,
             folders: Vec::new(),
+            constants: Constants::new(),
         }
     }
 

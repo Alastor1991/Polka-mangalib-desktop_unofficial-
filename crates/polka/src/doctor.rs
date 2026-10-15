@@ -1,8 +1,9 @@
 //! `polka doctor`: проверка, что приложение достаёт до всех частей сервиса.
 
 use anyhow::Result;
+use libsocial::Site;
+use libsocial::catalog::CatalogFilter;
 use libsocial::models::PlayerKind;
-use libsocial::{CatalogQuery, Site};
 
 use polka_core::config::Config;
 use polka_core::session;
@@ -14,7 +15,10 @@ pub async fn run() -> Result<()> {
     let config = Config::load()?;
     let (client, store) = session::connect(&config).await?;
 
-    match client.search(Site::MangaLib, "берсерк", 1).await {
+    match client
+        .catalog_filtered(Site::MangaLib, &CatalogFilter::search("берсерк"), 1)
+        .await
+    {
         Ok(_) => println!("✓ API: {}", client.api_base()),
         Err(e) => {
             println!("✗ API недоступен ни через одно зеркало: {e}");
@@ -33,7 +37,7 @@ pub async fn run() -> Result<()> {
     }
 
     for site in [Site::SlashLib, Site::HentaiLib, Site::AnimeLib] {
-        match client.catalog(site, &CatalogQuery::default()).await {
+        match client.catalog_filtered(site, &CatalogFilter::default(), 1).await {
             Ok(p) if !p.items.is_empty() => println!("✓ каталог {}", site.name()),
             Ok(_) => println!("• каталог {} пуст (возможно, нужен вход)", site.name()),
             Err(e) => println!("✗ каталог {}: {e}", site.name()),

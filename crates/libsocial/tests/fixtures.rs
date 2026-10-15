@@ -25,6 +25,33 @@ fn catalog_pages() {
     assert!(popular.has_next);
     let anime: Page<TitleShort> = serde_json::from_value(fixture("asearch.json")).unwrap();
     assert_eq!(anime.items[0].site(), Some(Site::AnimeLib));
+    assert_eq!(anime.items[0].model, "anime");
+    assert!(anime.items[0].shiki_rate.is_some_and(|r| r > 0.0));
+}
+
+#[test]
+fn catalog_card_extras() {
+    let page: Page<TitleShort> = serde_json::from_value(fixture("catalog_manga.json")).unwrap();
+    let first = &page.items[0];
+    assert_eq!((first.model.as_str(), first.slug.as_str()), ("manga", "chainsaw-man"));
+    let rating = first.rating.as_ref().unwrap();
+    assert_eq!(rating.average_formatted.as_deref(), Some("9.4"));
+    assert_eq!(rating.votes_formatted.as_deref(), Some("93.8 K"));
+    let bookmark = first.user_bookmark.as_deref().unwrap();
+    assert_eq!((bookmark.status, bookmark.item_id), (1, Some(5)));
+    assert_eq!(bookmark.meta.item_number, Some(4));
+
+    let popular: Page<TitleShort> = serde_json::from_value(fixture("popular.json")).unwrap();
+    assert_eq!(popular.items[0].content_marking[0].label, "Содержит нецензурную брань");
+    assert!(popular.items.iter().all(|t| t.user_bookmark.is_none()));
+
+    // Закладка, которая не разобралась, не уносит с собой карточку.
+    let odd: TitleShort = serde_json::from_value(serde_json::json!({
+        "id": 1, "slug_url": "1--x", "userBookmark": {"id": "x"}, "shiki_rate": "8.5"
+    }))
+    .unwrap();
+    assert!(odd.user_bookmark.is_none());
+    assert_eq!(odd.shiki_rate, Some(8.5));
 }
 
 #[test]

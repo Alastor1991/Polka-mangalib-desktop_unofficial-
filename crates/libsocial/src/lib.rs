@@ -43,5 +43,4 @@ pub use bookmarks::{Bookmark, BookmarkFolder, Place, PlayerChoice};
 pub use client::{Client, ClientConfig, TokenListener};
 pub use error::{Error, Result};
 pub use listing::Page;
-pub use manga::{CatalogQuery, Sort};
 pub use site::Site;

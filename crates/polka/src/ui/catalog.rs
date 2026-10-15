@@ -2,9 +2,10 @@
 
 use iced::widget::{button, column, container, image, pick_list, row, scrollable, text, text_input};
 use iced::{Alignment, ContentFit, Element, Fill, Task};
-use libsocial::listing::Page;
+use libsocial::catalog::{CatalogFilter, CatalogSort};
 use libsocial::models::TitleShort;
-use libsocial::{CatalogQuery, Site, Sort};
+use libsocial::{Page, Site};
+use polka_core::catalog::{Catalog as CatalogState, Ticket};
 
 use super::images::{ImageReq, Images, Loaded};
 use super::{Ctx, human_error, style};
@@ -13,43 +14,19 @@ pub const CARD_W: f32 = 150.0;
 pub const CARD_H: f32 = 212.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SortChoice(pub Sort);
-
-impl SortChoice {
-    const ALL: [SortChoice; 6] = [
-        SortChoice(Sort::Popular),
-        SortChoice(Sort::Rating),
-        SortChoice(Sort::Views),
-        SortChoice(Sort::LastUpdate),
-        SortChoice(Sort::Newest),
-        SortChoice(Sort::Name),
-    ];
-}
+pub struct SortChoice(pub CatalogSort);
 
 impl std::fmt::Display for SortChoice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self.0 {
-            Sort::Popular => "Популярное",
-            Sort::Rating => "По рейтингу",
-            Sort::Views => "По просмотрам",
-            Sort::LastUpdate => "Обновлённые",
-            Sort::Newest => "Новые на сайте",
-            Sort::Name => "По названию",
-        })
+        f.write_str(self.0.label())
     }
 }
 
 pub struct Catalog {
-    site: Site,
+    state: CatalogState,
+    /// Строка поиска, пока её не отправили.
     text: String,
-    sort: Sort,
-    items: Vec<TitleShort>,
-    page: u32,
-    has_next: bool,
-    loading: bool,
     error: Option<String>,
-    /// Номер запроса: ответ на устаревший запрос (сменили сайт, пока грузилось) выбрасывается.
-    request: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -58,7 +35,7 @@ pub enum Msg {
     Text(String),
     Submit,
     Sort(SortChoice),
-    Loaded(u64, Result<Page<TitleShort>, String>),
+    Loaded(Ticket, Result<Page<TitleShort>, String>),
     Scrolled(scrollable::Viewport),
     More,
     Open(Site, String),
@@ -67,84 +44,65 @@ pub enum Msg {
 
 impl Catalog {
     pub fn new() -> Catalog {
+        let filter = CatalogFilter {
+            only_with_content: true,
+            ..Default::default()
+        };
         Catalog {
-            site: Site::MangaLib,
+            state: CatalogState::new(Site::MangaLib, filter),
             text: String::new(),
-            sort: Sort::Popular,
-            items: Vec::new(),
-            page: 0,
-            has_next: true,
-            loading: false,
             error: None,
-            request: 0,
         }
     }
 
     /// Загружает первую страницу заново или следующую.
     pub fn load(&mut self, ctx: &Ctx, next_page: bool) -> Task<Msg> {
-        if next_page && (self.loading || !self.has_next) {
-            return Task::none();
-        }
         if !next_page {
-            self.items.clear();
-            self.page = 0;
-            self.has_next = true;
+            self.state.reload();
         }
-        self.loading = true;
-        self.error = None;
-        self.request += 1;
-        let request = self.request;
-        let query = CatalogQuery {
-            text: self.text.clone(),
-            page: self.page + 1,
-            sort: self.sort,
-            with_content: true,
-            ..Default::default()
+        let Some(request) = self.state.next_request() else {
+            return Task::none();
         };
+        self.error = None;
+        let ticket = request.ticket();
         let client = ctx.client.clone();
-        let site = self.site;
         Task::perform(
-            async move { client.catalog(site, &query).await.map_err(|e| human_error(&e)) },
-            move |result| Msg::Loaded(request, result),
+            async move { request.run(&client).await.map_err(|e| human_error(&e)) },
+            move |result| Msg::Loaded(ticket, result),
         )
+    }
+
+    /// Меняет фильтр и грузит заново. Строка поиска берётся из поля, даже если её
+    /// не отправили, как было и раньше: список всегда соответствует тому, что видно.
+    fn set_filter(&mut self, ctx: &Ctx, change: impl FnOnce(&mut CatalogFilter)) -> Task<Msg> {
+        let mut filter = self.state.filter().clone();
+        filter.text = self.text.clone();
+        change(&mut filter);
+        self.state.set_filter(filter);
+        self.load(ctx, false)
     }
 
     pub fn update(&mut self, msg: Msg, ctx: &Ctx, images: &mut Images) -> (Task<Msg>, Option<(Site, String)>) {
         let task = match msg {
             Msg::Site(site) => {
-                self.site = site;
-                self.load(ctx, false)
+                self.state.set_site(site);
+                self.set_filter(ctx, |_| {})
             }
             Msg::Text(text) => {
                 self.text = text;
                 Task::none()
             }
-            Msg::Submit => self.load(ctx, false),
-            Msg::Sort(choice) => {
-                self.sort = choice.0;
-                self.load(ctx, false)
-            }
-            Msg::Loaded(request, result) => {
-                if request != self.request {
-                    return (Task::none(), None);
-                }
-                self.loading = false;
-                match result {
-                    Ok(page) => {
-                        self.page += 1;
-                        self.has_next = page.has_next;
-                        let covers: Vec<Task<Msg>> = page
-                            .items
+            Msg::Submit => self.set_filter(ctx, |_| {}),
+            Msg::Sort(choice) => self.set_filter(ctx, |f| f.sort = choice.0),
+            Msg::Loaded(ticket, result) => {
+                let site = self.state.site();
+                match self.state.apply(ticket, result) {
+                    Ok(added) => {
+                        let covers: Vec<Task<Msg>> = added
                             .iter()
-                            .filter_map(|t| cover_req(self.site, t))
+                            .filter_map(|t| cover_req(site, t))
                             .map(|req| images.request(req, Msg::Image))
                             .collect();
-                        // Один и тот же тайтл иногда приходит на двух страницах подряд.
-                        for item in page.items {
-                            if !self.items.iter().any(|i| i.id == item.id) {
-                                self.items.push(item);
-                            }
-                        }
                         Task::batch(covers)
                     }
                     Err(e) => {
@@ -175,7 +133,7 @@ impl Catalog {
         let sites = row(Site::ALL.into_iter().filter(|s| !s.is_ranobe()).map(|site| {
             button(text(site.name()).size(14))
                 .padding([6, 12])
-                .style(if site == self.site {
+                .style(if site == self.state.site() {
                     button::primary
                 } else {
                     button::secondary
@@ -192,12 +150,18 @@ impl Catalog {
                 .padding(8)
                 .width(Fill),
             button("Найти").padding([8, 14]).on_press(Msg::Submit),
-            pick_list(SortChoice::ALL, Some(SortChoice(self.sort)), Msg::Sort).padding(8),
+            pick_list(
+                self.state.sorts().iter().copied().map(SortChoice).collect::<Vec<_>>(),
+                Some(SortChoice(self.state.filter().sort)),
+                Msg::Sort,
+            )
+            .padding(8),
         ]
         .spacing(8)
         .align_y(Alignment::Center);
 
-        let cards = row(self.items.iter().map(|t| card(self.site, t, images)))
+        let site = self.state.site();
+        let cards = row(self.state.items().iter().map(|t| card(site, t, images)))
             .spacing(14)
             .wrap();
 
@@ -211,11 +175,11 @@ impl Catalog {
                 .spacing(12)
                 .align_y(Alignment::Center),
             );
-        } else if self.loading {
+        } else if self.state.is_loading() {
             list = list.push(text("Загружаю…").style(text::secondary));
-        } else if self.items.is_empty() {
+        } else if self.state.items().is_empty() {
             list = list.push(text("Ничего не нашлось.").style(text::secondary));
-        } else if self.has_next {
+        } else if self.state.has_next() {
             list = list.push(button("Показать ещё").on_press(Msg::More));
         }
 

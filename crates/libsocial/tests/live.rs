@@ -6,7 +6,8 @@
 //!
 //! `POLKA_INTERFACE` нужен, если системный VPN выводит трафик в страну, откуда сервис недоступен.
 
-use libsocial::{CatalogQuery, Client, ClientConfig, Site};
+use libsocial::catalog::CatalogFilter;
+use libsocial::{Client, ClientConfig, Site};
 
 fn client() -> Client {
     let config = ClientConfig {
@@ -20,7 +21,10 @@ fn client() -> Client {
 #[ignore]
 async fn manga_flow() {
     let c = client();
-    let found = c.search(Site::MangaLib, "берсерк", 1).await.unwrap();
+    let found = c
+        .catalog_filtered(Site::MangaLib, &CatalogFilter::search("берсерк"), 1)
+        .await
+        .unwrap();
     assert!(!found.items.is_empty());
 
     let title = c.title(Site::MangaLib, "7965--chainsaw-man").await.unwrap();
@@ -57,10 +61,17 @@ async fn other_sites_catalog() {
     let c = client();
     for site in [Site::SlashLib, Site::AnimeLib] {
         let page = c
-            .catalog(site, &CatalogQuery::default())
+            .catalog_filtered(site, &CatalogFilter::default(), 1)
             .await
             .unwrap_or_else(|e| panic!("{site:?}: {e}"));
         assert!(!page.items.is_empty(), "{site:?}");
+        // Поля карточки, которые разбираются без входа.
+        let t = &page.items[0];
+        assert!(!t.model.is_empty() && !t.slug.is_empty(), "{site:?}");
+        assert!(
+            t.rating.as_ref().is_some_and(|r| r.average_formatted.is_some()),
+            "{site:?}"
+        );
     }
 }
 
@@ -90,7 +101,10 @@ async fn mirror_failover() {
         ..Default::default()
     };
     let c = Client::new(config).unwrap();
-    let page = c.search(Site::MangaLib, "берсерк", 1).await.unwrap();
+    let page = c
+        .catalog_filtered(Site::MangaLib, &CatalogFilter::search("берсерк"), 1)
+        .await
+        .unwrap();
     assert!(!page.items.is_empty());
     println!("рабочее зеркало: {}", c.api_base());
     assert_ne!(c.api_base(), "https://api.invalid/api");

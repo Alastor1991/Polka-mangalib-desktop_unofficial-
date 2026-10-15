@@ -85,11 +85,16 @@ GET /api/anime?site_id[]=5&page=1
     "slug_url": "7965--chainsaw-man", "site": 1,
     "cover": {"thumbnail": "...", "default": "...", "md": "..."},
     "type": {"id": 1, "label": "Манга"},
-    "rating": {"average": "9.42", "votes": 93785}
+    "model": "manga", "slug": "chainsaw-man",
+    "rating": {"average": "9.42", "averageFormated": "9.4", "votes": 93785, "votesFormated": "93.8 K", "user": 0},
+    "content_marking": [{"id": 1, "label": "Содержит нецензурную брань", "formulation": "..."}],
+    "userBookmark": {"id": 11, "status": 1, "item_id": 5, "progress": "3", "meta": {"item_number": 4}}
   }],
   "meta": {"has_next_page": true, "current_page": 1}
 }
 ```
+
+`userBookmark` приходит вошедшему с `fields[]=userBookmark`: закладка без тайтла, `status` – папка. У гостя и у тайтла без закладки поля нет или `null`. У аниме в карточке ещё `shiki_rate` (оценка Shikimori) и `anilist_id`. `averageFormated` и `votesFormated` – оценка и число оценок в том виде, в каком их показывает сайт; опечатка в названиях полей идёт от API.
 
 `slug_url` (`7965--chainsaw-man`) – основной идентификатор тайтла во всех остальных запросах. Число в его начале – id тайтла.
 
