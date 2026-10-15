@@ -4,14 +4,19 @@
 //! Сервер отдаёт страницу корневых комментариев и плоский список всех ответов к
 //! ним. Дерево собирается на клиенте по `parent_comment`. Комментарии не зависят
 //! от `Site-Id`: id всех объектов в сети общие.
+//!
+//! Подписка на новые комментарии описывает объект иначе, чем `Target`: тайтлом и
+//! необязательным id главы или серии (`CommentWatch`).
 
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::client::{Auth, Client, join_url};
+use crate::cards::TitleKind;
+use crate::client::{Auth, Client, join_url, record_of};
 use crate::error::{Error, Result};
 use crate::listing::Page;
+use crate::listing::bool_lenient;
 use crate::rich::Doc;
 use crate::serde_util::{null_default, opt_u64_lenient, u64_lenient};
 use crate::site::Site;
@@ -398,7 +403,110 @@ pub struct UserCommentsQuery {
     pub text: String,
 }
 
+/// Объект подписки на новые комментарии: тайтл целиком или его глава и серия.
+/// У главы и серии сайт передаёт их тайтл и отдельно id главы или серии.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CommentWatch {
+    /// `manga` или `anime` в запросе.
+    pub kind: TitleKind,
+    pub title_id: u64,
+    /// Глава или серия; `None` – тайтл целиком.
+    pub content_id: Option<u64>,
+}
+
+impl CommentWatch {
+    pub fn manga(title_id: u64) -> CommentWatch {
+        CommentWatch {
+            kind: TitleKind::Manga,
+            title_id,
+            content_id: None,
+        }
+    }
+
+    pub fn anime(title_id: u64) -> CommentWatch {
+        CommentWatch {
+            kind: TitleKind::Anime,
+            title_id,
+            content_id: None,
+        }
+    }
+
+    /// Глава манги.
+    pub fn chapter(title_id: u64, chapter_id: u64) -> CommentWatch {
+        CommentWatch {
+            content_id: Some(chapter_id),
+            ..CommentWatch::manga(title_id)
+        }
+    }
+
+    pub fn episode(title_id: u64, episode_id: u64) -> CommentWatch {
+        CommentWatch {
+            content_id: Some(episode_id),
+            ..CommentWatch::anime(title_id)
+        }
+    }
+
+    /// Параметры GET: `content_id` без значения не передаётся, как у сайта.
+    fn query(self) -> Vec<(&'static str, String)> {
+        let mut query = vec![
+            ("source_type", self.kind.as_str().to_string()),
+            ("source_id", self.title_id.to_string()),
+        ];
+        if let Some(id) = self.content_id {
+            query.push(("content_id", id.to_string()));
+        }
+        query
+    }
+
+    /// Тело POST: тот же объект, `content_id` у тайтла – `null`.
+    fn body(self) -> Value {
+        json!({
+            "source_type": self.kind.as_str(),
+            "source_id": self.title_id,
+            "content_id": self.content_id,
+        })
+    }
+}
+
+/// Состояние подписки на новые комментарии.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommentNotify {
+    #[serde(default, deserialize_with = "bool_lenient")]
+    pub notify: bool,
+    #[serde(default, deserialize_with = "opt_u64_lenient")]
+    pub content_id: Option<u64>,
+}
+
 impl Client {
+    /// Подписан ли вошедший на новые комментарии к объекту. Ответ без записи клиент
+    /// считает отсутствием подписки; так ли отвечает сервер, не проверено.
+    pub async fn comment_subscription(&self, watch: CommentWatch) -> Result<CommentNotify> {
+        let path = "comments/subscription";
+        let bytes = self
+            .send_raw::<_, ()>(Site::MangaLib, Method::GET, path, &watch.query(), None)
+            .await?
+            .bytes()
+            .await?;
+        let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
+            return Ok(CommentNotify::default());
+        };
+        Ok(record_of(&value, path)?.unwrap_or_default())
+    }
+
+    /// Переключает подписку на новые комментарии и возвращает новое состояние.
+    /// `None` – запрос прошёл, но состояния в ответе нет: его перечитывают
+    /// `comment_subscription`, а не переключают ещё раз. Сайт показывает кнопку
+    /// только тем, у кого есть права на объект (автор, команда, модератор).
+    pub async fn toggle_comment_subscription(&self, watch: CommentWatch) -> Result<Option<CommentNotify>> {
+        self.send_record(
+            Site::MangaLib,
+            Method::POST,
+            "comments/subscription",
+            Some(&watch.body()),
+        )
+        .await
+    }
+
     /// Страница комментариев. Без входа свой голос не приходит.
     pub async fn comments(&self, target: Target, sort: CommentSort, page: u32) -> Result<CommentPage> {
         let mut query: Vec<(&str, String)> = target.query();

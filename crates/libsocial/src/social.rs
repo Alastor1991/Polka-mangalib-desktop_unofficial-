@@ -312,56 +312,42 @@ impl Client {
     }
 
     /// Отправляет заявку в друзья. Сервер отвечает новой записью дружбы, сайт ставит
-    /// её вместо прежней. `None` – запрос прошёл, но записи в ответе нет.
+    /// её вместо прежней. `None` – запрос прошёл, но записи в ответе нет: тогда
+    /// состояние перечитывают `friendship_with`.
     pub async fn friend_request(&self, user_id: u64) -> Result<Option<Friendship>> {
         let body = json!({ "recipient_id": user_id });
-        self.friendship_write(Method::POST, "friendship", &body).await
+        self.send_record(Site::MangaLib, Method::POST, "friendship", Some(&body))
+            .await
     }
 
     /// Принимает входящую заявку. `entry_id` – id записи дружбы (`Friendship::id`).
     pub async fn accept_friend(&self, entry_id: u64) -> Result<Option<Friendship>> {
         let body = json!({ "status": FRIEND_ACCEPT });
-        self.friendship_write(Method::PUT, &format!("friendship/{entry_id}"), &body)
-            .await
+        self.send_record(
+            Site::MangaLib,
+            Method::PUT,
+            &format!("friendship/{entry_id}"),
+            Some(&body),
+        )
+        .await
     }
 
     /// Отклоняет входящую заявку или отзывает свою. `entry_id` – id записи дружбы.
     pub async fn decline_friend(&self, entry_id: u64) -> Result<Option<Friendship>> {
         let body = json!({ "status": FRIEND_DECLINE });
-        self.friendship_write(Method::PUT, &format!("friendship/{entry_id}"), &body)
-            .await
+        self.send_record(
+            Site::MangaLib,
+            Method::PUT,
+            &format!("friendship/{entry_id}"),
+            Some(&body),
+        )
+        .await
     }
 
     /// Удаляет из друзей. `entry_id` – id записи дружбы, а не пользователя.
     pub async fn remove_friend(&self, entry_id: u64) -> Result<()> {
         self.send_ok::<()>(Site::MangaLib, Method::DELETE, &format!("friendship/{entry_id}"), None)
             .await
-    }
-
-    /// Запись дружбы из ответа на заявку. Есть ли у этих ответов обёртка `data`, по
-    /// скриптам сайта не видно, поэтому клиент принимает запись и с ней, и без неё.
-    /// Запись на сервере к этому времени уже сделана: ответ, в котором записи нет
-    /// (пустое тело, `null`, пустой список), даёт `None`, а не ошибку, чтобы
-    /// вызывающий не повторил запрос. Состояние тогда перечитывают `friendship_with`.
-    async fn friendship_write(&self, method: Method, path: &str, body: &Value) -> Result<Option<Friendship>> {
-        let bytes = self
-            .send_raw(Site::MangaLib, method, path, &(), Some(body))
-            .await?
-            .bytes()
-            .await?;
-        let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
-            return Ok(None);
-        };
-        let record = value.get("data").unwrap_or(&value);
-        if !record.is_object() {
-            return Ok(None);
-        }
-        Friendship::deserialize(record)
-            .map(Some)
-            .map_err(|source| Error::Decode {
-                context: path.to_string(),
-                source,
-            })
     }
 
     /// Отношение игнора с одним пользователем.

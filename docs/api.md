@@ -323,6 +323,8 @@ GET /api/reports/types?namespaces[]=social_comments  причины жалоб, 
 GET /api/sticker-packs                               стикеры, только с входом
 POST /api/upload/image/comment                       картинки, multipart, поле content[]
 GET /api/user/{id}/comments                          что написал пользователь, по 20
+GET /api/comments/subscription?source_type=manga|anime&source_id=…&content_id=…   подписка на новые
+POST /api/comments/subscription   {"source_type": …, "source_id": …, "content_id": … или null}   переключить
 ```
 
 - `post_type`: `manga` (и для ранобэ), `anime`, `chapter`, `episodes`, `chapter_player`, `review`, `collection`, `post` (новость), `discussion`, `card`. Для главы `post_id` – id перевода в ветке.
@@ -330,6 +332,7 @@ GET /api/user/{id}/comments                          что написал по�
 - Ответ: `{"data": {"root": [...], "replies": [...]}, "meta": {"has_next_page": …}}`. Страницы по 25 корней. `replies` – плоский список ответов всех уровней, дерево собирается по `parent_comment`. В нём бывают повторы и ответы к корням с других страниц.
 - Текст приходит HTML-строкой (`<p>`, `<blockquote>`, спойлеры нескольких видов, картинки с `data-original-src`), а уходит документом ProseMirror. Оба формата разбирает `libsocial::rich::Doc`.
 - `sort_by` принимает только `id` и `votes_up`. Свой голос приходит в `votes.user`: `1`, `0` или `null`.
+- Подписка на новые комментарии описывает объект не через `post_type`, а тайтлом: `source_type` – `manga` или `anime`, `source_id` – id тайтла, `content_id` – id главы или серии, у тайтла `null` (в GET параметр тогда не передаётся). Ответ – `{notify, content_id}`, POST переключает подписку и отвечает новым состоянием. Обёртка `data` по скриптам не видна, клиент принимает оба вида; ответ без записи на GET клиент считает отсутствием подписки, это его допущение (`CommentWatch`, `comment_subscription`, `toggle_comment_subscription`). Сайт показывает кнопку только тем, у кого есть права на объект (автор, команда, модератор); что сервер ответит остальным, какие ещё `source_type` он принимает и как подписаться на главу ранобэ, не проверено.
 - В новом комментарии ответ задают `parent_comment`, `root_id` (корень родителя или сам родитель) и `comment_level` (уровень родителя плюс один).
 - Картинки и стикеры в комментариях доступны только с премиумом.
 
@@ -596,8 +599,6 @@ POST /api/cards/{id}/receive-preview {card_instance_stat_id}
 
 
 ```http
-GET    /api/comments/subscription?source_type=manga|anime|…&source_id=…&content_id=…   подписка на новые комментарии
-POST   /api/comments/subscription   то же тело     переключает её; ответ {notify, content_id}
 PUT    /api/user/{id}   {поля формы профиля}        правка профиля и смена почты
 POST   /api/user/{id}/email-confirmation/send
 DELETE /api/user/{id}                               удалить профиль

@@ -6,7 +6,7 @@ use std::time::Duration;
 use libsocial::auth::now_secs as now;
 use libsocial::{Client, ClientConfig, Error, Site, Token};
 use serde_json::json;
-use wiremock::matchers::{body_partial_json, header, method, path};
+use wiremock::matchers::{body_json, body_partial_json, header, method, path, query_param, query_param_is_missing};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn client(mirrors: &[&MockServer]) -> Client {
@@ -592,6 +592,68 @@ async fn bookmarks_page_and_writes() {
     c.delete_bookmark(Site::AnimeLib, 77).await.unwrap();
     c.mark_chapter_viewed(Site::MangaLib, 7965, 229662).await.unwrap();
     c.mark_episode_viewed(16133, 309079).await.unwrap();
+}
+
+#[tokio::test]
+async fn comment_subscription_read_and_toggle() {
+    use libsocial::comments::{CommentNotify, CommentWatch};
+
+    let s = MockServer::start().await;
+    // Тайтл: `content_id` в запросе нет, в теле он `null`.
+    Mock::given(method("GET"))
+        .and(path("/api/comments/subscription"))
+        .and(query_param("source_type", "manga"))
+        .and(query_param("source_id", "7965"))
+        .and(query_param_is_missing("content_id"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {"notify": false, "content_id": null}})))
+        .expect(1)
+        .mount(&s)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/comments/subscription"))
+        .and(body_json(
+            json!({"source_type": "manga", "source_id": 7965, "content_id": null}),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"notify": true, "content_id": null})))
+        .expect(1)
+        .mount(&s)
+        .await;
+    // Серия: тайтл аниме и id серии отдельно.
+    Mock::given(method("GET"))
+        .and(path("/api/comments/subscription"))
+        .and(query_param("source_type", "anime"))
+        .and(query_param("source_id", "20591"))
+        .and(query_param("content_id", "105"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": []})))
+        .expect(1)
+        .mount(&s)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/comments/subscription"))
+        .and(body_json(
+            json!({"source_type": "anime", "source_id": 20591, "content_id": 105}),
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {"notify": "1", "content_id": "105"}})))
+        .expect(1)
+        .mount(&s)
+        .await;
+
+    let c = client(&[&s]);
+    let title = CommentWatch::manga(7965);
+    assert!(!c.comment_subscription(title).await.unwrap().notify);
+    assert_eq!(
+        c.toggle_comment_subscription(title).await.unwrap(),
+        Some(CommentNotify {
+            notify: true,
+            content_id: None
+        })
+    );
+    let episode = CommentWatch::episode(20591, 105);
+    // Ответ без записи: подписки нет.
+    assert_eq!(c.comment_subscription(episode).await.unwrap(), CommentNotify::default());
+    let toggled = c.toggle_comment_subscription(episode).await.unwrap().unwrap();
+    assert!(toggled.notify);
+    assert_eq!(toggled.content_id, Some(105));
 }
 
 #[tokio::test]

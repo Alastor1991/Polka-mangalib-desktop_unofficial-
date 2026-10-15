@@ -83,6 +83,7 @@ flowchart LR
 | `send_data(site, Method, path, &query, Some(&body))` | запрос с телом JSON и разбором `{"data": T}` |
 | `send_ok(site, Method, path, Some(&body))` | запрос, ответ которого не нужен |
 | `send_raw(site, Method, path, &query, body)` | ответ целиком: тело без обёртки `data` или двоичное |
+| `send_record(site, Method, path, Some(&body))` | запись, ответ которой – одна запись с обёрткой `data` или без; ответ без записи даёт `None`, чтобы запрос не повторили |
 | `send_api(Auth::User, \|http, base\| …)` | особые случаи: multipart, свои заголовки |
 | `get_page` (в `listing.rs`) | GET списка, понимает три формы пагинации |
 
@@ -151,7 +152,7 @@ flowchart LR
 | `anime.rs` | серии и видео | `episodes`, `episode`, `resolve_video` |
 | `bookmarks.rs` | папки, закладки, отметки о прочтении | `BookmarkFolder` и `Bookmark` со всеми полями сервера, `bookmark_folders`, `bookmark`, `set_bookmark`, `delete_bookmark`, `mark_chapter_viewed`, `mark_episode_viewed`, `format_timecode` |
 | `bookmarks_ext.rs` | всё остальное о закладках | список (`bookmark_list`) с сортировками и поиском, папки (создать, изменить, удалить с переносом, порядок, уведомления), массовые операции, заметки к главам, комментарий и пересмотры |
-| `comments.rs` | комментарии | `Target` (к чему комментарий, в том числе страница главы), `comments`, `comment_thread`, `sticky_comments`, `post_comment`, `edit_comment`, `delete_comment`, `vote`, `report_comment`, `report_types`, `sticker_packs`, `upload_comment_images`, `user_comments` |
+| `comments.rs` | комментарии | `Target` (к чему комментарий, в том числе страница главы), `comments`, `comment_thread`, `sticky_comments`, `post_comment`, `edit_comment`, `delete_comment`, `vote`, `report_comment`, `report_types`, `sticker_packs`, `upload_comment_images`, `user_comments`, подписка на новые комментарии (`CommentWatch`, `comment_subscription`, `toggle_comment_subscription`) |
 | `media.rs` | вокруг тайтла | `covers`, `title_stats`, `relations`, `similar` и голоса, `add_similar`, `title_characters`, звёздочки-подписки, `rate_title`, `like_chapter`, `rate_translation`, подписки на ветку и озвучку, команды и их оценка, игнор команды, отзывы целиком, озвучка манги |
 | `catalog.rs`, `catalog_constants.rs` | полный каталог и справочник формы | `CatalogFilter` со всеми параметрами, `CatalogSort`, случайный порядок с курсором, отказ до запроса там, где сервер ответил бы 422; `catalog_constants` с отбором по сайту |
 | `feeds.rs` | главная и ленты | `home`, `latest_updates`, `user_latest_updates`, `top_views`, `hot_newest`, `news`, `news_article`, `mark_news_visited`, `upload_url` |

@@ -328,6 +328,29 @@ impl Client {
         .await
     }
 
+    /// Запрос на запись, ответ которого – одна запись. Есть ли у таких ответов обёртка
+    /// `data`, по скриптам сайта часто не видно, поэтому годится и с ней, и без неё.
+    /// Запись на сервере к разбору ответа уже сделана: ответ без записи (пустое тело,
+    /// `null`, пустой список) даёт `None`, а не ошибку, чтобы вызывающий не повторил
+    /// запрос. Состояние тогда перечитывают отдельным GET.
+    pub(crate) async fn send_record<T, B>(
+        &self,
+        site: Site,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&B>,
+    ) -> Result<Option<T>>
+    where
+        T: DeserializeOwned,
+        B: Serialize + ?Sized,
+    {
+        let bytes = self.send_raw(site, method, path, &(), body).await?.bytes().await?;
+        let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+            return Ok(None);
+        };
+        record_of(&value, path)
+    }
+
     /// Запрос к API, ответ которого не нужен: важно только, что он успешен.
     pub(crate) async fn send_ok<B>(
         &self,
@@ -655,6 +678,18 @@ fn is_mirror_block(response: &Response) -> bool {
         200 | 403 | 404 => html,
         _ => is_gateway(status),
     }
+}
+
+/// Запись из ответа с обёрткой `data` или без неё. `None`, если записи нет.
+pub(crate) fn record_of<T: DeserializeOwned>(value: &serde_json::Value, path: &str) -> Result<Option<T>> {
+    let record = value.get("data").unwrap_or(value);
+    if !record.is_object() {
+        return Ok(None);
+    }
+    T::deserialize(record).map(Some).map_err(|source| Error::Decode {
+        context: path.to_string(),
+        source,
+    })
 }
 
 /// Шлюз перед API лежит или не достучался до сервиса. 52x отдают Cloudflare и DDoS-Guard.
