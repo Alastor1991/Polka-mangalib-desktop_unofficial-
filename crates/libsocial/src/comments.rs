@@ -17,6 +17,8 @@ use crate::client::{Auth, Client, join_url, record_of};
 use crate::error::{Error, Result};
 use crate::listing::Page;
 use crate::listing::bool_lenient;
+use crate::reports::COMMENT_NAMESPACE;
+pub use crate::reports::ReportType;
 use crate::rich::Doc;
 use crate::serde_util::{null_default, opt_u64_lenient, u64_lenient};
 use crate::site::Site;
@@ -364,31 +366,6 @@ pub struct StickerPack {
     pub stickers: Vec<Sticker>,
 }
 
-/// Причина жалобы.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReportType {
-    #[serde(deserialize_with = "u64_lenient")]
-    pub id: u64,
-    /// Это значение уходит в жалобу (`reason`), а не `id`.
-    #[serde(deserialize_with = "crate::serde_util::string_lenient")]
-    pub name: String,
-    #[serde(default, deserialize_with = "null_default")]
-    pub label: String,
-    #[serde(default)]
-    pub metadata: Option<Value>,
-}
-
-impl ReportType {
-    /// Нужно ли пояснение к жалобе.
-    pub fn comment_required(&self) -> bool {
-        self.metadata
-            .as_ref()
-            .and_then(|m| m.get("comment_required"))
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-    }
-}
-
 /// Что показывать в списке комментариев пользователя.
 #[derive(Debug, Clone, Default)]
 pub struct UserCommentsQuery {
@@ -629,9 +606,7 @@ impl Client {
 
     /// Причины жалоб на комментарии.
     pub async fn report_types(&self) -> Result<Vec<ReportType>> {
-        // Ответ – голый массив, без обёртки `data`.
-        self.get_json(Site::MangaLib, "reports/types", &[("namespaces[]", "social_comments")])
-            .await
+        self.report_reasons(COMMENT_NAMESPACE).await
     }
 
     /// Жалоба на комментарий. `reason` – `ReportType::name`.
@@ -641,7 +616,7 @@ impl Client {
             "metadata": {"comment": note},
             "reportable_id": comment_id,
             "reportable_type": "comment",
-            "namespaces": "social_comments",
+            "namespaces": COMMENT_NAMESPACE,
         });
         self.send_ok(
             Site::MangaLib,

@@ -1082,3 +1082,111 @@ async fn live_notifications_need_login() {
     let c = live_client();
     assert!(matches!(c.notification_counts().await, Err(Error::Unauthorized)));
 }
+
+// ---------- жалобы ----------
+
+#[tokio::test]
+async fn reports_reasons_and_send() {
+    use libsocial::reports::ReportTarget;
+
+    let server = MockServer::start().await;
+    // Голый массив; причину другого пространства имён клиент отбрасывает.
+    Mock::given(method("GET"))
+        .and(path("/api/reports/types"))
+        .and(query_param("namespaces[]", "user-profile"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {"id": 1, "name": "spam", "label": "Спам", "namespaces": ["user-profile"]},
+            {"id": 2, "name": "other", "label": "Другое", "namespaces": ["user-profile"],
+             "metadata": {"comment_required": true}},
+            {"id": 3, "name": "pages", "label": "Страницы", "namespaces": ["reader-manga"]}
+        ])))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/reports"))
+        .and(body_json(json!({
+            "reason": "other", "metadata": {"comment": "пояснение"},
+            "reportable_id": 1004, "reportable_type": "user", "namespaces": "user-profile"
+        })))
+        .respond_with(empty_ok())
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/reports"))
+        .and(body_json(json!({
+            "reason": "duplicate_pages", "metadata": {"comment": "3, 4"},
+            "reportable_id": 223269, "reportable_type": "chapter", "namespaces": "reader-book"
+        })))
+        .respond_with(empty_ok())
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/reports"))
+        .and(body_json(json!({
+            "reason": "spam", "metadata": {"comment": ""},
+            "reportable_id": 105, "reportable_type": "episodes",
+            "namespaces": "episode-empty-translation-type"
+        })))
+        .respond_with(empty_ok())
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let c = client(&server);
+    let reasons = c.report_reasons_for(ReportTarget::User(1004)).await.unwrap();
+    assert_eq!(
+        reasons.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
+        ["spam", "other"]
+    );
+    assert!(reasons[1].comment_required());
+    c.report(ReportTarget::User(1004), "other", "пояснение").await.unwrap();
+    let chapter = ReportTarget::Chapter {
+        chapter_id: 223269,
+        site: Site::RanobeLib,
+    };
+    c.report(chapter, "duplicate_pages", "3, 4").await.unwrap();
+    c.report(ReportTarget::Episode(105), "spam", "").await.unwrap();
+}
+
+#[tokio::test]
+async fn report_reasons_filtered_like_site() {
+    use libsocial::reports::ReportTarget;
+
+    let server = MockServer::start().await;
+    // Тема форума делит причины с `social_forum`; причина без пространства имён и
+    // битая причина отбрасываются, остальной список цел.
+    Mock::given(method("GET"))
+        .and(path("/api/reports/types"))
+        .and(query_param("namespaces[]", "discussion"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {"id": 1, "name": "flood", "namespaces": ["social_forum"]},
+            {"id": 2, "name": "offtop", "namespaces": "discussion"},
+            {"id": 3, "name": "nowhere", "namespaces": []},
+            "не причина",
+            {"id": 4, "name": "comment_only", "namespaces": ["social_comments"]}
+        ])))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/reports/types"))
+        .and(query_param("namespaces[]", "social_comments"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {"id": 4, "name": "comment_only", "namespaces": ["social_comments", "social_forum"]},
+            {"id": 1, "name": "flood", "namespaces": ["social_forum"]}
+        ])))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let c = client(&server);
+    let names = |r: Vec<libsocial::comments::ReportType>| r.into_iter().map(|r| r.name).collect::<Vec<_>>();
+    assert_eq!(
+        names(c.report_reasons_for(ReportTarget::Discussion(9)).await.unwrap()),
+        ["flood", "offtop"]
+    );
+    assert_eq!(names(c.report_types().await.unwrap()), ["comment_only"]);
+}

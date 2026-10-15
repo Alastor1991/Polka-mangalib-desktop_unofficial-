@@ -5,7 +5,7 @@
 //! (ограничение частоты, повторы, обновление токена, зеркала) и разбирать ответы в
 //! типы. Каждая область сервиса – свой модуль: каталог и поиск (`catalog`, `feeds`,
 //! `search`), тайтл и главы (`manga`, `anime`, `media`, `ranobe`), закладки
-//! (`bookmarks`, `bookmarks_ext`), комментарии (`comments`), аккаунт и общение
+//! (`bookmarks`, `bookmarks_ext`), комментарии (`comments`), жалобы (`reports`), аккаунт и общение
 //! (`notifications`, `users`, `social`, `collections`), карточки (`cards`), экспорт
 //! книг (`exports`). Форматированный текст сервиса разбирает `rich`. Карта модулей и
 //! правила – в `docs/architecture.md`, протокол – в `docs/api.md`.
@@ -30,6 +30,7 @@ pub mod mirrors;
 pub mod models;
 pub mod notifications;
 pub mod ranobe;
+pub mod reports;
 pub mod rich;
 pub mod search;
 mod serde_util;
