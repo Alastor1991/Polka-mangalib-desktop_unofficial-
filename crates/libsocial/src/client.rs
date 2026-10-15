@@ -289,24 +289,39 @@ impl Client {
         Q: Serialize + ?Sized,
         B: Serialize + ?Sized,
     {
-        let response = self
-            .send_api(Auth::User, |http, base| {
-                let request = http
-                    .request(method.clone(), join_url(base, path))
-                    .headers(Self::site_headers(site))
-                    .query(query);
-                match body {
-                    Some(body) => request.json(body),
-                    None => request,
-                }
-            })
-            .await?;
-        let bytes = response.bytes().await?;
+        let bytes = self.send_raw(site, method, path, query, body).await?.bytes().await?;
         let body: Data<T> = serde_json::from_slice(&bytes).map_err(|source| Error::Decode {
             context: path.to_string(),
             source,
         })?;
         Ok(body.data)
+    }
+
+    /// Запрос к API от имени сайта с ответом целиком: для тел без обёртки `data` и
+    /// двоичных.
+    pub(crate) async fn send_raw<Q, B>(
+        &self,
+        site: Site,
+        method: reqwest::Method,
+        path: &str,
+        query: &Q,
+        body: Option<&B>,
+    ) -> Result<reqwest::Response>
+    where
+        Q: Serialize + ?Sized,
+        B: Serialize + ?Sized,
+    {
+        self.send_api(Auth::User, |http, base| {
+            let request = http
+                .request(method.clone(), join_url(base, path))
+                .headers(Self::site_headers(site))
+                .query(query);
+            match body {
+                Some(body) => request.json(body),
+                None => request,
+            }
+        })
+        .await
     }
 
     /// Запрос к API, ответ которого не нужен: важно только, что он успешен.

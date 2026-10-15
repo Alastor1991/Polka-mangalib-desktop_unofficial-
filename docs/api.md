@@ -511,7 +511,7 @@ DELETE /api/bookmarks/note/{id заметки}         {"bookmark_id": …, "boo
 
 ## Ранобэ
 
-Код: `crates/libsocial/src/ranobe.rs` (текст главы), `exports.rs` (экспорт книг). Ранобэ живёт в том же API, что и манга, с `Site-Id: 3`: пути `/manga/...`, в ответах `model` равен `"manga"`. Слово `book` встречается только в адресах страниц сайта и в `model` внутри раздела карточек. Сайт – `Site::RanobeLib`, запросы `Client::ranobe_*` идут с его обычными заголовками (`Site-Id: 3`, `Referer` и `Origin` ranobelib.me). Отметки о прочтении и закладки для ранобэ уходят теми же `mark_chapter_viewed` и `set_bookmark` с `Site::RanobeLib`; живьём для ранобэ они ещё не проверены.
+Код: `crates/libsocial/src/ranobe.rs` (текст главы), `exports.rs` (экспорт книг). Ранобэ живёт в том же API, что и манга, с `Site-Id: 3`: пути `/manga/...`, в ответах `model` равен `"manga"`. Слово `book` встречается только в адресах страниц сайта и в `model` внутри раздела карточек. Сайт – `Site::RanobeLib`, запросы идут через общие методы клиента с его обычными заголовками (`Site-Id: 3`, `Referer` и `Origin` ranobelib.me): текст главы – `ranobe_chapter`, список глав и ветки – `chapters` и `branches`. Отметки о прочтении и закладки для ранобэ уходят теми же `mark_chapter_viewed` и `set_bookmark` с `Site::RanobeLib`; живьём для ранобэ они ещё не проверены.
 
 ```http
 GET /api/manga/{slug_url}/chapters                                    Site-Id: 3

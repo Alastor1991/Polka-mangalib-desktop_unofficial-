@@ -276,7 +276,7 @@ impl Client {
     pub async fn book_exports(&self, manga_id: u64) -> Result<Vec<BookExport>> {
         let query = [("manga_id", manga_id.to_string())];
         let bytes = self
-            .ranobe_request(Method::GET, "book-exports", &query, None::<&()>)
+            .send_raw(Site::RanobeLib, Method::GET, "book-exports", &query, None::<&()>)
             .await?
             .bytes()
             .await?;
@@ -303,9 +303,15 @@ impl Client {
 
     /// Убирает задачу.
     pub async fn delete_book_export(&self, id: &str) -> Result<()> {
-        self.ranobe_request(Method::DELETE, &format!("book-exports/{id}"), &(), None::<&()>)
-            .await
-            .map(drop)
+        self.send_raw(
+            Site::RanobeLib,
+            Method::DELETE,
+            &format!("book-exports/{id}"),
+            &(),
+            None::<&()>,
+        )
+        .await
+        .map(drop)
     }
 
     /// Временная ссылка на готовую часть, `part` – `ExportPart::index`. Файл по ней
@@ -314,7 +320,7 @@ impl Client {
         let path = format!("book-exports/{id}/link");
         let query = [("part", part.to_string())];
         let bytes = self
-            .ranobe_request(Method::POST, &path, &query, None::<&()>)
+            .send_raw(Site::RanobeLib, Method::POST, &path, &query, None::<&()>)
             .await?
             .bytes()
             .await?;
@@ -327,7 +333,7 @@ impl Client {
         let path = format!("book-exports/{id}/segments/{index}");
         let query = [("v", key)];
         Ok(self
-            .ranobe_request(Method::GET, &path, &query, None::<&()>)
+            .send_raw(Site::RanobeLib, Method::GET, &path, &query, None::<&()>)
             .await?
             .bytes()
             .await?)
@@ -435,7 +441,11 @@ impl Client {
         T: DeserializeOwned,
         B: Serialize + ?Sized,
     {
-        let bytes = self.ranobe_request(method, path, &(), body).await?.bytes().await?;
+        let bytes = self
+            .send_raw(Site::RanobeLib, method, path, &(), body)
+            .await?
+            .bytes()
+            .await?;
         object(path, &bytes)
     }
 }

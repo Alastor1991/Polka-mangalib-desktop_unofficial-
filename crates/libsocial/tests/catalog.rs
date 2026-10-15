@@ -8,8 +8,9 @@
 
 use std::time::Duration;
 
-use libsocial::catalog::{Bounds, CatalogFilter, CatalogSort, RandomCursor, SortOrder, Target, TargetModel};
+use libsocial::catalog::{Bounds, CatalogFilter, CatalogSort, RandomCursor, Target, TargetModel};
 use libsocial::feeds::{NewsFilter, NewsKind, TopGroup, TopTime};
+use libsocial::listing::SortOrder;
 use libsocial::rich::Block;
 use libsocial::search::{EntityKind, EntityQuery, EntitySort, UserFilter, UserQuery};
 use libsocial::{Client, ClientConfig, Error, Site};
@@ -100,7 +101,7 @@ async fn anime_catalog_uses_links_next() {
     let filter = CatalogFilter {
         episodes: Bounds::at_least(12),
         sort: CatalogSort::EpisodeCount,
-        order: SortOrder::Ascending,
+        order: SortOrder::Asc,
         ..Default::default()
     };
     let page = client(&server)
@@ -584,7 +585,7 @@ async fn user_search_sends_text_and_sort() {
         .mount(&server)
         .await;
     let query = UserQuery {
-        order: SortOrder::Ascending,
+        order: SortOrder::Asc,
         ..UserQuery::search("user1")
     };
     let page = client(&server).users(&query, 1).await.unwrap();

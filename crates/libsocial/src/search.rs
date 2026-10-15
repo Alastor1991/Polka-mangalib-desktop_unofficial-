@@ -17,10 +17,10 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
-use crate::catalog::{SortOrder, lenient_object};
+use crate::catalog::lenient_object;
 use crate::client::Client;
 use crate::error::{Error, Result};
-use crate::listing::Page;
+use crate::listing::{Page, SortOrder};
 use crate::models::Cover;
 use crate::rich::Doc;
 use crate::serde_util::{lenient_vec, null_default, opt_string_lenient, opt_u64_lenient, string_lenient, u64_lenient};
@@ -159,7 +159,7 @@ impl EntityQuery {
         }
         if let Some(sort) = self.sort {
             p.push(("sort_by".into(), sort.param().into()));
-            p.push(("sort_type".into(), self.order.param().into()));
+            p.push(("sort_type".into(), self.order.as_str().into()));
         }
         for site in &self.site_ids {
             p.push(("site_ids[]".into(), site.to_string()));
@@ -476,7 +476,7 @@ impl UserQuery {
         let mut p = vec![
             ("page".to_string(), page.max(1).to_string()),
             ("sort_by".into(), self.sort.param().into()),
-            ("sort_type".into(), self.order.param().into()),
+            ("sort_type".into(), self.order.as_str().into()),
         ];
         if !self.text.trim().is_empty() {
             p.push(("q".into(), self.text.trim().to_string()));
@@ -531,7 +531,7 @@ mod tests {
         let q = EntityQuery {
             text: " маг ".into(),
             sort: Some(EntitySort::Subscribers),
-            order: SortOrder::Ascending,
+            order: SortOrder::Asc,
             site_ids: vec![1, 5],
             limit: Some(30),
         };
@@ -583,7 +583,7 @@ mod tests {
             text: "user1".into(),
             filter: UserFilter::DailyStreak { days: Some(30) },
             sort: UserSort::Username,
-            order: SortOrder::Ascending,
+            order: SortOrder::Asc,
         };
         let p = q.to_query(2);
         for (k, v) in [

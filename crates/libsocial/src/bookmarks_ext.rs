@@ -18,12 +18,11 @@ use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use crate::bookmarks::Bookmark;
+use crate::bookmarks::{Bookmark, BookmarkFolder};
 use crate::client::Client;
 use crate::error::{Error, Result};
-use crate::listing::{Page, SortOrder, bool_lenient};
-use crate::models::TitleShort;
-use crate::serde_util::{null_default, opt_string_lenient, opt_u64_lenient, string_lenient, u64_lenient};
+use crate::listing::{Page, SortOrder};
+use crate::serde_util::{null_default, opt_u64_lenient, string_lenient};
 use crate::site::Site;
 
 /// Сколько записей помещается в заметку к одной главе или серии.
@@ -160,115 +159,6 @@ impl Rewatch {
     }
 }
 
-/// Дополнительные данные закладки. Пустые поля бывают `false` и `null`.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct BookmarkRowMeta {
-    #[serde(default, deserialize_with = "opt_u64_lenient")]
-    pub item_number: Option<u64>,
-    /// Сколько раз пересмотрено: длина `rewatches_history`.
-    #[serde(default, deserialize_with = "opt_u64_lenient")]
-    pub rewatches: Option<u64>,
-    #[serde(default, deserialize_with = "crate::serde_util::lenient_vec")]
-    pub rewatches_history: Vec<Rewatch>,
-    /// Мой комментарий. Пустые значения (`false`, `null`, пустая строка) дают `None`.
-    #[serde(default, deserialize_with = "comment_lenient")]
-    pub comment: Option<String>,
-    /// Сколько заметок у закладки.
-    #[serde(default, deserialize_with = "u64_lenient")]
-    pub notes: u64,
-}
-
-fn comment_lenient<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Option<String>, D::Error> {
-    Ok(opt_string_lenient(d)?.filter(|s| !s.trim().is_empty()))
-}
-
-fn opt_f32<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Option<f32>, D::Error> {
-    Ok(match Value::deserialize(d)? {
-        Value::Number(n) => n.as_f64().map(|n| n as f32),
-        Value::String(s) => s.trim().parse().ok(),
-        _ => None,
-    })
-}
-
-/// Закладка в списке со всеми полями, которые сервер присылает.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BookmarkRow {
-    #[serde(deserialize_with = "u64_lenient")]
-    pub id: u64,
-    /// `manga_bookmark` или `anime_bookmark`. Разобранное – `BookmarkRow::bookmark_type`.
-    #[serde(default, rename = "type", deserialize_with = "null_default")]
-    pub kind: String,
-    /// Папка.
-    #[serde(default, deserialize_with = "u64_lenient")]
-    pub status: u64,
-    #[serde(default, deserialize_with = "opt_u64_lenient")]
-    pub media_id: Option<u64>,
-    #[serde(default, deserialize_with = "opt_u64_lenient")]
-    pub item_id: Option<u64>,
-    /// Позиция: номер страницы или `ММ:СС`.
-    #[serde(default, deserialize_with = "opt_string_lenient")]
-    pub progress: Option<String>,
-    #[serde(default)]
-    pub created_at: Option<String>,
-    #[serde(default)]
-    pub updated_at: Option<String>,
-    #[serde(default, deserialize_with = "null_default")]
-    pub meta: BookmarkRowMeta,
-    #[serde(default)]
-    pub media: Option<TitleShort>,
-    /// Глава или серия, где остановились, как есть. `None`, если место не задано.
-    #[serde(default)]
-    pub item: Option<Value>,
-    /// Моя оценка тайтла.
-    #[serde(default, deserialize_with = "opt_f32")]
-    pub rating: Option<f32>,
-}
-
-impl BookmarkRow {
-    pub fn bookmark_type(&self) -> Option<BookmarkType> {
-        BookmarkType::parse(&self.kind)
-    }
-}
-
-/// Папка закладок со всеми полями.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FolderDetails {
-    #[serde(deserialize_with = "u64_lenient")]
-    pub id: u64,
-    #[serde(default, deserialize_with = "null_default")]
-    pub name: String,
-    /// Видна ли другим.
-    #[serde(default, deserialize_with = "bool_lenient")]
-    pub public: bool,
-    /// Приходят ли уведомления о новых главах тайтлов из папки.
-    #[serde(default, deserialize_with = "bool_lenient")]
-    pub notify: bool,
-    /// Цвет `#rrggbb`.
-    #[serde(default)]
-    pub color: Option<String>,
-    /// Цвет текста на нём: `#000` или `#fff`.
-    #[serde(default, rename = "textColor")]
-    pub text_color: Option<String>,
-    /// Позиция. У чужого пользователя `None`.
-    #[serde(default, deserialize_with = "opt_u64_lenient")]
-    pub order: Option<u64>,
-    #[serde(default, deserialize_with = "u64_lenient")]
-    pub count: u64,
-    #[serde(default, deserialize_with = "crate::listing::site_ids_lenient")]
-    pub site_ids: Vec<u8>,
-}
-
-impl FolderDetails {
-    /// Папку создал пользователь: только такие можно менять и удалять.
-    pub fn is_custom(&self) -> bool {
-        self.id > SYSTEM_FOLDER_MAX_ID
-    }
-
-    pub fn is_for(&self, site: Site) -> bool {
-        self.site_ids.contains(&site.id())
-    }
-}
-
 /// Что изменить в папке. То, что `None`, не отправляется.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct FolderUpdate {
@@ -377,21 +267,16 @@ pub struct BookmarkMetaUpdate {
 }
 
 impl Client {
-    /// Список закладок с сортировкой, поиском и всеми полями. По 24–25 на страницу,
-    /// общего числа нет.
-    pub async fn bookmark_list(&self, site: Site, q: &BookmarkListQuery) -> Result<Page<BookmarkRow>> {
+    /// Список закладок с сортировкой и поиском. По 24–25 на страницу, общего числа
+    /// нет. Сервер отдаёт только тайтлы того сайта, от имени которого спрашивают,
+    /// поэтому папку манги собирают по MangaLib, SlashLib, RanobeLib и HentaiLib.
+    /// Папки со всеми полями отдаёт `Client::bookmark_folders`.
+    pub async fn bookmark_list(&self, site: Site, q: &BookmarkListQuery) -> Result<Page<Bookmark>> {
         self.get_page(site, "bookmarks", &q.to_query(site)).await
     }
 
-    /// Папки пользователя со всеми полями: публичность, уведомления, цвет, порядок и
-    /// число закладок.
-    pub async fn bookmark_folder_details(&self, user_id: u64) -> Result<Vec<FolderDetails>> {
-        self.get_data(Site::MangaLib, &format!("bookmarks/folder/{user_id}"), &())
-            .await
-    }
-
     /// Создаёт папку. К какому сайту она относится, сервер определяет по `site`.
-    pub async fn create_bookmark_folder(&self, site: Site, name: &str) -> Result<FolderDetails> {
+    pub async fn create_bookmark_folder(&self, site: Site, name: &str) -> Result<BookmarkFolder> {
         let name = name.trim();
         if name.is_empty() {
             return Err(Error::Other("у папки нет названия".into()));
@@ -412,7 +297,7 @@ impl Client {
         site: Site,
         folder_id: u64,
         update: &FolderUpdate,
-    ) -> Result<FolderDetails> {
+    ) -> Result<BookmarkFolder> {
         self.send_data(
             site,
             Method::PUT,
@@ -615,11 +500,13 @@ mod tests {
     }
 
     #[test]
-    fn row_meta_tolerates_both_shapes() {
-        let bare: BookmarkRowMeta =
+    fn meta_tolerates_both_shapes() {
+        use crate::bookmarks::BookmarkMeta;
+
+        let bare: BookmarkMeta =
             serde_json::from_value(json!({"comment": false, "rewatches": null, "item_number": null})).unwrap();
         assert!(bare.comment.is_none() && bare.rewatches.is_none() && bare.notes == 0);
-        let full: BookmarkRowMeta = serde_json::from_value(json!({
+        let full: BookmarkMeta = serde_json::from_value(json!({
             "item_number": 11, "rewatches": 1, "comment": "текст", "notes": 2,
             "rewatches_history": [{"start": "2026-01-01", "end": null}]
         }))

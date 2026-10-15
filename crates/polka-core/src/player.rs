@@ -53,7 +53,7 @@ impl Track {
             place: libsocial::Place {
                 item_id: self.episode_id,
                 item_number: self.item_number,
-                progress: libsocial::bookmarks::format_timecode(progress.position),
+                progress: Some(libsocial::bookmarks::format_timecode(progress.position)),
                 player: self.choice.clone(),
             },
         });

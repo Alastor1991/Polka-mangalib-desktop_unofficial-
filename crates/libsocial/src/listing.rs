@@ -15,7 +15,7 @@ use crate::serde_util::lenient_vec;
 use crate::site::Site;
 
 /// Порядок сортировки: параметр `sort_type`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SortOrder {
     Asc,
     #[default]

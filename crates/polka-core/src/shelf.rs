@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 
+use libsocial::bookmarks_ext::BookmarkListQuery;
 use libsocial::{Bookmark, Page, Site};
 
 use crate::context::Core;
@@ -61,7 +62,13 @@ pub struct FolderPage {
 pub async fn folder_pages(core: &Core, user_id: u64, folder: u64, pages: Vec<(Site, u32)>) -> Vec<FolderPage> {
     let mut out = Vec::new();
     for (site, page) in pages {
-        let result = core.client.bookmarks(site, user_id, folder, page).await;
+        let query = BookmarkListQuery {
+            user_id,
+            folder: Some(folder),
+            page,
+            ..Default::default()
+        };
+        let result = core.client.bookmark_list(site, &query).await;
         out.push(FolderPage { site, page, result });
     }
     out

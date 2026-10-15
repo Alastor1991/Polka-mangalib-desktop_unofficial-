@@ -450,7 +450,13 @@ async fn bookmarks_page_and_writes() {
 
     let c = client(&[&s]);
     // Битый элемент выбрасывается, следующая страница видна по ссылке.
-    let page = c.bookmarks(Site::SlashLib, 7, 1, 1).await.unwrap();
+    let query = libsocial::bookmarks_ext::BookmarkListQuery {
+        user_id: 7,
+        folder: Some(1),
+        page: 1,
+        ..Default::default()
+    };
+    let page = c.bookmark_list(Site::SlashLib, &query).await.unwrap();
     assert_eq!(page.items.len(), 2);
     assert!(page.has_next);
 
@@ -458,7 +464,7 @@ async fn bookmarks_page_and_writes() {
     let place = libsocial::Place {
         item_id: 5,
         item_number: Some(3),
-        progress: "12:34".into(),
+        progress: Some("12:34".into()),
         player: Some(libsocial::PlayerChoice {
             player: "Animelib".into(),
             team: 9,
@@ -547,4 +553,29 @@ async fn comment_writes() {
     c.edit_comment(9, &Doc::from_plain("правка"), &[]).await.unwrap();
     c.delete_comment(9).await.unwrap();
     c.report_comment(7, "3", "").await.unwrap();
+}
+
+#[tokio::test]
+async fn place_without_position_sends_no_progress() {
+    let s = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/bookmarks"))
+        .and(header("Site-Id", "3"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {"id": 1, "status": 1}})))
+        .expect(1)
+        .mount(&s)
+        .await;
+    let place = libsocial::Place {
+        item_id: 5,
+        item_number: Some(2),
+        progress: None,
+        player: None,
+    };
+    client(&[&s])
+        .set_bookmark(Site::RanobeLib, "1--n", 1, Some(&place))
+        .await
+        .unwrap();
+    let sent: serde_json::Value = s.received_requests().await.unwrap()[0].body_json().unwrap();
+    assert_eq!(sent["bookmark"], json!({"status": 1, "item_id": 5}));
+    assert_eq!(sent["media_type"], "manga");
 }

@@ -19,7 +19,7 @@ use serde_json::Value;
 
 use crate::client::Client;
 use crate::error::{Error, Result};
-use crate::listing::Page;
+use crate::listing::{Page, SortOrder};
 use crate::models::TitleShort;
 use crate::site::Site;
 
@@ -170,22 +170,6 @@ impl CatalogSort {
             CatalogSort::EpisodeCount => "По количеству эпизодов",
             CatalogSort::LastEpisode => "По дате обновления",
             CatalogSort::Random => "Случайно",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum SortOrder {
-    #[default]
-    Descending,
-    Ascending,
-}
-
-impl SortOrder {
-    pub fn param(self) -> &'static str {
-        match self {
-            SortOrder::Descending => "desc",
-            SortOrder::Ascending => "asc",
         }
     }
 }
@@ -532,7 +516,7 @@ impl CatalogFilter {
             p.add("sort_by", sort.to_string());
         }
         if self.order != SortOrder::default() {
-            p.add("sort_type", self.order.param().to_string());
+            p.add("sort_type", self.order.as_str().to_string());
         }
         if random && let Some(cursor) = &self.random {
             p.add("seed", cursor.seed.clone());
@@ -717,7 +701,7 @@ mod tests {
             text: "  берсерк ".into(),
             site_ids: vec![1, Site::RanobeLib.id()],
             sort: CatalogSort::Views,
-            order: SortOrder::Ascending,
+            order: SortOrder::Asc,
             genres: vec![34, 47],
             genres_exclude: vec![5],
             genres_any: true,

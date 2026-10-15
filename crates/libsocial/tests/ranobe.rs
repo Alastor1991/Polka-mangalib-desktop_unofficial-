@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use libsocial::ranobe::{ContentFormat, ParagraphSpan, RanobeChapter};
 use libsocial::rich::Block;
-use libsocial::{Client, ClientConfig, Error};
+use libsocial::{Client, ClientConfig, Error, Site};
 use serde_json::Value;
 use wiremock::matchers::{header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -138,13 +138,13 @@ async fn chapter_list_and_branches_use_site_3() {
         .mount(&server)
         .await;
     let c = client(&server);
-    let chapters = c.ranobe_chapters("1--n").await.unwrap();
+    let chapters = c.chapters(Site::RanobeLib, "1--n").await.unwrap();
     assert_eq!(chapters.len(), 2);
     assert_eq!(chapters[1].number, "0.5");
     assert_eq!(chapters[0].item_number, Some(1));
     // Ветка без branch_id: её передают как None.
     assert_eq!(chapters[1].branches[0].branch_id, None);
-    assert_eq!(c.ranobe_branches(1).await.unwrap()[0].id, 9823);
+    assert_eq!(c.branches(Site::RanobeLib, 1).await.unwrap()[0].id, 9823);
 }
 
 /// Живая проверка: `cargo test -p libsocial --test ranobe -- --ignored`.

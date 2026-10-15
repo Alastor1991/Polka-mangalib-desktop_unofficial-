@@ -769,7 +769,7 @@ async fn bookmark_folder_management() {
     .await;
 
     let c = client(&server);
-    let folders = c.bookmark_folder_details(1001).await.unwrap();
+    let folders = c.bookmark_folders(1001).await.unwrap();
     assert!(folders[0].public && !folders[0].is_custom() && folders[0].is_for(Site::SlashLib));
     assert_eq!(folders[0].text_color.as_deref(), Some("#fff"));
     assert!(folders[1].is_custom() && folders[1].order.is_none() && folders[1].notify);

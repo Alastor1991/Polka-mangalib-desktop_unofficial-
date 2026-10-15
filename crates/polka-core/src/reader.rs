@@ -206,7 +206,7 @@ impl ReaderSession {
             place: Place {
                 item_id: self.chapter_id(),
                 item_number: self.chapter().item_number,
-                progress: (self.page + 1).to_string(),
+                progress: Some((self.page + 1).to_string()),
                 player: None,
             },
         });

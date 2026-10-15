@@ -18,30 +18,23 @@
 //!   держит их рядом: `spans` параллелен `doc.blocks`;
 //! - пустой абзац нового вида – это `paragraph` без текста или только с `hardBreak`, он
 //!   тоже получает номер;
-//! - запросы идут с явным `Site-Id: 3`, потому что `Site::RanobeLib` в крейте пока нет.
+//! - список глав и ветки отдают общие `Client::chapters` и `Client::branches` с
+//!   `Site::RanobeLib`; у лицензированных тайтлов список глав пуст, а сортировать
+//!   главы надо по `Chapter::item_number`, а не по `number`: пролог бывает «0» или «0.1».
 
-use reqwest::Method;
-use reqwest::header::HeaderMap;
-
-use crate::site::Site;
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::bookmarks::Place;
-use crate::client::{Auth, Client, join_url};
+use crate::client::Client;
 use crate::error::{Error, Result};
-use crate::models::{Branch, Chapter, Data, Team};
+use crate::models::{Chapter, Team};
 use crate::rich::{Block, Doc, Inline, Picture};
 use crate::serde_util::{lenient_vec, null_default, opt_u64_lenient, string_lenient, u64_lenient};
+use crate::site::Site;
 
 /// Домен сайта. Картинки глав лежат на нём же, а `Referer` у них проверяет любой домен сети.
 pub const RANOBE_ORIGIN: &str = "https://ranobelib.me";
-
-/// Заголовки сайта RanobeLib: `Site-Id`, `Referer`, `Origin`.
-pub(crate) fn ranobe_headers() -> HeaderMap {
-    Client::site_headers(Site::RanobeLib)
-}
 
 /// В каком виде сервер прислал текст главы.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -259,7 +252,7 @@ impl RanobeChapter {
         Place {
             item_id: self.id,
             item_number,
-            progress: paragraph.to_string(),
+            progress: Some(paragraph.to_string()),
             player: None,
         }
     }
@@ -517,52 +510,6 @@ fn collect_pictures<'a>(blocks: &'a [Block], out: &mut Vec<&'a Picture>) {
 // --------------------------------------------------------------------- запросы
 
 impl Client {
-    /// Запрос к API от имени RanobeLib (`Site-Id: 3`). Ответ целиком, для бинарных тел.
-    pub(crate) async fn ranobe_request<Q, B>(
-        &self,
-        method: Method,
-        path: &str,
-        query: &Q,
-        body: Option<&B>,
-    ) -> Result<reqwest::Response>
-    where
-        Q: Serialize + ?Sized,
-        B: Serialize + ?Sized,
-    {
-        self.send_api(Auth::User, |http, base| {
-            let request = http
-                .request(method.clone(), join_url(base, path))
-                .headers(ranobe_headers())
-                .query(query);
-            match body {
-                Some(body) => request.json(body),
-                None => request,
-            }
-        })
-        .await
-    }
-
-    /// Запрос от имени RanobeLib с разбором `{"data": T}`.
-    pub(crate) async fn ranobe_data<T, Q, B>(
-        &self,
-        method: Method,
-        path: &str,
-        query: &Q,
-        body: Option<&B>,
-    ) -> Result<T>
-    where
-        T: DeserializeOwned,
-        Q: Serialize + ?Sized,
-        B: Serialize + ?Sized,
-    {
-        let bytes = self.ranobe_request(method, path, query, body).await?.bytes().await?;
-        let parsed: Data<T> = serde_json::from_slice(&bytes).map_err(|source| Error::Decode {
-            context: path.to_string(),
-            source,
-        })?;
-        Ok(parsed.data)
-    }
-
     /// Глава ранобэ по тому и номеру из списка глав. `branch_id` берётся из
     /// `ChapterBranch::branch_id`; у части тайтлов он `null`, тогда передают `None`.
     /// Закрытая глава отвечает так же, как у манги: ошибкой.
@@ -578,12 +525,12 @@ impl Client {
             query.push(("branch_id", branch.to_string()));
         }
         let data: Value = self
-            .ranobe_data(Method::GET, &format!("manga/{slug_url}/chapter"), &query, None::<&()>)
+            .get_data(Site::RanobeLib, &format!("manga/{slug_url}/chapter"), &query)
             .await?;
         RanobeChapter::from_value(&data)
     }
 
-    /// То же по главе из списка `ranobe_chapters`.
+    /// То же по главе из списка `Client::chapters` с `Site::RanobeLib`.
     pub async fn ranobe_chapter_of(
         &self,
         slug_url: &str,
@@ -591,19 +538,6 @@ impl Client {
         branch_id: Option<u64>,
     ) -> Result<RanobeChapter> {
         self.ranobe_chapter(slug_url, &chapter.volume, &chapter.number, branch_id)
-            .await
-    }
-
-    /// Список глав ранобэ одним ответом. У лицензированных тайтлов он пуст. Главы
-    /// сортируют по `Chapter::item_number`, а не по `number`: пролог бывает «0» или «0.1».
-    pub async fn ranobe_chapters(&self, slug_url: &str) -> Result<Vec<Chapter>> {
-        self.ranobe_data(Method::GET, &format!("manga/{slug_url}/chapters"), &(), None::<&()>)
-            .await
-    }
-
-    /// Ветки перевода тайтла ранобэ.
-    pub async fn ranobe_branches(&self, title_id: u64) -> Result<Vec<Branch>> {
-        self.ranobe_data(Method::GET, &format!("branches/{title_id}"), &(), None::<&()>)
             .await
     }
 }
@@ -756,8 +690,8 @@ mod tests {
         let ch = RanobeChapter::from_value(&json!({"id": 42, "content": ""})).unwrap();
         let place = ch.bookmark_place(Some(3), 17);
         assert_eq!(
-            (place.item_id, place.progress.as_str(), place.item_number),
-            (42, "17", Some(3))
+            (place.item_id, place.progress.as_deref(), place.item_number),
+            (42, Some("17"), Some(3))
         );
     }
 

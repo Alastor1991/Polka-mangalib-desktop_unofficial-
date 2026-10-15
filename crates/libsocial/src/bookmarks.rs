@@ -8,9 +8,10 @@
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 
+use crate::bookmarks_ext::{BookmarkType, Rewatch, SYSTEM_FOLDER_MAX_ID};
 use crate::client::{Auth, Client, join_url};
 use crate::error::Result;
-use crate::listing::Page;
+use crate::listing::bool_lenient;
 use crate::models::TitleShort;
 use crate::serde_util::{null_default, opt_string_lenient, opt_u64_lenient, string_lenient, u64_lenient};
 use crate::site::Site;
@@ -22,16 +23,37 @@ pub struct BookmarkFolder {
     pub id: u64,
     #[serde(default, deserialize_with = "null_default")]
     pub name: String,
+    /// Цвет `#rrggbb`.
     #[serde(default)]
     pub color: Option<String>,
+    /// Цвет текста на нём: `#000` или `#fff`.
+    #[serde(default, rename = "textColor")]
+    pub text_color: Option<String>,
     /// Сайты, к которым относится папка. У манги и аниме папки разные.
-    #[serde(default, deserialize_with = "null_default")]
+    #[serde(default, deserialize_with = "crate::listing::site_ids_lenient")]
     pub site_ids: Vec<u8>,
+    /// Видна ли другим.
+    #[serde(default, deserialize_with = "bool_lenient")]
+    pub public: bool,
+    /// Приходят ли уведомления о новых главах тайтлов из папки.
+    #[serde(default, deserialize_with = "bool_lenient")]
+    pub notify: bool,
+    /// Позиция. У чужого пользователя `None`.
+    #[serde(default, deserialize_with = "opt_u64_lenient")]
+    pub order: Option<u64>,
+    /// Сколько в папке закладок.
+    #[serde(default, deserialize_with = "u64_lenient")]
+    pub count: u64,
 }
 
 impl BookmarkFolder {
     pub fn is_for(&self, site: Site) -> bool {
         self.site_ids.contains(&site.id())
+    }
+
+    /// Папку создал пользователь: только такие можно менять и удалять.
+    pub fn is_custom(&self) -> bool {
+        self.id > SYSTEM_FOLDER_MAX_ID
     }
 }
 
@@ -44,17 +66,34 @@ pub struct PlayerChoice {
     pub translation_type: u64,
 }
 
+/// Дополнительные данные закладки. Пустые поля сервер присылает и как `false`, и
+/// как `null`, поэтому все они необязательные.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct BookmarkMeta {
     /// Порядковый номер главы или серии в тайтле, с единицы.
     #[serde(default, deserialize_with = "opt_u64_lenient")]
     pub item_number: Option<u64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "opt_string_lenient")]
     pub player: Option<String>,
     #[serde(default, deserialize_with = "opt_u64_lenient")]
     pub team: Option<u64>,
     #[serde(default, deserialize_with = "opt_u64_lenient")]
     pub translation_type: Option<u64>,
+    /// Сколько раз пересмотрено: длина `rewatches_history`.
+    #[serde(default, deserialize_with = "opt_u64_lenient")]
+    pub rewatches: Option<u64>,
+    #[serde(default, deserialize_with = "crate::serde_util::lenient_vec")]
+    pub rewatches_history: Vec<Rewatch>,
+    /// Мой комментарий. Пустые значения (`false`, `null`, пустая строка) дают `None`.
+    #[serde(default, deserialize_with = "comment_lenient")]
+    pub comment: Option<String>,
+    /// Сколько заметок у закладки.
+    #[serde(default, deserialize_with = "u64_lenient")]
+    pub notes: u64,
+}
+
+fn comment_lenient<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Option<String>, D::Error> {
+    Ok(opt_string_lenient(d)?.filter(|s| !s.trim().is_empty()))
 }
 
 /// Глава или серия, на которой стоит закладка.
@@ -70,31 +109,48 @@ pub struct BookmarkItem {
     pub name: Option<String>,
 }
 
+/// Закладка со всеми полями, которые присылает сервер: и одна закладка тайтла, и
+/// строка списка, и `userBookmark` в карточке каталога.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bookmark {
     #[serde(deserialize_with = "u64_lenient")]
     pub id: u64,
+    /// `manga_bookmark` или `anime_bookmark`. Разобранное – `Bookmark::bookmark_type`.
+    #[serde(default, rename = "type", deserialize_with = "null_default")]
+    pub kind: String,
     /// Папка, `BookmarkFolder::id`.
     #[serde(deserialize_with = "u64_lenient")]
     pub status: u64,
+    #[serde(default, deserialize_with = "opt_u64_lenient")]
+    pub media_id: Option<u64>,
     /// Глава или серия, где остановились.
     #[serde(default, deserialize_with = "opt_u64_lenient")]
     pub item_id: Option<u64>,
-    /// Позиция в ней: номер страницы у главы, `ММ:СС` у серии.
+    /// Позиция в ней: номер страницы у главы, `ММ:СС` у серии, номер абзаца у ранобэ.
     #[serde(default, deserialize_with = "opt_string_lenient")]
     pub progress: Option<String>,
     #[serde(default, deserialize_with = "null_default")]
     pub meta: BookmarkMeta,
     #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
     pub updated_at: Option<String>,
     /// Тайтл. Есть в списке закладок, в закладке одного тайтла его нет.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::serde_util::opt_lenient")]
     pub media: Option<TitleShort>,
-    #[serde(default)]
+    /// Глава или серия, где остановились. `None`, если место не задано.
+    #[serde(default, deserialize_with = "crate::serde_util::opt_lenient")]
     pub item: Option<BookmarkItem>,
+    /// Моя оценка тайтла. Приходит в списке закладок.
+    #[serde(default, deserialize_with = "crate::serde_util::opt_f32_lenient")]
+    pub rating: Option<f32>,
 }
 
 impl Bookmark {
+    pub fn bookmark_type(&self) -> Option<BookmarkType> {
+        BookmarkType::parse(&self.kind)
+    }
+
     /// Когда закладку меняли в последний раз, Unix-время. `None`, если сервер не
     /// прислал дату или прислал непонятную.
     pub fn updated_secs(&self) -> Option<u64> {
@@ -117,8 +173,10 @@ pub struct Place {
     /// Id главы (перевода конкретной ветки) или серии.
     pub item_id: u64,
     pub item_number: Option<u64>,
-    /// Номер страницы у главы, `ММ:СС` у серии.
-    pub progress: String,
+    /// Номер страницы у главы, `ММ:СС` у серии, номер абзаца у ранобэ. `None` –
+    /// место без позиции, с начала главы: так сайт пишет автозакладку ранобэ.
+    #[serde(default)]
+    pub progress: Option<String>,
     /// Только у серий.
     pub player: Option<PlayerChoice>,
 }
@@ -128,17 +186,6 @@ impl Client {
     pub async fn bookmark_folders(&self, user_id: u64) -> Result<Vec<BookmarkFolder>> {
         self.get_data(Site::MangaLib, &format!("bookmarks/folder/{user_id}"), &())
             .await
-    }
-
-    /// Закладки одной папки на одном сайте, по 24 на страницу. Сервер отдаёт только
-    /// тайтлы того сайта, от имени которого спрашивают.
-    pub async fn bookmarks(&self, site: Site, user_id: u64, folder: u64, page: u32) -> Result<Page<Bookmark>> {
-        let query = [
-            ("user_id", user_id.to_string()),
-            ("status", folder.to_string()),
-            ("page", page.max(1).to_string()),
-        ];
-        self.get_page(site, "bookmarks", &query).await
     }
 
     /// Закладка вошедшего пользователя на тайтл. `None`, если тайтла нет в закладках.
@@ -161,7 +208,9 @@ impl Client {
         let mut meta = serde_json::json!({});
         if let Some(place) = place {
             bookmark["item_id"] = place.item_id.into();
-            bookmark["progress"] = place.progress.clone().into();
+            if let Some(progress) = &place.progress {
+                bookmark["progress"] = progress.clone().into();
+            }
             meta["item_number"] = place.item_number.into();
             if let Some(p) = &place.player {
                 meta["player"] = p.player.clone().into();
@@ -266,5 +315,16 @@ mod tests {
         assert_eq!(parse_time("2024-09-10T05:00:52.000000Z"), Some(1_725_944_452));
         assert_eq!(parse_time("2024-09-08 15:46:01"), Some(1_725_810_361));
         assert_eq!(parse_time("вчера"), None);
+    }
+
+    #[test]
+    fn place_from_old_queue() {
+        // Очередь отметок в базе хранит места, записанные до того, как позиция стала
+        // необязательной.
+        let old: Place =
+            serde_json::from_str(r#"{"item_id": 5, "item_number": 2, "progress": "3", "player": null}"#).unwrap();
+        assert_eq!(old.progress.as_deref(), Some("3"));
+        let bare: Place = serde_json::from_str(r#"{"item_id": 5, "item_number": null, "player": null}"#).unwrap();
+        assert!(bare.progress.is_none());
     }
 }

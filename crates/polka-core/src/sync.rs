@@ -187,8 +187,7 @@ async fn send(client: &Client, key: &str, mark: &Mark, created_at: u64) -> libso
             if !ours && updated.is_some_and(|t| t > created_at + CLOCK_SKEW) {
                 return Ok(());
             }
-            if bookmark.item_id == Some(place.item_id) && bookmark.progress.as_deref() == Some(place.progress.as_str())
-            {
+            if bookmark.item_id == Some(place.item_id) && bookmark.progress == place.progress {
                 return Ok(());
             }
             let saved = client.set_bookmark(*site, slug, bookmark.status, Some(place)).await?;
@@ -216,7 +215,7 @@ mod tests {
         Place {
             item_id,
             item_number: Some(2),
-            progress: "5".into(),
+            progress: Some("5".into()),
             player: None,
         }
     }

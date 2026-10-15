@@ -66,6 +66,28 @@ fn title_details() {
     let _: TitleDetails = data("details.json");
 }
 
+/// Карточку тайтла ядро хранит в базе и читает обратно без сети: всё, что в ней
+/// есть, должно пережить круг записи и чтения.
+#[test]
+fn title_details_roundtrip() {
+    let mut t: TitleDetails = data("details_full.json");
+    let catalog: libsocial::Page<TitleShort> = serde_json::from_value(fixture("catalog_manga.json")).unwrap();
+    t.short.user_bookmark = catalog.items[0].user_bookmark.clone();
+    t.short.content_marking = catalog.items[0].content_marking.clone();
+    t.short.shiki_rate = Some(8.5);
+
+    let back: TitleDetails = serde_json::from_str(&serde_json::to_string(&t).unwrap()).unwrap();
+    assert_eq!(back.short.slug_url, t.short.slug_url);
+    assert_eq!(back.short.shiki_rate, Some(8.5));
+    assert_eq!(back.short.content_marking.len(), t.short.content_marking.len());
+    let (a, b) = (back.short.user_bookmark.unwrap(), t.short.user_bookmark.unwrap());
+    assert_eq!(
+        (a.status, a.item_id, a.meta.item_number),
+        (b.status, b.item_id, b.meta.item_number)
+    );
+    assert_eq!(back.genres.len(), t.genres.len());
+}
+
 #[test]
 fn chapters_and_branches() {
     let simple: Vec<Chapter> = data("chapters.json");
