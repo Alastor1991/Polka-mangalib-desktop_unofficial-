@@ -262,6 +262,123 @@ pub struct OauthLink {
     pub service_id: Option<String>,
 }
 
+/// На какой стадии проверки то, что пользователь залил. Сайт показывает вкладки
+/// с непринятым владельцу и модераторам.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UploadState {
+    /// Черновик, только у карточек.
+    Draft,
+    /// Ждёт проверки.
+    OnReview,
+    /// Проверку отложили, только у карточек.
+    Deferred,
+    Accepted,
+    Rejected,
+}
+
+/// Вкладка «Контент» профиля.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UploadKind {
+    Chapters,
+    Characters,
+    Cards,
+}
+
+impl UploadKind {
+    fn path(self) -> &'static str {
+        match self {
+            UploadKind::Chapters => "chapters",
+            UploadKind::Characters => "characters",
+            UploadKind::Cards => "cards",
+        }
+    }
+}
+
+impl UploadState {
+    /// Параметры запроса, как у сайта. Главы и персонажи знают только `moderated`,
+    /// у карточек стадии до проверки различаются ещё `status`; черновика и
+    /// отложенного у глав и персонажей нет, такой запрос клиент не шлёт.
+    fn query(self, kind: UploadKind) -> Result<Vec<(&'static str, String)>> {
+        let (moderated, status) = match self {
+            UploadState::Draft => (0, Some("draft")),
+            UploadState::OnReview => (0, Some("review")),
+            UploadState::Deferred => (0, Some("deferred")),
+            UploadState::Accepted => (1, None),
+            UploadState::Rejected => (2, None),
+        };
+        let mut query = vec![("moderated", moderated.to_string())];
+        match (kind, status) {
+            (UploadKind::Cards, Some(status)) => query.push(("status", status.to_string())),
+            (_, Some("draft" | "deferred")) => {
+                return Err(Error::Other("черновики и отложенное бывают только у карточек".into()));
+            }
+            _ => {}
+        }
+        Ok(query)
+    }
+}
+
+/// Тайтл и главы, которые пользователь в него залил.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UploadedChapters {
+    pub manga: TitleShort,
+    #[serde(default, deserialize_with = "crate::serde_util::lenient_vec")]
+    pub chapters: Vec<UploadedChapter>,
+    #[serde(default, deserialize_with = "u64_lenient")]
+    pub chapters_count: u64,
+}
+
+/// Залитая глава, коротко: номер, ветка и стадия проверки.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UploadedChapter {
+    #[serde(deserialize_with = "u64_lenient")]
+    pub id: u64,
+    #[serde(default, deserialize_with = "string_lenient")]
+    pub volume: String,
+    #[serde(default, deserialize_with = "string_lenient")]
+    pub number: String,
+    #[serde(default, deserialize_with = "opt_string_lenient")]
+    pub name: Option<String>,
+    #[serde(default, deserialize_with = "opt_u64_lenient")]
+    pub branch_id: Option<u64>,
+    /// 0 на проверке, 1 принята; 2 (отклонена) по аналогии с персонажами, у глав
+    /// не проверено.
+    #[serde(default, deserialize_with = "u64_lenient")]
+    pub moderated: u64,
+    #[serde(default, deserialize_with = "opt_string_lenient")]
+    pub created_at: Option<String>,
+}
+
+/// Залитый персонаж: карточка и её стадия проверки.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UploadedCharacter {
+    #[serde(flatten)]
+    pub card: crate::search::EntityCard,
+    /// 1 принят, 2 отклонён; 0 (на проверке) по аналогии с главами, у персонажей
+    /// не проверено.
+    #[serde(default, deserialize_with = "u64_lenient")]
+    pub moderated: u64,
+    #[serde(default, deserialize_with = "crate::serde_util::opt_lenient")]
+    pub moderation_status: Option<crate::models::Label>,
+    #[serde(default, deserialize_with = "opt_string_lenient")]
+    pub moderation_comment: Option<String>,
+}
+
+/// Состояние подписки Premium. Сайт показывает из него срок и отмену; остальные
+/// поля лежат в `extra`, потому что на аккаунте без Premium ответ – `null` и полный
+/// вид объекта не снят.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PremiumStatus {
+    /// До какого числа действует.
+    #[serde(default, deserialize_with = "opt_string_lenient")]
+    pub end: Option<String>,
+    /// Продление отключено: подписка кончится в `end`.
+    #[serde(default, rename = "isCancelled", deserialize_with = "bool_lenient")]
+    pub is_cancelled: bool,
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
+}
+
 /// Форма «Информация» в настройках профиля. Сайт шлёт её целиком: незатронутые
 /// поля берёт из профиля, поэтому форму собирают `ProfileInfo::from_profile`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -888,6 +1005,54 @@ impl Client {
     pub async fn personalization_settings(&self, user_id: u64) -> Result<PersonalizationSettings> {
         self.get_data(Site::MangaLib, &format!("user/{user_id}/personalization-settings"), &())
             .await
+    }
+
+    /// Главы, которые залил пользователь, сгруппированные по тайтлам, по 16 групп.
+    pub async fn uploaded_chapters(
+        &self,
+        user_id: u64,
+        state: UploadState,
+        page: u32,
+    ) -> Result<Page<UploadedChapters>> {
+        self.uploads_page(user_id, UploadKind::Chapters, state, page).await
+    }
+
+    /// Персонажи, которых завёл пользователь.
+    pub async fn uploaded_characters(
+        &self,
+        user_id: u64,
+        state: UploadState,
+        page: u32,
+    ) -> Result<Page<UploadedCharacter>> {
+        self.uploads_page(user_id, UploadKind::Characters, state, page).await
+    }
+
+    /// Карточки, которые создал пользователь. Устройство записи не снято (на
+    /// проверенном профиле список пуст), поэтому записи сырые.
+    pub async fn uploaded_cards(&self, user_id: u64, state: UploadState, page: u32) -> Result<Page<Value>> {
+        self.uploads_page(user_id, UploadKind::Cards, state, page).await
+    }
+
+    async fn uploads_page<T: serde::de::DeserializeOwned>(
+        &self,
+        user_id: u64,
+        kind: UploadKind,
+        state: UploadState,
+        page: u32,
+    ) -> Result<Page<T>> {
+        let mut query = state.query(kind)?;
+        query.push(("page", page.max(1).to_string()));
+        self.get_page(Site::MangaLib, &format!("user/{user_id}/{}", kind.path()), &query)
+            .await
+    }
+
+    /// Своя подписка Premium, `None` – подписки нет. Только для просмотра: купить
+    /// и отменить её Полка не даёт.
+    pub async fn premium_status(&self, user_id: u64) -> Result<Option<PremiumStatus>> {
+        let value: Value = self
+            .get_json(Site::MangaLib, &format!("user/{user_id}/premium"), &())
+            .await?;
+        record_of(&value, "user/premium")
     }
 
     /// Сохраняет форму «Информация» профиля: ник, пол, «о себе», аватар, фон.

@@ -207,5 +207,7 @@ async fn title_extras() {
     assert!(!voices.items.is_empty());
     if let Some(v) = voices.items.first() {
         assert!(c.manga_voice_url(v, 720).await.unwrap().is_some());
+        // Одну озвучку по id гостю сервер не отдаёт, клиент отказывает сам.
+        assert!(matches!(c.manga_voice(v.id).await, Err(libsocial::Error::Unauthorized)));
     }
 }

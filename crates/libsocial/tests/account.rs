@@ -1374,3 +1374,143 @@ fn profile_info_without_pictures() {
     assert_eq!(info.gender, 0);
     assert_eq!(info.about.trim(), "Абзац");
 }
+
+// ---------- чтение: содержимое пользователя, избранное, Premium, озвучка ----------
+
+#[tokio::test]
+async fn user_uploads_favorites_premium_voice() {
+    use libsocial::media::FavoriteEntry;
+    use libsocial::search::EntityKind;
+
+    let server = MockServer::start().await;
+    // Ответы синтетические, устройство как у настоящих.
+    Mock::given(method("GET"))
+        .and(path("/api/user/1001/chapters"))
+        .and(query_param("moderated", "1"))
+        .and(query_param_is_missing("status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{"manga": {"id": 7965, "name": "Title", "rus_name": "Тайтл", "slug_url": "7965--title", "model": "manga", "site": 1},
+                      "chapters": [{"id": 50, "volume": "1", "number": "2.5", "name": null, "branch_id": 9, "moderated": 1,
+                                    "created_at": "2026-05-19T15:16:02.000000Z"}],
+                      "chapters_count": 1}],
+            "links": {"next": "x?page=2"}, "meta": {"current_page": 1, "has_next_page": true}
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/user/1001/cards"))
+        .and(query_param("moderated", "0"))
+        .and(query_param("status", "draft"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"data": [], "meta": {"current_page": 1, "last_page": 1}})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/user/1001/characters"))
+        .and(query_param("moderated", "2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{"id": 77, "name": "Name", "rus_name": "Имя", "slug_url": "77--name", "model": "character",
+                      "moderated": 2, "moderation_status": {"id": 2, "label": "Отклонено"}, "moderation_comment": "дубль"}],
+            "meta": {"current_page": 1, "last_page": 1}
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/favorites"))
+        .and(query_param("user_id", "1001"))
+        .and(query_param("source_type", "team"))
+        .and(query_param("q", "кот"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{"is_subscribed": true, "source_id": 5, "source_type": "team",
+                      "relation": {"id": 5, "name": "Команда", "slug_url": "5--team", "model": "team"}}],
+            "meta": {"current_page": 1, "last_page": 1}
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/favorites/bulk"))
+        .and(body_json(json!({"source_type": "character", "ids": [77, 78]})))
+        .respond_with(empty_ok())
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/user/1001/premium"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": null})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/user/1002/premium"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"data": {"end": "2026-11-01", "isCancelled": true, "plan": "month"}})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/chapters/players/23"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {
+            "id": 23, "manga_id": 6192, "player": "Animelib", "teams": [], "chapters": [{"volume": "1", "chapter": "1"}],
+            "is_viewed": false
+        }})))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let c = client(&server);
+    let chapters = c.uploaded_chapters(1001, UploadState::Accepted, 1).await.unwrap();
+    assert!(chapters.has_next);
+    assert_eq!(chapters.items[0].manga.id, 7965);
+    assert_eq!(chapters.items[0].chapters[0].number, "2.5");
+    assert!(
+        c.uploaded_cards(1001, UploadState::Draft, 1)
+            .await
+            .unwrap()
+            .items
+            .is_empty()
+    );
+    let characters = c.uploaded_characters(1001, UploadState::Rejected, 1).await.unwrap();
+    assert_eq!(characters.items[0].card.slug_url, "77--name");
+    assert_eq!(characters.items[0].moderation_comment.as_deref(), Some("дубль"));
+
+    let favorites = c.favorites_list(1001, EntityKind::Team, " кот ", 1).await.unwrap();
+    let first: &FavoriteEntry = &favorites.items[0];
+    assert!(first.favorite.is_subscribed);
+    assert_eq!(first.relation.as_ref().unwrap().name, "Команда");
+    c.favorites_bulk(EntityKind::Character, &[]).await.unwrap();
+    assert!(matches!(
+        c.favorites_bulk(EntityKind::Team, &[5]).await,
+        Err(Error::Other(_))
+    ));
+    // Черновиков у глав нет: до сервера не доходит.
+    assert!(matches!(
+        c.uploaded_chapters(1001, UploadState::Draft, 1).await,
+        Err(Error::Other(_))
+    ));
+    c.favorites_bulk(EntityKind::Character, &[77, 78]).await.unwrap();
+
+    assert!(c.premium_status(1001).await.unwrap().is_none());
+    let premium = c.premium_status(1002).await.unwrap().unwrap();
+    assert!(premium.is_cancelled);
+    assert_eq!(premium.end.as_deref(), Some("2026-11-01"));
+    assert_eq!(premium.extra["plan"], "month");
+
+    assert!(matches!(c.manga_voice(23).await, Err(Error::Unauthorized)));
+    c.set_token(Some(libsocial::Token {
+        access_token: "t".into(),
+        refresh_token: None,
+        token_type: "Bearer".into(),
+        expires_at: libsocial::auth::now_secs() + 3600,
+        client_id: "1".into(),
+    }))
+    .await;
+    let voice = c.manga_voice(23).await.unwrap();
+    assert_eq!(voice.manga_id, 6192);
+}

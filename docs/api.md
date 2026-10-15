@@ -15,6 +15,7 @@
 - [Каталог, справочник, ленты и поиск](#каталог-справочник-ленты-и-поиск): полный фильтр, главная, топы, новости, поиск сущностей и пользователей
 - [Аккаунт и общение](#аккаунт-и-общение): уведомления, профиль, история, настройки, друзья, игнор, сообщения, подборки, папки и заметки закладок
 - [Ранобэ](#ранобэ) и серверный экспорт книг
+- [Справка](#справка)
 - [Карточки](#карточки)
 - [Запросы сайта, которых нет в клиенте](#запросы-сайта-которых-нет-в-клиенте): сверка со всеми скриптами сборки
 - [Ограничения](#ограничения), [ловушки](#ловушки-на-которые-ушло-больше-всего-времени), [источники](#источники)
@@ -298,7 +299,14 @@ POST|DELETE /api/teams/{id}/rating   POST|DELETE /api/teams/{id}/ignore
 GET /api/reviews?reviewable_type=manga&reviewable_id=7965   GET /api/reviews/{id}
 POST /api/reviews   PUT|DELETE /api/reviews/{id}   POST /api/review/{id}/vote
 GET /api/manga/{slug_url}/chapters/players   озвучка манги видео, только по slug_url
+GET /api/chapters/players/{id}    одна озвучка, те же поля; гостю 500, вошедшему работает
+GET /api/favorites?user_id=…&source_type=team|people|character|franchise|publisher&q=…&page=…   избранное списком
+POST /api/favorites/bulk          {"source_type": "character"|"people", "ids": [...]}   несколько сразу
 ```
+
+- Избранное списком – вкладки профиля «Команды», «Люди», «Персонажи», «Франшизы», «Издатели». Строка – `{is_subscribed, source_id, source_type, relation}`, в `relation` карточка сущности. Тайтлов в избранном нет: `source_type=manga` сервер отвергает с 422. Чужое избранное на проверенном профиле ответило 403, своё отдаётся.
+- `favorites/bulk` сайт шлёт со страницы подборки: отмеченные карточки, `source_type` – вид подборки (`character` или `people`).
+- Одну озвучку гостю сервер не отдаёт (500, клиент тогда отказывает до запроса), с входом она та же, что строка списка.
 
 - Карточка тайтла принимает много `fields[]` сверх описанных выше: `background`, `views`, `publisher`, `franchise`, `metadata` (`close_comments`, `count`), `chap_count` (даёт `items_count`), `translation_quality_rating`, у аниме `time`, `shiki_rate`, `episodesSchedule`. Своя оценка приходит в `rating.user` (`0` – не оценивал).
 - `metadata.close_comments`: 0 комментарии открыты, 1 и 3 закрыты на странице тайтла, 2 и 3 в главах.
@@ -481,6 +489,19 @@ DELETE /api/user/{id}                                         удалить п�
 POST   /api/auth/oauth/unlink/{service}                       отвязать соцсеть
 ```
 
+Что пользователь залил и его подписка (`uploaded_chapters`, `uploaded_characters`, `uploaded_cards`, `premium_status`):
+
+```http
+GET /api/user/{id}/chapters?moderated=0|1|2&page=…      главы по тайтлам, по 16 групп
+GET /api/user/{id}/characters?moderated=…&page=…        персонажи
+GET /api/user/{id}/cards?moderated=0&status=draft|review|deferred   карточки; принятые и отклонённые – moderated=1|2 без status
+GET /api/user/{id}/premium                               своя подписка Premium, у кого её нет – {"data": null}
+```
+
+- `moderated`: 0 на проверке, 1 принято, 2 отклонено. По скриптам сайт шлёт главам только 0 и 1, персонажам только 1 и 2, остальные сочетания не проверены. Черновик и отложенное (`status`) бывают только у карточек, для глав и персонажей клиент такой запрос не шлёт. Вкладки с непринятым сайт показывает владельцу и модераторам. Группа глав – `{manga, chapters, chapters_count}`, у персонажа рядом с карточкой `moderated`, `moderation_status`, `moderation_comment`. Устройство записи карточки не снято: на проверенном профиле список пуст.
+- Из состояния Premium сайт показывает `end` и `isCancelled`, полный вид объекта не снят (на аккаунте без подписки приходит `null`).
+- `GET /api/user/{id}/settings/privacy` с чужим id сайт зовёт со страницы настроек чужого аккаунта, это инструмент модератора. Обычному пользователю сервер отвечает 403, в клиенте этого запроса нет.
+
 - Форму «Информация» сайт шлёт целиком. Значения он берёт из профиля с `fields[]=about&fields[]=gender&fields[]=background&fields[]=avatar_frame_id&fields[]=premium_background_id`, причём от объектов с `filename` (аватар, фон) берёт только имя файла, а пол – как `gender.id`. У пользователя без аватара имя файла `null`, и в форму уходит `null`. «О себе» – простой текст.
 - После загрузки картинки в форму идёт поле ответа: у аватара `filename`, у фона `name`. Есть ли у ответа обёртка `data`, по скриптам не видно, клиент принимает оба вида. Сайт требует аватар от 120×120, а GIF – премиум или пятый уровень.
 - Отвязать можно сервис из `oauth` профиля (`fields[]=oauth`, только владельцу). Привязка идёт через страницу `auth.lib.social/auth/oauth/redirect/{service}` в браузере, клиент её не делает.
@@ -575,6 +596,19 @@ DELETE /api/bookmarks/note/{id заметки}         {"bookmark_id": …, "boo
 - Заметка – до 15 записей на главу или серию, сохраняется целиком. Если заметки нет, `GET` по составному идентификатору отвечает 404.
 - Комментарий и история пересмотров правятся тем же `POST /bookmarks`, что и папка, через поле `meta` (`comment`, `rewatches_history`). Место чтения остаётся прежним, если не передавать `item_id` и `progress`.
 
+## Справка
+
+Код: `crates/libsocial/src/faq.rs`. Общая для сети, работает без входа. Есть и в Android-приложении.
+
+```http
+GET /api/faq/category                                          все разделы и подразделы, без страниц
+GET /api/faq/articles?category_id=5&include_sub_categories=0|1   статьи раздела
+GET /api/faq/articles/{slug_url}                               статья
+```
+
+- Подраздел ссылается на родителя через `category_id` и `root_category_id`. В статье списка есть `category` и `votes` (`up`, `down`).
+- Текст статьи – документ ProseMirror. Картинки лежат в `attrs.src` путём на хосте API (`/uploads/posts/…`), и путь приходит в лишних кавычках с обратной косой: `\"/uploads/posts/….png\"`. Клиент их снимает и подставляет хост API, как у новостей. С хоста сайта (mangalib.org) те же пути отвечают 403.
+
 ## Ранобэ
 
 Код: `crates/libsocial/src/ranobe.rs` (текст главы), `exports.rs` (экспорт книг). Ранобэ живёт в том же API, что и манга, с `Site-Id: 3`: пути `/manga/...`, в ответах `model` равен `"manga"`. Слово `book` встречается только в адресах страниц сайта и в `model` внутри раздела карточек. Сайт – `Site::RanobeLib`, запросы идут через общие методы клиента с его обычными заголовками (`Site-Id: 3`, `Referer` и `Origin` ranobelib.me): текст главы – `ranobe_chapter`, список глав и ветки – `chapters` и `branches`. Отметки о прочтении и закладки для ранобэ уходят теми же `mark_chapter_viewed` и `set_bookmark` с `Site::RanobeLib`; живьём для ранобэ они ещё не проверены.
@@ -651,14 +685,6 @@ POST /api/cards/{id}/receive-preview {card_instance_stat_id}
 
 
 ```http
-GET    /api/user/{id}/settings/privacy              приватность чужого профиля (свою клиент уже читает)
-GET    /api/user/{id}/premium                       состояние подписки Premium, только чтение
-GET    /api/favorites?user_id=…&source_type=team|people|character|…   избранное пользователя списком
-POST   /api/favorites/bulk   {"source_type": …, "ids": […]}   из подборки: выбранные тайтлы в избранное (смысл уточнить)
-GET    /api/user/{id}/chapters|cards|characters?moderated=0|1   что пользователь залил: вкладка «Контент» профиля
-GET    /api/chapters/players/{id}                   одна озвучка манги (список у клиента есть)
-GET    /api/faq/category                            справка: разделы и статьи (есть и в Android-приложении)
-GET    /api/faq/articles/{slug}
 GET    /api/card-instances/{id}/history             история экземпляра карточки
 GET    /api/user/{id}/cards/history?sort=latest&per_page=18&rank=all&…   история карточек пользователя
 GET    /api/cards/albums/merge/search, POST /api/cards/albums/{id}/merge/preview, POST /api/cards/albums/{id}/merge   объединение альбомов
@@ -680,11 +706,11 @@ POST /api/discussion/{id}/vote   {"vote": 1}       лайк темы
 
 Комментарии к теме идут через общие комментарии с целью `discussion`, они в клиенте есть.
 
-С Android-приложением lib.social 2.0.4 клиент сверен тем же способом 15 октября: приложение разобрано jadx, из его кода взяты все пути API (87 строк) и проверены по коду `libsocial`. Приложение умеет заметно меньше сайта. Сверх сайтового списка у него только справка (`/faq`), проверка своей версии (`GET /app/version`), просмотр банов в команде (`/bans`) и платёжные запросы (`/payment/subscription-plans`, `/payment/balancelog`, `/premium/backgrounds`, `/user/{id}/premium`). Заявки в друзья приложение только принимает, отклоняет и удаляет (`PUT` и `DELETE /api/friendship/{id}`), отправлять их не умеет. Выход в приложении, как и на сайте, отзывает токен (`DELETE /auth/oauth/token`), Полка тоже.
+С Android-приложением lib.social 2.0.4 клиент сверен тем же способом 15 октября: приложение разобрано jadx, из его кода взяты все пути API (87 строк) и проверены по коду `libsocial`. Приложение умеет заметно меньше сайта. Сверх сайтового списка у него только проверка своей версии (`GET /app/version`), просмотр банов в команде (`/bans`) и платёжные запросы (`/payment/subscription-plans`, `/payment/balancelog`, `/premium/backgrounds`); справка (`/faq`) и состояние Premium (`/user/{id}/premium`) есть и на сайте, они уже в клиенте. Заявки в друзья приложение только принимает, отклоняет и удаляет (`PUT` и `DELETE /api/friendship/{id}`), отправлять их не умеет. Выход в приложении, как и на сайте, отзывает токен (`DELETE /auth/oauth/token`), Полка тоже.
 
 Как устроена сеть приложения, чтобы повторить сверку на новой версии. Код обфусцирован, имена ниже из версии 2.0.4 и в следующей будут другими, но устройство то же. Все запросы идут через интерфейс `ru.libapp.core.remote.api.a` (реализация в `…api.c` на OkHttp, адрес собирается как `https://` + хост API + путь). Метод запроса виден по реализации: в 2.0.4 `i` и `e` – GET, `a`, `c`, `j` и `g` – POST (`g` – multipart с файлом), `h` и `f` – PUT, `b` и `d` – DELETE. Часть запросов строится лямбдой с параметром `$this$get`, `$this$post`, `$this$put`, `$this$delete` над построителем `…api.h`: метод назван в имени параметра, путь задаётся его методами (целиком или по сегментам), параметры запроса – парами значение и имя. Проще всего собрать все строки, начинающиеся с `/`, в пакетах `ru.libapp` и `ru.libappc` и проверить каждую по коду клиента. Мини-чат (`POST /chat`, `DELETE /chat/{id}`, websocket) описан в roadmap.
 
-Сознательно вне клиента: модерация и админка (`/admin`, `/moderation`, `/permissions`, `/roles`, `/bans`, `/changelog`, `/export-reports`, правка справочников и сущностей), заливка и правка глав, серий, плееров, субтитров и тайтлов (идёт на отдельный адрес `https://api.novelslib.me/api`), управление командой и её реквизитами, создание карточек и паков, платежи и донаты (`/payment`, `/foreign-service-pay`, `/teams/{id}/donats`, `/manga/{id}/bundles`), закрепление комментария командой. `GET /policy/manga/{slug}` говорит только, можно ли пользователю заливать главы и озвучку. `GET /geo` и `GET /translations` нужны интерфейсу сайта (страна для способа входа, строки интерфейса).
+Сознательно вне клиента: модерация и админка (`/admin`, `/moderation`, `/permissions`, `/roles`, `/bans`, `/changelog`, `/export-reports`, правка справочников и сущностей, настройки чужого аккаунта вроде `GET /user/{id}/settings/privacy`), заливка и правка глав, серий, плееров, субтитров и тайтлов (идёт на отдельный адрес `https://api.novelslib.me/api`), управление командой и её реквизитами, создание карточек и паков, платежи и донаты (`/payment`, `/foreign-service-pay`, `/teams/{id}/donats`, `/manga/{id}/bundles`), закрепление комментария командой. `GET /policy/manga/{slug}` говорит только, можно ли пользователю заливать главы и озвучку. `GET /geo` и `GET /translations` нужны интерфейсу сайта (страна для способа входа, строки интерфейса).
 
 ## Ограничения
 

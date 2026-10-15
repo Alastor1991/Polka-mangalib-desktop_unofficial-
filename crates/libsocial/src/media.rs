@@ -14,7 +14,7 @@ use serde_json::{Value, json};
 
 use crate::client::Client;
 use crate::comments::{Vote, Votes};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::listing::Page;
 use crate::models::{Cover, Label, Rating, TitleShort, TranslationRating, Video};
 use crate::rich::Doc;
@@ -135,6 +135,15 @@ pub struct Favorite {
     pub source_type: String,
     #[serde(default, deserialize_with = "u64_lenient")]
     pub source_id: u64,
+}
+
+/// Строка списка избранного пользователя: подписка и карточка того, на кого она.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FavoriteEntry {
+    #[serde(flatten)]
+    pub favorite: Favorite,
+    #[serde(default, deserialize_with = "crate::serde_util::opt_lenient")]
+    pub relation: Option<crate::search::EntityCard>,
 }
 
 /// Число с подписью из карточек: «Тайтлов», «Подписчиков».
@@ -447,6 +456,44 @@ impl Client {
             .await
     }
 
+    /// Избранное пользователя одного вида, по страницам. `text` ищет по имени или
+    /// названию. Тайтлов в избранном нет: `source_type=manga` сервер отвергает.
+    /// Чужое избранное сервер отдаёт не всем (на проверенном профиле 403).
+    pub async fn favorites_list(
+        &self,
+        user_id: u64,
+        kind: EntityKind,
+        text: &str,
+        page: u32,
+    ) -> Result<Page<FavoriteEntry>> {
+        let mut query = vec![
+            ("user_id", user_id.to_string()),
+            ("source_type", kind.model().to_string()),
+            ("page", page.max(1).to_string()),
+        ];
+        let text = text.trim();
+        if !text.is_empty() {
+            query.push(("q", text.to_string()));
+        }
+        self.get_page(Site::MangaLib, "favorites", &query).await
+    }
+
+    /// Добавляет в избранное сразу несколько. Сайт делает это только со страницы
+    /// подборки людей или персонажей: отмечает карточки и шлёт их id.
+    pub async fn favorites_bulk(&self, kind: EntityKind, ids: &[u64]) -> Result<()> {
+        if !matches!(kind, EntityKind::People | EntityKind::Character) {
+            return Err(Error::Other(
+                "сразу несколько в избранное добавляются только люди и персонажи".into(),
+            ));
+        }
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let body = json!({"source_type": kind.model(), "ids": ids});
+        self.send_ok(Site::MangaLib, Method::POST, "favorites/bulk", Some(&body))
+            .await
+    }
+
     /// Переключает подписку-звёздочку. Возвращает новое состояние.
     pub async fn toggle_favorite(&self, kind: EntityKind, id: u64) -> Result<Favorite> {
         let body = json!({"source_type": kind.model(), "source_id": id});
@@ -681,6 +728,16 @@ impl Client {
             &[("page", page.max(1))],
         )
         .await
+    }
+
+    /// Одна озвучка манги по id: те же поля, что в `manga_voices`. Гостю сервер
+    /// отвечает 500, а 5xx клиент повторяет, поэтому без входа отказ до запроса.
+    pub async fn manga_voice(&self, voice_id: u64) -> Result<MangaVoice> {
+        if !self.is_logged_in().await {
+            return Err(Error::Unauthorized);
+        }
+        self.get_data(Site::MangaLib, &format!("chapters/players/{voice_id}"), &())
+            .await
     }
 
     /// Адрес видео озвучки манги. Серверы у озвучек свои (`videoServersManga`),

@@ -152,14 +152,15 @@ flowchart LR
 | `anime.rs` | серии и видео | `episodes`, `episode`, `resolve_video` |
 | `bookmarks.rs` | папки, закладки, отметки о прочтении | `BookmarkFolder` и `Bookmark` со всеми полями сервера, `bookmark_folders`, `bookmark`, `set_bookmark`, `delete_bookmark`, `mark_chapter_viewed`, `mark_episode_viewed`, `format_timecode` |
 | `bookmarks_ext.rs` | всё остальное о закладках | список (`bookmark_list`) с сортировками и поиском, папки (создать, изменить, удалить с переносом, порядок, уведомления), массовые операции, заметки к главам, комментарий и пересмотры |
+| `faq.rs` | справка | `faq_categories`, `faq_articles`, `faq_article` (картинки с полным адресом) |
 | `reports.rs` | жалобы и тикеты | `ReportTarget` (пользователь, подборка, отзыв, карточка, тема, глава, серия), `ReportType`, `report_reasons_for`, `report`; ошибка в карточке тайтла `TitleTicket`, `report_title_error` |
 | `comments.rs` | комментарии | `Target` (к чему комментарий, в том числе страница главы), `comments`, `comment_thread`, `sticky_comments`, `post_comment`, `edit_comment`, `delete_comment`, `vote`, `report_comment`, `report_types`, `sticker_packs`, `upload_comment_images`, `user_comments`, подписка на новые комментарии (`CommentWatch`, `comment_subscription`, `toggle_comment_subscription`) |
-| `media.rs` | вокруг тайтла | `covers`, `title_stats`, `relations`, `similar` и голоса, `add_similar`, `title_characters`, звёздочки-подписки, `rate_title`, `like_chapter`, `rate_translation`, подписки на ветку и озвучку, команды и их оценка, игнор команды, отзывы целиком, озвучка манги |
+| `media.rs` | вокруг тайтла | `covers`, `title_stats`, `relations`, `similar` и голоса, `add_similar`, `title_characters`, звёздочки-подписки и избранное списком (`favorites_list`, `favorites_bulk`), `rate_title`, `like_chapter`, `rate_translation`, подписки на ветку и озвучку, команды и их оценка, игнор команды, отзывы целиком, озвучка манги (список и `manga_voice`) |
 | `catalog.rs`, `catalog_constants.rs` | полный каталог и справочник формы | `CatalogFilter` со всеми параметрами, `CatalogSort`, случайный порядок с курсором, отказ до запроса там, где сервер ответил бы 422; `catalog_constants` с отбором по сайту и видами тикетов об ошибке в карточке |
 | `feeds.rs` | главная и ленты | `home`, `latest_updates`, `user_latest_updates`, `top_views`, `hot_newest`, `news`, `news_article`, `mark_news_visited`, `upload_url` |
 | `search.rs` | поиск сущностей и пользователей | `EntityKind`, `EntityCard`, `search_entities`, `entity`, `users` |
 | `notifications.rs` | уведомления | счётчики, список с типизированными событиями `NotificationEvent`, отметка прочитанным и удаление поштучно и пачкой |
-| `users.rs` | профиль и настройки | `user_profile`, `user_stats`, `user_view_statistics`, `view_history` (три вида), настройки приватности, уведомлений, фильтра контента и персонализации на чтение и запись; правка профиля (`ProfileInfo`, `update_profile_info`, `change_email`, `send_email_confirmation`, `upload_avatar`, `upload_background`, `delete_profile`, `unlink_oauth`) |
+| `users.rs` | профиль и настройки | `user_profile`, `user_stats`, `user_view_statistics`, `view_history` (три вида), настройки приватности, уведомлений, фильтра контента и персонализации на чтение и запись; что пользователь залил (`UploadState`, `uploaded_chapters`, `uploaded_characters`, `uploaded_cards`), `premium_status`; правка профиля (`ProfileInfo`, `update_profile_info`, `change_email`, `send_email_confirmation`, `upload_avatar`, `upload_background`, `delete_profile`, `unlink_oauth`) |
 | `social.rs` | друзья, игнор, сообщения | списки друзей и заявок, общие друзья, заявки в друзья (отправить, принять, отклонить, удалить), массовое принятие и отклонение, игнор-лист, диалоги и сообщения, проверка онлайна |
 | `collections.rs` | подборки | список с фильтрами, одна подборка, свои и избранные, создание, правка, удаление, голос |
 | `ranobe.rs` | текст глав ранобэ | `RanobeChapter` (оба вида текста в `Doc`, картинки с верными адресами, номера абзацев, место для закладки), `ranobe_chapter`; список глав и ветки отдают общие `chapters` и `branches` с `Site::RanobeLib` |
@@ -465,14 +466,14 @@ GTK требует главный поток, а в окне приложени�
 | `libsocial/tests/fixtures.rs` | разбор сохранённых ответов API из `tests/fixtures`, поля карточки каталога, круговая запись карточки тайтла | нет |
 | `libsocial/tests/client.rs` | смена зеркал, шлюз на всех зеркалах, повторы, долгий `Retry-After`, обновление токена, свой клиент OAuth, запасной сервер картинок, закладки, место без позиции, запись комментариев | нет |
 | `libsocial/tests/media.rs` | запросы на запись вокруг тайтла: оценки, лайк, подписки, звёздочки, похожие, отзывы, команды | нет |
-| `libsocial/tests/catalog.rs` | фильтр каталога, справочник, ленты, новости, поиск | нет, и 3 живых |
-| `libsocial/tests/account.rs` | уведомления, профиль, история, настройки, друзья, игнор, сообщения, подборки, закладки, жалобы | нет, и 3 живых |
+| `libsocial/tests/catalog.rs` | фильтр каталога, справочник, ленты, новости, справка, поиск | нет, и 4 живых |
+| `libsocial/tests/account.rs` | уведомления, профиль и его правка, история, настройки, друзья, игнор, сообщения, подборки, закладки, избранное, жалобы и тикеты | нет, и 3 живых |
 | `libsocial/tests/ranobe.rs`, `exports.rs`, `cards.rs` | главы ранобэ, экспорт книг, карточки | нет, и 2 живых (ранобэ и карточки) |
 | `libsocial/tests/live.rs` | основные сценарии против настоящего API, все `#[ignore]` | да |
 | `polka-core/src/**` (`#[cfg(test)]`) | очередь в базе, прогресс, `outbox`, пути и имена файлов, CBZ, блокировка загрузчика, позиция и пропуск опенинга через сокет mpv, отправка отметок, «Продолжить» и «Читать», отметки с правильным id, тайтл без сети, дерево комментариев, страницы каталога и кэш справочника | нет |
 | `polka-core/src/downloads.rs` (`job_tests`) | задания загрузчика целиком на wiremock, отказ качать ранобэ | нет |
 
-Всего тестов 279: 265 обычных и 14 живых (`#[ignore]`). Живые проверки запускаются так и только на чтение:
+Всего тестов 283: 268 обычных и 15 живых (`#[ignore]`). Живые проверки запускаются так и только на чтение:
 
 ```sh
 cargo test -p libsocial -- --ignored --test-threads=1

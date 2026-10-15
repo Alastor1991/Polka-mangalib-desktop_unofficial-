@@ -506,6 +506,59 @@ async fn news_marked_visited_only_with_login() {
     assert!(requests[0].body.is_empty());
 }
 
+#[tokio::test]
+async fn faq_categories_and_article() {
+    let server = MockServer::start().await;
+    // Устройство как у настоящих ответов, текст синтетический.
+    Mock::given(method("GET"))
+        .and(path("/api/faq/category"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": [
+            {"category_id": null, "id": 5, "name": "Комментарии", "posts_count": 3, "root_category_id": null, "slug_url": "5--"},
+            {"category_id": 5, "id": 17, "name": "Стикеры", "posts_count": "1", "root_category_id": 5, "slug_url": "17--"}
+        ]})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/faq/articles"))
+        .and(query_param("category_id", "5"))
+        .and(query_param("include_sub_categories", "1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": [
+            {"id": 33, "slug_url": "33--comments", "title": "Комментарии", "updated_at": "2026-10-11T16:07:20.000000Z",
+             "category": {"id": 5, "name": "Комментарии", "slug_url": "5--"}, "votes": {"up": 4, "down": 1}}
+        ]})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/faq/articles/33--comments"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {
+            "id": 33, "slug_url": "33--comments", "title": "Комментарии", "attachments": [],
+            "content": {"type": "doc", "content": [
+                {"type": "paragraph", "content": [{"type": "text", "text": "Как писать"}]},
+                {"type": "image", "attrs": {"src": "\\\"/uploads/posts/a.png\\\""}}
+            ]},
+            "votes": {"up": 4, "down": 1}
+        }})))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let c = client(&server);
+    let categories = c.faq_categories().await.unwrap();
+    assert_eq!(categories[1].category_id, Some(5));
+    assert_eq!(categories[1].posts_count, 1);
+    let articles = c.faq_articles(5, true).await.unwrap();
+    assert_eq!(articles[0].votes.up, 4);
+    let article = c.faq_article(&articles[0].slug_url).await.unwrap();
+    assert!(article.content.plain_text().contains("Как писать"));
+    let Block::Images(pictures) = &article.content.blocks[1] else {
+        panic!("{:?}", article.content.blocks);
+    };
+    // Кавычки вокруг пути сняты, картинка на хосте API.
+    assert_eq!(pictures[0].url, format!("{}/uploads/posts/a.png", server.uri()));
+}
+
 // --- поиск -----------------------------------------------------------------------------
 
 #[tokio::test]
@@ -764,4 +817,15 @@ async fn live_news_and_search() {
         .await
         .unwrap();
     assert!(moderators.items.iter().any(|u| !u.roles.is_empty()));
+}
+
+#[tokio::test]
+#[ignore]
+async fn live_faq() {
+    let c = live();
+    let categories = c.faq_categories().await.unwrap();
+    assert!(categories.len() > 5);
+    let articles = c.faq_articles(categories[0].id, true).await.unwrap();
+    let article = c.faq_article(&articles[0].slug_url).await.unwrap();
+    assert!(!article.content.plain_text().is_empty());
 }

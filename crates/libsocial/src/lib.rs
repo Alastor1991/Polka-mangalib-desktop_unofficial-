@@ -7,7 +7,7 @@
 //! `search`), тайтл и главы (`manga`, `anime`, `media`, `ranobe`), закладки
 //! (`bookmarks`, `bookmarks_ext`), комментарии (`comments`), жалобы (`reports`), аккаунт и общение
 //! (`notifications`, `users`, `social`, `collections`), карточки (`cards`), экспорт
-//! книг (`exports`). Форматированный текст сервиса разбирает `rich`. Карта модулей и
+//! книг (`exports`), справка (`faq`). Форматированный текст сервиса разбирает `rich`. Карта модулей и
 //! правила – в `docs/architecture.md`, протокол – в `docs/api.md`.
 
 mod anime;
@@ -22,6 +22,7 @@ pub mod collections;
 pub mod comments;
 mod error;
 pub mod exports;
+pub mod faq;
 pub mod feeds;
 pub mod listing;
 mod manga;
