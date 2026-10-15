@@ -657,6 +657,60 @@ async fn comment_subscription_read_and_toggle() {
 }
 
 #[tokio::test]
+async fn comment_subscription_edge_answers() {
+    use libsocial::comments::CommentWatch;
+
+    let s = MockServer::start().await;
+    // Глава: тайтл манги и id главы отдельно; ответ без обёртки `data`.
+    Mock::given(method("GET"))
+        .and(path("/api/comments/subscription"))
+        .and(query_param("source_type", "manga"))
+        .and(query_param("source_id", "7965"))
+        .and(query_param("content_id", "223269"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"notify": true, "content_id": 223269})))
+        .expect(1)
+        .mount(&s)
+        .await;
+    // Переключение прошло, но состояния в ответе нет: `None`, а не «не подписан».
+    Mock::given(method("POST"))
+        .and(path("/api/comments/subscription"))
+        .and(body_partial_json(json!({"content_id": 223269})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {}})))
+        .expect(1)
+        .mount(&s)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/comments/subscription"))
+        .and(body_partial_json(json!({"source_id": 1})))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&s)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/comments/subscription"))
+        .and(body_partial_json(json!({"source_id": 2})))
+        .respond_with(ResponseTemplate::new(403).set_body_json(json!({"message": "Нет прав"})))
+        .expect(1)
+        .mount(&s)
+        .await;
+
+    let c = client(&[&s]);
+    let chapter = CommentWatch::chapter(7965, 223269);
+    let state = c.comment_subscription(chapter).await.unwrap();
+    assert!(state.notify);
+    assert_eq!(state.content_id, Some(223269));
+    assert_eq!(c.toggle_comment_subscription(chapter).await.unwrap(), None);
+    assert_eq!(
+        c.toggle_comment_subscription(CommentWatch::manga(1)).await.unwrap(),
+        None
+    );
+    assert!(matches!(
+        c.toggle_comment_subscription(CommentWatch::manga(2)).await,
+        Err(Error::Forbidden)
+    ));
+}
+
+#[tokio::test]
 async fn comment_writes() {
     use libsocial::comments::{Comment, NewComment, Target, Vote};
     use libsocial::rich::Doc;

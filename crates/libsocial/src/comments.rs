@@ -498,13 +498,27 @@ impl Client {
     /// `comment_subscription`, а не переключают ещё раз. Сайт показывает кнопку
     /// только тем, у кого есть права на объект (автор, команда, модератор).
     pub async fn toggle_comment_subscription(&self, watch: CommentWatch) -> Result<Option<CommentNotify>> {
-        self.send_record(
-            Site::MangaLib,
-            Method::POST,
-            "comments/subscription",
-            Some(&watch.body()),
-        )
-        .await
+        let record: Option<Value> = self
+            .send_record(
+                Site::MangaLib,
+                Method::POST,
+                "comments/subscription",
+                Some(&watch.body()),
+            )
+            .await?;
+        // Запись без `notify` разобралась бы как «не подписан» и выдала бы
+        // догадку за новое состояние.
+        match record {
+            Some(record) if record.get("notify").is_some() => {
+                CommentNotify::deserialize(&record)
+                    .map(Some)
+                    .map_err(|source| Error::Decode {
+                        context: "comments/subscription".into(),
+                        source,
+                    })
+            }
+            _ => Ok(None),
+        }
     }
 
     /// Страница комментариев. Без входа свой голос не приходит.
