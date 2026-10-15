@@ -21,7 +21,7 @@ fn client() -> Client {
 async fn manga_flow() {
     let c = client();
     let found = c.search(Site::MangaLib, "берсерк", 1).await.unwrap();
-    assert!(!found.data.is_empty());
+    assert!(!found.items.is_empty());
 
     let title = c.title(Site::MangaLib, "7965--chainsaw-man").await.unwrap();
     assert!(!title.summary_text().is_empty());
@@ -60,7 +60,7 @@ async fn other_sites_catalog() {
             .catalog(site, &CatalogQuery::default())
             .await
             .unwrap_or_else(|e| panic!("{site:?}: {e}"));
-        assert!(!page.data.is_empty(), "{site:?}");
+        assert!(!page.items.is_empty(), "{site:?}");
     }
 }
 
@@ -91,7 +91,7 @@ async fn mirror_failover() {
     };
     let c = Client::new(config).unwrap();
     let page = c.search(Site::MangaLib, "берсерк", 1).await.unwrap();
-    assert!(!page.data.is_empty());
+    assert!(!page.items.is_empty());
     println!("рабочее зеркало: {}", c.api_base());
     assert_ne!(c.api_base(), "https://api.invalid/api");
 }

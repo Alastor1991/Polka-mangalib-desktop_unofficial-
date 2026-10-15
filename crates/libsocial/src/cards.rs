@@ -31,6 +31,7 @@ use serde_json::{Map, Value, json};
 
 use crate::client::{Auth, Client, join_url};
 use crate::error::{Error, Result};
+use crate::listing::Page;
 use crate::models::TitleShort;
 use crate::serde_util::{f32_lenient, lenient_vec, null_default, opt_u64_lenient, string_lenient, u64_lenient};
 use crate::site::Site;
@@ -179,52 +180,6 @@ fn push_text(params: &mut Vec<(String, String)>, text: &str) {
 }
 
 // --------------------------------------------------------------------- страницы
-
-/// Страница списка. Сервер отдаёт то `links.next`, то `meta.has_next_page`, учитываются оба.
-#[derive(Debug, Clone)]
-pub struct Page<T> {
-    pub items: Vec<T>,
-    pub has_next: bool,
-    pub total: Option<u64>,
-    /// `meta` ответа целиком: там фильтры, `weekly_limits`, `hidden_site_cards_count`.
-    pub meta: Value,
-}
-
-#[derive(Deserialize)]
-#[serde(bound(deserialize = "T: DeserializeOwned"))]
-struct RawPage<T> {
-    #[serde(default, deserialize_with = "lenient_vec")]
-    data: Vec<T>,
-    #[serde(default)]
-    links: RawLinks,
-    #[serde(default)]
-    meta: Value,
-}
-
-#[derive(Default, Deserialize)]
-struct RawLinks {
-    #[serde(default)]
-    next: Option<String>,
-}
-
-impl<T> From<RawPage<T>> for Page<T> {
-    fn from(raw: RawPage<T>) -> Page<T> {
-        let flag = raw.meta.get("has_next_page").and_then(Value::as_bool).unwrap_or(false);
-        let by_numbers = match (
-            raw.meta.get("current_page").and_then(Value::as_u64),
-            raw.meta.get("last_page").and_then(Value::as_u64),
-        ) {
-            (Some(cur), Some(last)) => cur < last,
-            _ => false,
-        };
-        Page {
-            has_next: raw.links.next.is_some() || flag || by_numbers,
-            total: raw.meta.get("total").and_then(Value::as_u64),
-            items: raw.data,
-            meta: raw.meta,
-        }
-    }
-}
 
 /// Пагинация торговой площадки и слотов альбома.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -2090,8 +2045,7 @@ pub struct ReceivePreview {
 
 impl Client {
     async fn cards_page<T: DeserializeOwned>(&self, path: &str, query: &[(String, String)]) -> Result<Page<T>> {
-        let raw: RawPage<T> = self.get_json(Site::MangaLib, path, query).await?;
-        Ok(raw.into())
+        self.get_page(Site::MangaLib, path, query).await
     }
 
     /// Справочник: ранги, стихии, типы. Вход не нужен.

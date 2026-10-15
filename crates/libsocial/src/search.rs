@@ -17,13 +17,15 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
-use crate::catalog::{Page, RawList, SortOrder, lenient_object};
+use crate::catalog::{SortOrder, lenient_object};
 use crate::client::Client;
 use crate::error::{Error, Result};
+use crate::listing::Page;
 use crate::models::Cover;
 use crate::rich::Doc;
 use crate::serde_util::{lenient_vec, null_default, opt_string_lenient, opt_u64_lenient, string_lenient, u64_lenient};
 use crate::site::Site;
+use crate::users::PointsInfo;
 
 /// Наименьшая длина `q`, которую принимают списки сущностей.
 pub const MIN_QUERY_CHARS: usize = 2;
@@ -347,24 +349,6 @@ impl Avatar {
     }
 }
 
-/// Очки и уровень в рейтингах `weekly-top` и `points`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PointsInfo {
-    /// Место в рейтинге. У пользователей вне топа `None`.
-    #[serde(default, deserialize_with = "opt_u64_lenient")]
-    pub top: Option<u64>,
-    #[serde(default, deserialize_with = "u64_lenient")]
-    pub total_points: u64,
-    #[serde(default, deserialize_with = "u64_lenient")]
-    pub level: u64,
-    #[serde(default, deserialize_with = "u64_lenient")]
-    pub max_level_points: u64,
-    #[serde(default, deserialize_with = "u64_lenient")]
-    pub current_level_points: u64,
-    #[serde(default, deserialize_with = "crate::serde_util::f32_lenient")]
-    pub point_percent_progress: f32,
-}
-
 /// Роль модератора в списке `moderators`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserRole {
@@ -516,8 +500,7 @@ impl Client {
     /// ответ не зависит.
     pub async fn search_entities(&self, kind: EntityKind, query: &EntityQuery, page: u32) -> Result<Page<EntityCard>> {
         let params = query.to_query(kind, page)?;
-        let raw: RawList<EntityCard> = self.get_json(Site::MangaLib, kind.path(), &params).await?;
-        Ok(raw.into_page())
+        self.get_page(Site::MangaLib, kind.path(), &params).await
     }
 
     /// Карточка одной сущности по `slug_url`. Человека и персонажа сервер находит и
@@ -530,8 +513,7 @@ impl Client {
     /// Список или поиск пользователей. Для `Points` и `Moderators` сервер отдаёт всех
     /// одной страницей без признака продолжения.
     pub async fn users(&self, query: &UserQuery, page: u32) -> Result<Page<UserCard>> {
-        let raw: RawList<UserCard> = self.get_json(Site::MangaLib, "user", &query.to_query(page)).await?;
-        Ok(raw.into_page())
+        self.get_page(Site::MangaLib, "user", &query.to_query(page)).await
     }
 }
 

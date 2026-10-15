@@ -1,8 +1,7 @@
 use crate::client::Client;
 use crate::error::{Error, Result};
-use crate::models::{
-    Branch, Chapter, ChapterPages, MediaServer, PageImage, Paged, TitleDetails, TitleShort, image_format,
-};
+use crate::listing::Page;
+use crate::models::{Branch, Chapter, ChapterPages, MediaServer, PageImage, TitleDetails, TitleShort, image_format};
 use crate::site::Site;
 
 /// Поля полной карточки, которые сервер отдаёт только по запросу.
@@ -140,11 +139,11 @@ impl CatalogQuery {
 
 impl Client {
     /// Каталог или поиск по сайту. Для AnimeLib идёт в раздел аниме.
-    pub async fn catalog(&self, site: Site, query: &CatalogQuery) -> Result<Paged<TitleShort>> {
-        self.get_json(site, site.catalog_path(), &query.params(site)).await
+    pub async fn catalog(&self, site: Site, query: &CatalogQuery) -> Result<Page<TitleShort>> {
+        self.get_page(site, site.catalog_path(), &query.params(site)).await
     }
 
-    pub async fn search(&self, site: Site, text: &str, page: u32) -> Result<Paged<TitleShort>> {
+    pub async fn search(&self, site: Site, text: &str, page: u32) -> Result<Page<TitleShort>> {
         let query = CatalogQuery {
             text: text.into(),
             page,

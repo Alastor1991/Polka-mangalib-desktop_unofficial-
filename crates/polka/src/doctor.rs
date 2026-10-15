@@ -34,7 +34,7 @@ pub async fn run() -> Result<()> {
 
     for site in [Site::SlashLib, Site::HentaiLib, Site::AnimeLib] {
         match client.catalog(site, &CatalogQuery::default()).await {
-            Ok(p) if !p.data.is_empty() => println!("✓ каталог {}", site.name()),
+            Ok(p) if !p.items.is_empty() => println!("✓ каталог {}", site.name()),
             Ok(_) => println!("• каталог {} пуст (возможно, нужен вход)", site.name()),
             Err(e) => println!("✗ каталог {}: {e}", site.name()),
         }

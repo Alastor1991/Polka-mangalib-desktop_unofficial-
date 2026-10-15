@@ -22,9 +22,10 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::catalog::{Page, RawList, lenient_object};
+use crate::catalog::lenient_object;
 use crate::client::Client;
 use crate::error::{Error, Result};
+use crate::listing::Page;
 use crate::models::{Cover, Label, RestrictedView, Team, TitleShort};
 use crate::rich::Doc;
 use crate::search::UserCard;
@@ -795,14 +796,12 @@ impl Client {
     }
 
     async fn feed_page(&self, site: Site, path: &str, query: &[(&str, String)]) -> Result<Page<FeedTitle>> {
-        let raw: RawList<FeedTitle> = self.get_json(site, path, query).await?;
-        Ok(raw.into_page())
+        self.get_page(site, path, query).await
     }
 
     /// Список новостей по 20. Для сайта 1 их около двухсот, для AnimeLib около двадцати.
     pub async fn news(&self, site: Site, filter: &NewsFilter, page: u32) -> Result<Page<NewsItem>> {
-        let raw: RawList<NewsItem> = self.get_json(site, "news", &filter.to_query(page)).await?;
-        Ok(raw.into_page())
+        self.get_page(site, "news", &filter.to_query(page)).await
     }
 
     /// Новость по `slug_url`. Текст приходит документом ProseMirror.

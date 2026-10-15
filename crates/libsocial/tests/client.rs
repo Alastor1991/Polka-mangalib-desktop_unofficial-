@@ -451,7 +451,7 @@ async fn bookmarks_page_and_writes() {
     let c = client(&[&s]);
     // Битый элемент выбрасывается, следующая страница видна по ссылке.
     let page = c.bookmarks(Site::SlashLib, 7, 1, 1).await.unwrap();
-    assert_eq!(page.bookmarks.len(), 2);
+    assert_eq!(page.items.len(), 2);
     assert!(page.has_next);
 
     assert!(c.bookmark(Site::AnimeLib, "1--x").await.unwrap().is_none());

@@ -2,7 +2,8 @@
 
 use iced::widget::{button, column, container, image, pick_list, row, scrollable, text, text_input};
 use iced::{Alignment, ContentFit, Element, Fill, Task};
-use libsocial::models::{Paged, TitleShort};
+use libsocial::listing::Page;
+use libsocial::models::TitleShort;
 use libsocial::{CatalogQuery, Site, Sort};
 
 use super::images::{ImageReq, Images, Loaded};
@@ -57,7 +58,7 @@ pub enum Msg {
     Text(String),
     Submit,
     Sort(SortChoice),
-    Loaded(u64, Result<Paged<TitleShort>, String>),
+    Loaded(u64, Result<Page<TitleShort>, String>),
     Scrolled(scrollable::Viewport),
     More,
     Open(Site, String),
@@ -131,15 +132,15 @@ impl Catalog {
                 match result {
                     Ok(page) => {
                         self.page += 1;
-                        self.has_next = page.meta.has_next_page;
+                        self.has_next = page.has_next;
                         let covers: Vec<Task<Msg>> = page
-                            .data
+                            .items
                             .iter()
                             .filter_map(|t| cover_req(self.site, t))
                             .map(|req| images.request(req, Msg::Image))
                             .collect();
                         // Один и тот же тайтл иногда приходит на двух страницах подряд.
-                        for item in page.data {
+                        for item in page.items {
                             if !self.items.iter().any(|i| i.id == item.id) {
                                 self.items.push(item);
                             }

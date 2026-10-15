@@ -1,6 +1,7 @@
 //! Разбор настоящих ответов API, сохранённых в `tests/fixtures`.
 
 use libsocial::Site;
+use libsocial::listing::Page;
 use libsocial::models::*;
 use serde::de::DeserializeOwned;
 
@@ -16,14 +17,14 @@ fn data<T: DeserializeOwned>(name: &str) -> T {
 #[test]
 fn catalog_pages() {
     for name in ["search.json", "popular.json", "asearch.json", "latest.json"] {
-        let page: Paged<TitleShort> = serde_json::from_value(fixture(name)).unwrap_or_else(|e| panic!("{name}: {e}"));
-        assert!(!page.data.is_empty(), "{name}");
-        assert!(page.data.iter().all(|t| !t.slug_url.is_empty()));
+        let page: Page<TitleShort> = serde_json::from_value(fixture(name)).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert!(!page.items.is_empty(), "{name}");
+        assert!(page.items.iter().all(|t| !t.slug_url.is_empty()));
     }
-    let popular: Paged<TitleShort> = serde_json::from_value(fixture("popular.json")).unwrap();
-    assert!(popular.meta.has_next_page);
-    let anime: Paged<TitleShort> = serde_json::from_value(fixture("asearch.json")).unwrap();
-    assert_eq!(anime.data[0].site(), Some(Site::AnimeLib));
+    let popular: Page<TitleShort> = serde_json::from_value(fixture("popular.json")).unwrap();
+    assert!(popular.has_next);
+    let anime: Page<TitleShort> = serde_json::from_value(fixture("asearch.json")).unwrap();
+    assert_eq!(anime.items[0].site(), Some(Site::AnimeLib));
 }
 
 #[test]

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::client::{Auth, Client, join_url};
 use crate::error::Result;
+use crate::listing::Page;
 use crate::models::TitleShort;
 use crate::serde_util::{null_default, opt_string_lenient, opt_u64_lenient, string_lenient, u64_lenient};
 use crate::site::Site;
@@ -110,27 +111,6 @@ impl Bookmark {
     }
 }
 
-/// Страница списка закладок одной папки на одном сайте.
-#[derive(Debug, Clone)]
-pub struct BookmarkPage {
-    pub bookmarks: Vec<Bookmark>,
-    pub has_next: bool,
-}
-
-#[derive(Deserialize)]
-struct RawPage {
-    #[serde(deserialize_with = "crate::serde_util::lenient_vec")]
-    data: Vec<Bookmark>,
-    #[serde(default)]
-    links: Links,
-}
-
-#[derive(Default, Deserialize)]
-struct Links {
-    #[serde(default)]
-    next: Option<String>,
-}
-
 /// Место, где остановились: его пишут в закладку.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Place {
@@ -152,17 +132,13 @@ impl Client {
 
     /// Закладки одной папки на одном сайте, по 24 на страницу. Сервер отдаёт только
     /// тайтлы того сайта, от имени которого спрашивают.
-    pub async fn bookmarks(&self, site: Site, user_id: u64, folder: u64, page: u32) -> Result<BookmarkPage> {
+    pub async fn bookmarks(&self, site: Site, user_id: u64, folder: u64, page: u32) -> Result<Page<Bookmark>> {
         let query = [
             ("user_id", user_id.to_string()),
             ("status", folder.to_string()),
             ("page", page.max(1).to_string()),
         ];
-        let raw: RawPage = self.get_json(site, "bookmarks", &query).await?;
-        Ok(BookmarkPage {
-            bookmarks: raw.data,
-            has_next: raw.links.next.is_some(),
-        })
+        self.get_page(site, "bookmarks", &query).await
     }
 
     /// Закладка вошедшего пользователя на тайтл. `None`, если тайтла нет в закладках.

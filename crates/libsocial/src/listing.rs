@@ -1,5 +1,5 @@
-//! Общее для списков раздела «аккаунт и общение»: страница с признаком продолжения,
-//! порядок сортировки и терпимые разборщики булевых значений.
+//! Общее для всех списков API: страница с признаком продолжения, порядок сортировки
+//! и терпимые разборщики значений, которые сервер присылает в разном виде.
 //!
 //! Списки сервиса пагинируются по-разному. У одних есть `meta.total` и `links.next`,
 //! у других только `links.next`, у третьих (сообщения короткого диалога, общие друзья,
@@ -31,27 +31,49 @@ impl SortOrder {
     }
 }
 
-/// Страница списка. Элемент, который не разобрался, в неё не попадает.
-#[derive(Debug, Clone)]
+/// Страница любого списка API. Элемент, который не разобрался, в неё не попадает.
+///
+/// Разбирается прямо из ответа сервера `{"data": [...], "links": ..., "meta": ...}`
+/// любого из трёх видов: курсорного (только `links.next`), полного (с `last_page` и
+/// `total`) и списка целиком без `links` и `meta`.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(from = "RawPage<T>", bound(deserialize = "T: DeserializeOwned"))]
 pub struct Page<T> {
     pub items: Vec<T>,
-    /// Есть ли следующая страница: `meta.has_next_page` или непустой `links.next`.
+    /// Есть ли следующая страница. Сервер говорит об этом по-разному, учитывается всё:
+    /// непустой `links.next`, `meta.has_next_page`, `meta.next_page_url` (в закладках
+    /// он булев) и `current_page < last_page`. У аниме `has_next_page` нет вовсе.
     pub has_next: bool,
-    /// Общее число записей, если сервер его прислал (`meta.total` или `meta.items_count`).
-    /// У большинства списков его нет, листать надо до пустого `has_next`.
+    /// Общее число записей (`meta.total` или `meta.items_count`). У большинства
+    /// списков его нет, при поиске `q` обычно пропадает: листать надо до `has_next`.
     pub total: Option<u64>,
     /// Номер страницы по `meta.current_page`.
     pub page: Option<u32>,
+    pub per_page: Option<u32>,
+    pub last_page: Option<u32>,
+    /// `meta` ответа целиком. В нём то, что у каждого списка своё: курсор случайного
+    /// порядка каталога (`catalog::RandomCursor::of`), фильтры и лимиты карточек.
+    pub meta: Value,
 }
 
-impl<T> Default for Page<T> {
-    fn default() -> Self {
+impl<T> Page<T> {
+    /// Страница, которой на сервере нет, или пустой результат.
+    pub fn empty() -> Page<T> {
         Page {
             items: Vec::new(),
             has_next: false,
             total: None,
             page: None,
+            per_page: None,
+            last_page: None,
+            meta: Value::Null,
         }
+    }
+}
+
+impl<T> Default for Page<T> {
+    fn default() -> Self {
+        Page::empty()
     }
 }
 
@@ -66,35 +88,60 @@ struct RawPage<T> {
     meta: Value,
 }
 
-impl<T: DeserializeOwned> Page<T> {
-    fn from_raw(raw: RawPage<T>) -> Page<T> {
-        let meta = &raw.meta;
-        let flag = |key: &str| meta.get(key).and_then(Value::as_bool).unwrap_or(false);
-        let next = raw.links.get("next").is_some_and(|n| !n.is_null());
+impl<T> From<RawPage<T>> for Page<T> {
+    fn from(raw: RawPage<T>) -> Page<T> {
+        let meta = raw.meta;
+        let page = meta_u32(&meta, "current_page");
+        let last_page = meta_u32(&meta, "last_page");
+        let by_numbers = matches!((page, last_page), (Some(cur), Some(last)) if cur < last);
         Page {
             items: raw.data,
-            // `next_page_url` в закладках приходит булевым значением.
-            has_next: flag("has_next_page") || flag("next_page_url") || next,
-            total: ["total", "items_count"]
-                .iter()
-                .find_map(|k| meta.get(k).and_then(Value::as_u64)),
-            page: meta
-                .get("current_page")
-                .and_then(Value::as_u64)
-                .and_then(|p| u32::try_from(p).ok()),
+            has_next: has_next(&raw.links, &meta) || by_numbers,
+            total: meta_u64(&meta, "total").or_else(|| meta_u64(&meta, "items_count")),
+            page,
+            per_page: meta_u32(&meta, "per_page"),
+            last_page,
+            meta,
         }
     }
 }
 
+/// Признак следующей страницы по `links.next`, `meta.has_next_page` и
+/// `meta.next_page_url`. Нужен и спискам, которые не укладываются в `Page`
+/// (дерево комментариев).
+pub(crate) fn has_next(links: &Value, meta: &Value) -> bool {
+    // `links.next` – адрес следующей страницы, флаги в `meta` – булевы значения,
+    // которые сервер присылает и как `"0"` или `"false"`.
+    let link = links.get("next").and_then(Value::as_str).is_some_and(|s| !s.is_empty());
+    let flag = |key: &str| {
+        meta.get(key)
+            .and_then(|v| bool_lenient(v.clone()).ok())
+            .unwrap_or(false)
+    };
+    link || flag("has_next_page") || flag("next_page_url")
+}
+
+/// Число из `meta`: сервер присылает его то числом, то строкой.
+fn meta_u64(meta: &Value, key: &str) -> Option<u64> {
+    match meta.get(key)? {
+        Value::Number(n) => n.as_u64(),
+        Value::String(s) => s.trim().parse().ok(),
+        _ => None,
+    }
+}
+
+fn meta_u32(meta: &Value, key: &str) -> Option<u32> {
+    meta_u64(meta, key).and_then(|n| u32::try_from(n).ok())
+}
+
 impl Client {
-    /// GET списка с разбором `{"data": [...], "links": ..., "meta": ...}`.
+    /// GET списка с разбором в `Page`.
     pub(crate) async fn get_page<T, Q>(&self, site: Site, path: &str, query: &Q) -> Result<Page<T>>
     where
         T: DeserializeOwned,
         Q: Serialize + ?Sized,
     {
-        let raw: RawPage<T> = self.get_json(site, path, query).await?;
-        Ok(Page::from_raw(raw))
+        self.get_json(site, path, query).await
     }
 }
 
@@ -146,7 +193,7 @@ mod tests {
     use serde_json::json;
 
     fn parse(v: Value) -> Page<u64> {
-        Page::from_raw(serde_json::from_value::<RawPage<u64>>(v).unwrap())
+        serde_json::from_value(v).unwrap()
     }
 
     #[test]
@@ -166,6 +213,25 @@ mod tests {
 
         let flagged = parse(json!({"data": [1], "meta": {"next_page_url": true}}));
         assert!(flagged.has_next);
+        let denied = parse(json!({"data": [1], "meta": {"has_next_page": "false", "next_page_url": "0"}}));
+        assert!(!denied.has_next);
+
+        // Полный список: конец по номерам, число строкой.
+        let numbered = parse(
+            json!({"data": [], "links": {"next": null}, "meta": {"current_page": 2, "last_page": 9, "total": "180", "per_page": 20}}),
+        );
+        assert!(numbered.has_next);
+        assert_eq!(
+            (numbered.total, numbered.per_page, numbered.last_page),
+            (Some(180), Some(20), Some(9))
+        );
+        let end = parse(json!({"data": [], "meta": {"current_page": 9, "last_page": 9}}));
+        assert!(!end.has_next);
+
+        // Список целиком: `meta` и `links` пустыми массивами.
+        let flat = parse(json!({"data": [7], "meta": [], "links": []}));
+        assert_eq!(flat.items, vec![7]);
+        assert!(!flat.has_next && flat.page.is_none());
     }
 
     #[test]

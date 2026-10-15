@@ -4,7 +4,7 @@
 
 use iced::widget::{button, column, row, scrollable, text};
 use iced::{Alignment, Element, Fill, Task};
-use libsocial::{BookmarkPage, Site};
+use libsocial::{Bookmark, Page, Site};
 use polka_core::shelf::{self, ShelfItem};
 
 use super::catalog::{CARD_H, CARD_W, cover};
@@ -35,7 +35,7 @@ pub enum Msg {
     More,
     /// Страницы закладок по сайтам для загрузки с этим номером: сайт, номер
     /// страницы, ответ.
-    Loaded(u64, Vec<(Site, u32, Result<BookmarkPage, String>)>),
+    Loaded(u64, Vec<(Site, u32, Result<Page<Bookmark>, String>)>),
 }
 
 impl LibraryView {
@@ -133,7 +133,7 @@ impl LibraryView {
                                 self.next.push((site, page + 1));
                             }
                             self.cards
-                                .extend(found.bookmarks.iter().filter_map(|b| shelf::bookmark_item(site, b)));
+                                .extend(found.items.iter().filter_map(|b| shelf::bookmark_item(site, b)));
                             // Ранобэ окно не читает: его читалка умеет только картинки.
                             self.cards.retain(|c| !c.site.is_ranobe());
                         }

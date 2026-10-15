@@ -187,13 +187,13 @@ async fn random_order_cursor_travels_between_pages() {
     ));
     let first = c.catalog_filtered(Site::MangaLib, &filter, 1).await.unwrap();
     assert_eq!(
-        first.random,
+        RandomCursor::of(&first),
         Some(RandomCursor {
             seed: "6f722d27ae79acdce142486711099825".into(),
             random_order: "0.617244741235508".into()
         })
     );
-    filter.random = first.random;
+    filter.random = RandomCursor::of(&first);
     c.catalog_filtered(Site::MangaLib, &filter, 2).await.unwrap();
 }
 
@@ -636,7 +636,7 @@ async fn live_catalog_filters() {
     };
     let first = c.catalog_filtered(Site::MangaLib, &random, 1).await.unwrap();
     let second = CatalogFilter {
-        random: first.random.clone(),
+        random: RandomCursor::of(&first),
         ..random
     };
     assert!(

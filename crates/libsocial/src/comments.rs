@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 
 use crate::client::{Auth, Client, join_url};
 use crate::error::{Error, Result};
+use crate::listing::Page;
 use crate::rich::Doc;
 use crate::serde_util::{null_default, opt_u64_lenient, u64_lenient};
 use crate::site::Site;
@@ -276,7 +277,9 @@ pub struct CommentPage {
 struct RawPage {
     data: RawTree,
     #[serde(default)]
-    meta: crate::models::PageMeta,
+    links: Value,
+    #[serde(default)]
+    meta: Value,
 }
 
 #[derive(Deserialize)]
@@ -395,24 +398,6 @@ pub struct UserCommentsQuery {
     pub text: String,
 }
 
-/// Страница комментариев пользователя.
-#[derive(Debug, Clone)]
-pub struct UserComments {
-    pub comments: Vec<Comment>,
-    pub total: Option<u64>,
-    pub has_next: bool,
-}
-
-#[derive(Deserialize)]
-struct RawUserComments {
-    #[serde(deserialize_with = "crate::serde_util::lenient_vec")]
-    data: Vec<Comment>,
-    #[serde(default)]
-    meta: Value,
-    #[serde(default)]
-    links: Value,
-}
-
 impl Client {
     /// Страница комментариев. Без входа свой голос не приходит.
     pub async fn comments(&self, target: Target, sort: CommentSort, page: u32) -> Result<CommentPage> {
@@ -423,7 +408,7 @@ impl Client {
         Ok(CommentPage {
             roots: raw.data.root,
             replies: raw.data.replies,
-            has_next: raw.meta.has_next_page,
+            has_next: crate::listing::has_next(&raw.links, &raw.meta),
         })
     }
 
@@ -583,7 +568,7 @@ impl Client {
     }
 
     /// Комментарии, которые оставил пользователь, по 20 на страницу.
-    pub async fn user_comments(&self, user_id: u64, q: &UserCommentsQuery) -> Result<UserComments> {
+    pub async fn user_comments(&self, user_id: u64, q: &UserCommentsQuery) -> Result<Page<Comment>> {
         let mut query: Vec<(&str, String)> = vec![
             ("page", q.page.max(1).to_string()),
             ("sort_by", if q.by_votes { "votes" } else { "id" }.into()),
@@ -598,14 +583,8 @@ impl Client {
         if q.text.trim().chars().count() >= 2 {
             query.push(("q", q.text.trim().to_string()));
         }
-        let raw: RawUserComments = self
-            .get_json(Site::MangaLib, &format!("user/{user_id}/comments"), &query)
-            .await?;
-        Ok(UserComments {
-            comments: raw.data,
-            total: raw.meta.get("items_count").and_then(Value::as_u64),
-            has_next: raw.links.get("next").is_some_and(|n| !n.is_null()),
-        })
+        self.get_page(Site::MangaLib, &format!("user/{user_id}/comments"), &query)
+            .await
     }
 }
 

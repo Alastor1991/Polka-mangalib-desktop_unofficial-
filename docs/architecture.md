@@ -121,7 +121,7 @@ flowchart LR
 - непонятные или большие объекты, которые пока не нужны целиком, держатся как `serde_json::Value`;
 - модели, которые приложение хранит на диске (карточка тайтла), сериализуются обратно, поэтому у них есть и `Serialize`.
 
-Списки сервиса пагинируются тремя способами: `meta.has_next_page`, `links.next` и вовсе без `meta` и `links` (весь список за раз). Сейчас для страницы списка в крейте пять типов: `models::Paged` (старый каталог), `models::ListPage` (вокруг тайтла), `listing::Page` (аккаунт), `catalog::Page` (каталог, ленты, поиск), `cards::Page`. Они появились параллельно и делают одно и то же; свести их в один – первый пункт технического долга.
+Списки сервиса пагинируются тремя способами: курсором (`links.next`, иногда `meta.has_next_page` или булев `meta.next_page_url`), номерами (`current_page`, `last_page`, `total`) и вовсе без `meta` и `links` (весь список за раз). Все они разбираются в один тип `listing::Page<T>`: `items`, `has_next`, `total`, `page`, `per_page`, `last_page` и `meta` ответа целиком. В `meta` остаётся то, что у списка своё: курсор случайного порядка каталога (`RandomCursor::of`), фильтры и лимиты карточек. `Page` разбирается прямо из ответа (`Deserialize`), метод клиента для списка зовёт `get_page`; тип вынесен в корень крейта как `libsocial::Page`. Дерево комментариев в `Page` не укладывается, признак следующей страницы оно берёт у `listing::has_next`.
 
 ### Форматированный текст
 
@@ -143,7 +143,7 @@ flowchart LR
 | `client.rs` | очередь, зеркала, повторы, файлы | `Client`, `ClientConfig`, `fetch_bytes`, `fetch_stream`, `constants`, `cooldown_remaining` |
 | `auth.rs` | вход OAuth с PKCE | `AuthSession`, `Token`, `begin_login`, `exchange_code`, `refresh_token`, `restore_token`, `me` |
 | `site.rs`, `mirrors.rs` | сайты сети и зеркала | `Site`, `mirrors::web` |
-| `models.rs` | общие модели | `TitleShort`, `TitleDetails` (с фоном, просмотрами, издателями, франшизой, метаданными, числом глав, оценкой перевода, данными аниме), `Chapter`, `ChapterBranch`, `ChapterPages` (лайк, оценка перевода, закрытость), `Branch` (подписка), `Player` (таймкоды, отметка просмотра), `Rating` (своя оценка), `ListPage` |
+| `models.rs` | общие модели | `TitleShort`, `TitleDetails` (с фоном, просмотрами, издателями, франшизой, метаданными, числом глав, оценкой перевода, данными аниме), `Chapter`, `ChapterBranch`, `ChapterPages` (лайк, оценка перевода, закрытость), `Branch` (подписка), `Player` (таймкоды, отметка просмотра), `Rating` (своя оценка) |
 | `manga.rs` | старый каталог, тайтл, главы, страницы | `catalog`, `title`, `chapters`, `branches`, `chapter_pages_by`, `fetch_page` |
 | `anime.rs` | серии и видео | `episodes`, `episode`, `resolve_video` |
 | `bookmarks.rs` | папки, закладки, отметки о прочтении | `bookmark_folders`, `bookmarks`, `bookmark`, `set_bookmark`, `delete_bookmark`, `mark_chapter_viewed`, `mark_episode_viewed`, `format_timecode` |
@@ -161,7 +161,7 @@ flowchart LR
 | `exports.rs` | серверный экспорт книг (EPUB, FB2, MOBI – какие доступны, говорит `book_export_settings`; только премиум) | создание задачи, опрос по `poll_after` (`wait_book_export`), скачивание по сегментам и ссылкам (`download_book_export`) |
 | `cards.rs` | коллекционные карточки | каталог, карта, владельцы, инвентарь, папки, статистика, альбомы и награды, коллекция и осколки по тайтлу, рынок, лоты, заявки, прямые обмены, хаос-обмен, топ, просмотр паков; действия с ними, кроме платных (покупки и открытия паков нет) |
 | `rich.rs` | форматированный текст | `Doc` и всё выше |
-| `listing.rs` | общее для списков | `Page`, `SortOrder`, `get_page`, терпимые разборщики булевых значений и списков сайтов |
+| `listing.rs` | общее для списков | `Page` (страница любого списка), `SortOrder`, `get_page`, терпимые разборщики булевых значений и списков сайтов |
 | `serde_util.rs` | терпимый разбор | `*_lenient`, `null_default`, `lenient_vec` |
 | `error.rs` | ошибки | `Error`, `Result` |
 
@@ -451,7 +451,7 @@ GTK требует главный поток, а в окне приложени�
 | `polka-core/src/**` (`#[cfg(test)]`) | очередь в базе, прогресс, `outbox`, пути и имена файлов, CBZ, блокировка загрузчика, позиция и пропуск опенинга через сокет mpv, отправка отметок, «Продолжить» и «Читать», отметки с правильным id, тайтл без сети, дерево комментариев | нет |
 | `polka-core/src/downloads.rs` (`job_tests`) | задания загрузчика целиком на wiremock, отказ качать ранобэ | нет |
 
-Всего тестов 249: 235 обычных и 14 живых (`#[ignore]`). Живые проверки запускаются так и только на чтение:
+Всего тестов 248: 234 обычных и 14 живых (`#[ignore]`). Живые проверки запускаются так и только на чтение:
 
 ```sh
 cargo test -p libsocial -- --ignored --test-threads=1
@@ -512,9 +512,8 @@ POLKA_DEBUG=1 polka                                   # журнал загру�
 
 Известное и записанное, чтобы не потерялось. Приоритеты и план – в [roadmap.md](roadmap.md).
 
-- Пять типов страницы списка в `libsocial` (`Paged`, `ListPage`, `listing::Page`, `catalog::Page`, `cards::Page`) и два `PointsInfo` (`search.rs` и `users.rs`). Свести к одному `Page<T>` в `listing.rs`.
+- Два порядка сортировки: `catalog::SortOrder` (`Ascending`, `Descending`) и `listing::SortOrder` (`Asc`, `Desc`) делают одно и то же.
 - Старый каталог `CatalogQuery` в `manga.rs` дублирует `CatalogFilter` и содержит ошибку: для аниме шлёт `episodes_count_min` вместо `episodes_min`, и сервер фильтр молча игнорирует. Перевести окно на `catalog_filtered` и убрать старый.
-- `Paged<TitleShort>` старого каталога не видит следующую страницу у аниме: у `/anime` нет `meta.has_next_page`.
 - `TitleShort` не знает `userBookmark` (папка на карточке каталога), `model`, отформатированные оценки, `content_marking`.
 - `Place::progress` обязателен, а автозакладка ранобэ шлёт закладку без позиции.
 - Ранобэ: нет задания загрузчика для текста, сессии читалки и экспорта у себя. Отметки и закладки ранобэ с `Site::RanobeLib` вживую не проверены.

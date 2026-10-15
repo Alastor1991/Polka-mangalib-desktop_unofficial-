@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use libsocial::{Bookmark, BookmarkPage, Site};
+use libsocial::{Bookmark, Page, Site};
 
 use crate::context::Core;
 use crate::db::TitleRow;
@@ -53,7 +53,7 @@ pub fn folder_sites(core: &Core, folder: u64) -> Vec<Site> {
 pub struct FolderPage {
     pub site: Site,
     pub page: u32,
-    pub result: libsocial::Result<BookmarkPage>,
+    pub result: libsocial::Result<Page<Bookmark>>,
 }
 
 /// Загружает указанные страницы папки по сайтам. Запросы идут по очереди: они

@@ -4,7 +4,7 @@
 //! (только AnimeLib). Вход не нужен. Что здесь неочевидно:
 //!
 //! - у аниме в `meta` нет `has_next_page`, поэтому следующую страницу определяют по
-//!   `links.next`; так делает `CatalogPage` и все списки этого крейта;
+//!   `links.next`; так делает `listing::Page` и все списки этого крейта;
 //! - без `fields[]=rate` и `fields[]=rate_avg` оценка в карточке нулевая;
 //! - `site_id[]` сервер пересекает с тем, что разрешено для `Site-Id` запроса: из
 //!   MangaLib нельзя увидеть SlashLib и HentaiLib, а RanobeLib виден как `site_id[]=3`;
@@ -19,8 +19,8 @@ use serde_json::Value;
 
 use crate::client::Client;
 use crate::error::{Error, Result};
+use crate::listing::Page;
 use crate::models::TitleShort;
-use crate::serde_util::{lenient_vec, opt_string_lenient, opt_u64_lenient};
 use crate::site::Site;
 
 /// Размер страницы каталога.
@@ -35,100 +35,8 @@ pub const MIN_VOTES_FOR_RATING_SORT: u32 = 50;
 pub const MAX_FILTERABLE_FORMAT: u64 = 7;
 
 // ---------------------------------------------------------------------------------------
-// Общие страницы списков
+// Разборщики
 // ---------------------------------------------------------------------------------------
-
-/// Страница любого списка API: людей, команд, пользователей, лент.
-///
-/// Сервер отдаёт списки в трёх видах: курсорный (только `links.next`), полный
-/// (с `last_page` и `total`) и целиком без страниц. Здесь они сведены в одну форму,
-/// а `has_next` надёжно собран из `links.next`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Page<T> {
-    pub items: Vec<T>,
-    pub has_next: bool,
-    /// Номер страницы, как его назвал сервер.
-    pub page: Option<u32>,
-    pub per_page: Option<u32>,
-    /// Всего записей. Есть только у полных списков, при поиске `q` обычно пропадает.
-    pub total: Option<u64>,
-    pub last_page: Option<u32>,
-}
-
-impl<T> Page<T> {
-    /// Страница, которой на сервере нет, или пустой результат.
-    pub fn empty() -> Page<T> {
-        Page {
-            items: Vec::new(),
-            has_next: false,
-            page: None,
-            per_page: None,
-            total: None,
-            last_page: None,
-        }
-    }
-}
-
-/// Разобранное тело списка: `data`, `links`, `meta`.
-#[derive(Debug, Deserialize)]
-#[serde(bound(deserialize = "T: DeserializeOwned"))]
-pub(crate) struct RawList<T> {
-    /// Элемент, который не разобрался, выбрасывается, а не валит страницу.
-    #[serde(default, deserialize_with = "lenient_vec")]
-    pub data: Vec<T>,
-    #[serde(default, deserialize_with = "lenient_object")]
-    links: RawLinks,
-    #[serde(default, deserialize_with = "lenient_object")]
-    meta: RawMeta,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct RawLinks {
-    #[serde(default)]
-    next: Option<String>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct RawMeta {
-    #[serde(default, deserialize_with = "opt_u64_lenient")]
-    current_page: Option<u64>,
-    #[serde(default, deserialize_with = "opt_u64_lenient")]
-    per_page: Option<u64>,
-    #[serde(default, deserialize_with = "opt_u64_lenient")]
-    total: Option<u64>,
-    #[serde(default, deserialize_with = "opt_u64_lenient")]
-    last_page: Option<u64>,
-    #[serde(default)]
-    has_next_page: Option<bool>,
-    #[serde(default, deserialize_with = "opt_string_lenient")]
-    seed: Option<String>,
-    /// Приходит числом на первой странице и строкой на следующих.
-    #[serde(default, deserialize_with = "opt_string_lenient")]
-    random_order: Option<String>,
-}
-
-impl<T> RawList<T> {
-    /// Курсор случайного порядка для следующей страницы, если сервер его прислал.
-    pub(crate) fn random_cursor(&self) -> Option<RandomCursor> {
-        Some(RandomCursor {
-            seed: self.meta.seed.clone().filter(|s| !s.is_empty())?,
-            random_order: self.meta.random_order.clone().filter(|s| !s.is_empty())?,
-        })
-    }
-
-    pub(crate) fn into_page(self) -> Page<T> {
-        // `has_next_page` бывает не везде (у аниме его нет), `links.next` есть всегда.
-        let has_next = self.links.next.is_some() || self.meta.has_next_page == Some(true);
-        Page {
-            items: self.data,
-            has_next,
-            page: self.meta.current_page.and_then(|n| u32::try_from(n).ok()),
-            per_page: self.meta.per_page.and_then(|n| u32::try_from(n).ok()),
-            total: self.meta.total,
-            last_page: self.meta.last_page.and_then(|n| u32::try_from(n).ok()),
-        }
-    }
-}
 
 /// Объект, а если сервер прислал `[]`, `null` или что-то другое, значение по умолчанию.
 pub(crate) fn lenient_object<'de, D, T>(d: D) -> std::result::Result<T, D::Error>
@@ -388,6 +296,22 @@ pub struct RandomCursor {
     /// Строка из 32 шестнадцатеричных символов.
     pub seed: String,
     pub random_order: String,
+}
+
+impl RandomCursor {
+    /// Курсор из `meta` страницы каталога, если сервер его прислал. `random_order`
+    /// приходит числом на первой странице и строкой на следующих.
+    pub fn of<T>(page: &Page<T>) -> Option<RandomCursor> {
+        let text = |key: &str| match page.meta.get(key)? {
+            Value::String(s) if !s.is_empty() => Some(s.clone()),
+            Value::Number(n) => Some(n.to_string()),
+            _ => None,
+        };
+        Some(RandomCursor {
+            seed: text("seed")?,
+            random_order: text("random_order")?,
+        })
+    }
 }
 
 /// Диапазон значений с необязательными границами.
@@ -751,37 +675,16 @@ fn flag(on: bool) -> &'static str {
 // Ответ и запрос
 // ---------------------------------------------------------------------------------------
 
-/// Страница каталога.
-#[derive(Debug, Clone)]
-pub struct CatalogPage {
-    pub items: Vec<TitleShort>,
-    /// Есть ли следующая страница. У аниме берётся из `links.next`.
-    pub has_next: bool,
-    pub page: Option<u32>,
-    pub per_page: Option<u32>,
-    /// Что подставить в `CatalogFilter::random`, чтобы листать случайный порядок.
-    /// Сервер присылает его на любой странице, но нужен он только при `Random`.
-    pub random: Option<RandomCursor>,
-}
-
 impl Client {
     /// Каталог с полным набором фильтров сайта. `site` – сайт, от имени которого
     /// идёт запрос; он же задаёт `/manga` или `/anime`.
     ///
     /// Оценки и число оценок заполнены, пока в `filter.fields` есть `Rate` и `RateAvg`.
-    pub async fn catalog_filtered(&self, site: Site, filter: &CatalogFilter, page: u32) -> Result<CatalogPage> {
+    /// Курсор для следующей страницы случайного порядка даёт `RandomCursor::of`.
+    pub async fn catalog_filtered(&self, site: Site, filter: &CatalogFilter, page: u32) -> Result<Page<TitleShort>> {
         let query = filter.to_query(site, page)?;
         let path = if filter.is_anime(site) { "anime" } else { "manga" };
-        let raw: RawList<TitleShort> = self.get_json(site, path, &query).await?;
-        let random = raw.random_cursor();
-        let list = raw.into_page();
-        Ok(CatalogPage {
-            items: list.items,
-            has_next: list.has_next,
-            page: list.page,
-            per_page: list.per_page,
-            random,
-        })
+        self.get_page(site, path, &query).await
     }
 }
 
@@ -1004,51 +907,21 @@ mod tests {
     }
 
     #[test]
-    fn page_shapes_are_unified() {
-        let cursor: RawList<u32> = serde_json::from_value(serde_json::json!({
-            "data": [1, 2, "мусор"],
-            "links": {"next": "x?page=2", "last": null},
-            "meta": {"current_page": 1, "per_page": 60}
-        }))
-        .unwrap();
-        let page = cursor.into_page();
-        assert_eq!(page.items, vec![1, 2]);
-        assert!(page.has_next);
-
-        let full: RawList<u32> = serde_json::from_value(serde_json::json!({
-            "data": [],
-            "links": {"next": null},
-            "meta": {"current_page": 9, "last_page": 9, "total": "180", "per_page": 20}
-        }))
-        .unwrap();
-        let page = full.into_page();
-        assert!(!page.has_next);
-        assert_eq!((page.total, page.last_page), (Some(180), Some(9)));
-
-        // Список целиком: `meta` и `links` пусты или отсутствуют.
-        let bare: RawList<u32> =
-            serde_json::from_value(serde_json::json!({"data": [7], "meta": [], "links": []})).unwrap();
-        let page = bare.into_page();
-        assert_eq!(page.items, vec![7]);
-        assert!(!page.has_next);
-    }
-
-    #[test]
     fn random_cursor_accepts_number_and_string() {
-        let first: RawList<u32> = serde_json::from_value(serde_json::json!({
+        let first: Page<u32> = serde_json::from_value(serde_json::json!({
             "data": [],
             "meta": {"seed": "abc", "random_order": 0.617244741235508}
         }))
         .unwrap();
         assert_eq!(
-            first.random_cursor(),
+            RandomCursor::of(&first),
             Some(RandomCursor {
                 seed: "abc".into(),
                 random_order: "0.617244741235508".into()
             })
         );
-        let plain: RawList<u32> =
+        let plain: Page<u32> =
             serde_json::from_value(serde_json::json!({"data": [], "meta": {"seed": "abc"}})).unwrap();
-        assert_eq!(plain.random_cursor(), None);
+        assert_eq!(RandomCursor::of(&plain), None);
     }
 }

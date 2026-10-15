@@ -15,7 +15,8 @@ use serde_json::{Value, json};
 use crate::client::Client;
 use crate::comments::{Vote, Votes};
 use crate::error::Result;
-use crate::models::{Cover, Label, ListPage, Rating, RawList, TitleShort, TranslationRating, Video};
+use crate::listing::Page;
+use crate::models::{Cover, Label, Rating, TitleShort, TranslationRating, Video};
 use crate::rich::Doc;
 use crate::search::{EntityCard, EntityKind};
 use crate::serde_util::{null_default, opt_string_lenient, opt_u64_lenient, u64_lenient};
@@ -427,7 +428,7 @@ impl Client {
         title_id: u64,
         role: Option<CharacterRole>,
         page: u32,
-    ) -> Result<ListPage<TitleCharacter>> {
+    ) -> Result<Page<TitleCharacter>> {
         let mut query = vec![
             ("media_id", title_id.to_string()),
             ("media_type", site.catalog_path().to_string()),
@@ -437,8 +438,7 @@ impl Client {
         if let Some(role) = role {
             query.push(("position", role.param().to_string()));
         }
-        let raw: RawList<TitleCharacter> = self.get_json(site, "character", &query).await?;
-        Ok(raw.into())
+        self.get_page(site, "character", &query).await
     }
 
     /// Состояние подписки-звёздочки.
@@ -541,7 +541,7 @@ impl Client {
             .await
     }
 
-    pub async fn teams(&self, text: &str, sort: TeamSort, page: u32) -> Result<ListPage<TeamCard>> {
+    pub async fn teams(&self, text: &str, sort: TeamSort, page: u32) -> Result<Page<TeamCard>> {
         let mut query = vec![
             ("page", page.max(1).to_string()),
             ("sort_by", sort.param().to_string()),
@@ -553,8 +553,7 @@ impl Client {
         if text.trim().chars().count() >= 2 {
             query.push(("q", text.trim().to_string()));
         }
-        let raw: RawList<TeamCard> = self.get_json(Site::MangaLib, "teams", &query).await?;
-        Ok(raw.into())
+        self.get_page(Site::MangaLib, "teams", &query).await
     }
 
     /// Участники команды. Здесь, наоборот, нужен числовой id.
@@ -564,15 +563,13 @@ impl Client {
     }
 
     /// Свежие главы команды, сгруппированные по тайтлам, по 16 групп.
-    pub async fn team_chapters(&self, team_id: u64, page: u32) -> Result<ListPage<Value>> {
-        let raw: RawList<Value> = self
-            .get_json(
-                Site::MangaLib,
-                &format!("teams/{team_id}/chapters"),
-                &[("page", page.max(1))],
-            )
-            .await?;
-        Ok(raw.into())
+    pub async fn team_chapters(&self, team_id: u64, page: u32) -> Result<Page<Value>> {
+        self.get_page(
+            Site::MangaLib,
+            &format!("teams/{team_id}/chapters"),
+            &[("page", page.max(1))],
+        )
+        .await
     }
 
     pub async fn rate_team(&self, team_id: u64, score: TeamScore) -> Result<()> {
@@ -599,7 +596,7 @@ impl Client {
 
     // --- Отзывы ---
 
-    pub async fn reviews(&self, filter: &ReviewFilter) -> Result<ListPage<Review>> {
+    pub async fn reviews(&self, filter: &ReviewFilter) -> Result<Page<Review>> {
         let mut query = vec![("page", filter.page.max(1).to_string())];
         if let Some((site, id)) = filter.title {
             query.push(("reviewable_type", site.catalog_path().to_string()));
@@ -618,8 +615,7 @@ impl Client {
             }
         }
         let site = filter.title.map(|(s, _)| s).unwrap_or(Site::MangaLib);
-        let raw: RawList<Review> = self.get_json(site, "reviews", &query).await?;
-        Ok(raw.into())
+        self.get_page(site, "reviews", &query).await
     }
 
     pub async fn review(&self, id: u64) -> Result<Review> {
@@ -678,15 +674,13 @@ impl Client {
 
     /// Озвучки манги: видео, где читают вслух несколько глав. Только по `slug_url`,
     /// по числовому id сервер отвечает 404.
-    pub async fn manga_voices(&self, site: Site, slug_url: &str, page: u32) -> Result<ListPage<MangaVoice>> {
-        let raw: RawList<MangaVoice> = self
-            .get_json(
-                site,
-                &format!("manga/{slug_url}/chapters/players"),
-                &[("page", page.max(1))],
-            )
-            .await?;
-        Ok(raw.into())
+    pub async fn manga_voices(&self, site: Site, slug_url: &str, page: u32) -> Result<Page<MangaVoice>> {
+        self.get_page(
+            site,
+            &format!("manga/{slug_url}/chapters/players"),
+            &[("page", page.max(1))],
+        )
+        .await
     }
 
     /// Адрес видео озвучки манги. Серверы у озвучек свои (`videoServersManga`),

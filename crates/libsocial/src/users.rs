@@ -102,9 +102,10 @@ impl UserRef {
     }
 }
 
-/// Уровень и очки. Без `top` пользователь вне топа.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// Уровень и очки: в профиле и в рейтингах `weekly-top` и `points`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PointsInfo {
+    /// Место в рейтинге. У пользователя вне топа `None`.
     #[serde(default, deserialize_with = "opt_u64_lenient")]
     pub top: Option<u64>,
     #[serde(default, deserialize_with = "u64_lenient")]
@@ -115,7 +116,7 @@ pub struct PointsInfo {
     pub max_level_points: u64,
     #[serde(default, deserialize_with = "u64_lenient")]
     pub current_level_points: u64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::serde_util::f32_lenient")]
     pub point_percent_progress: f32,
 }
 
