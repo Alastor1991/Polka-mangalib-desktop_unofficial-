@@ -13,8 +13,9 @@ use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
-use crate::client::Client;
-use crate::error::Result;
+use crate::client::{Auth, Client, join_url, record_of};
+use crate::comments::{Uploaded, image_part};
+use crate::error::{Error, Result};
 use crate::listing::{Page, bool_lenient, opt_bool_lenient, site_ids_lenient};
 use crate::models::{Cover, TitleShort};
 use crate::rich::Doc;
@@ -239,6 +240,89 @@ pub struct UserProfile {
     pub previous_usernames: Vec<PreviousUsername>,
     #[serde(default, deserialize_with = "opt_string_lenient")]
     pub email: Option<String>,
+    /// Почта подтверждена. Только владельцу (`ProfileField::Confirmed`).
+    #[serde(default, deserialize_with = "opt_bool_lenient")]
+    pub confirmed: Option<bool>,
+    /// Привязанные соцсети. Только владельцу (`ProfileField::Oauth`).
+    #[serde(default, deserialize_with = "crate::serde_util::lenient_vec")]
+    pub oauth: Vec<OauthLink>,
+    #[serde(default, deserialize_with = "opt_u64_lenient")]
+    pub avatar_frame_id: Option<u64>,
+    #[serde(default, deserialize_with = "opt_u64_lenient")]
+    pub premium_background_id: Option<u64>,
+}
+
+/// Соцсеть, через которую можно входить в аккаунт.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OauthLink {
+    /// Имя сервиса в `Client::unlink_oauth`.
+    #[serde(default, deserialize_with = "null_default")]
+    pub service: String,
+    #[serde(default, deserialize_with = "opt_string_lenient")]
+    pub service_id: Option<String>,
+}
+
+/// Форма «Информация» в настройках профиля. Сайт шлёт её целиком: незатронутые
+/// поля берёт из профиля, поэтому форму собирают `ProfileInfo::from_profile`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ProfileInfo {
+    pub username: String,
+    /// `Gender::id`.
+    pub gender: u64,
+    /// Простой текст: на сайте это обычное поле ввода.
+    pub about: String,
+    /// Имя файла аватара: прежнее (`avatar.filename`) или `filename` из
+    /// `upload_avatar`. `None` у пользователя без аватара.
+    pub avatar: Option<String>,
+    /// Имя файла фона: прежнее (`background.filename`) или `name` из
+    /// `upload_background`.
+    pub cover: Option<String>,
+    pub avatar_frame_id: Option<u64>,
+    pub premium_background_id: Option<u64>,
+}
+
+impl ProfileInfo {
+    /// Поля, которые сайт запрашивает для формы.
+    pub const FIELDS: [ProfileField; 5] = [
+        ProfileField::About,
+        ProfileField::Gender,
+        ProfileField::Background,
+        ProfileField::AvatarFrameId,
+        ProfileField::PremiumBackgroundId,
+    ];
+
+    /// Форма с текущими значениями профиля, запрошенного с `ProfileInfo::FIELDS`.
+    /// От картинок сайт берёт имя файла, а не адрес. У пользователя без аватара
+    /// `filename` равен `null`, и сайт так же шлёт `"avatar": null`.
+    pub fn from_profile(profile: &UserProfile) -> ProfileInfo {
+        let about = match &profile.about {
+            Some(Value::String(s)) => s.clone(),
+            Some(_) => profile.about_text().plain_text(),
+            None => String::new(),
+        };
+        ProfileInfo {
+            username: profile.user.username.clone(),
+            gender: profile.gender.as_ref().map_or(0, |g| g.id),
+            about,
+            avatar: profile.user.avatar.as_ref().and_then(|a| a.filename.clone()),
+            cover: profile.background.as_ref().and_then(|b| b.filename.clone()),
+            avatar_frame_id: profile.avatar_frame_id,
+            premium_background_id: profile.premium_background_id,
+        }
+    }
+
+    fn body(&self) -> Value {
+        json!({
+            "update_type": "info",
+            "username": self.username,
+            "gender": self.gender,
+            "about": self.about,
+            "avatar": self.avatar,
+            "cover": self.cover,
+            "avatar_frame_id": self.avatar_frame_id,
+            "premium_background_id": self.premium_background_id,
+        })
+    }
 }
 
 impl UserProfile {
@@ -804,6 +888,99 @@ impl Client {
     pub async fn personalization_settings(&self, user_id: u64) -> Result<PersonalizationSettings> {
         self.get_data(Site::MangaLib, &format!("user/{user_id}/personalization-settings"), &())
             .await
+    }
+
+    /// Сохраняет форму «Информация» профиля: ник, пол, «о себе», аватар, фон.
+    pub async fn update_profile_info(&self, user_id: u64, info: &ProfileInfo) -> Result<()> {
+        if info.username.trim().is_empty() {
+            return Err(Error::Other("ник не может быть пустым".into()));
+        }
+        self.send_ok(
+            Site::MangaLib,
+            Method::PUT,
+            &format!("user/{user_id}"),
+            Some(&info.body()),
+        )
+        .await
+    }
+
+    /// Меняет почту. Подтверждение новой почты – `send_email_confirmation`.
+    /// Смену пароля Полка не делает: пароль вводится только на странице lib.social.
+    pub async fn change_email(&self, user_id: u64, email: &str) -> Result<()> {
+        let email = email.trim();
+        if !email.contains('@') {
+            return Err(Error::Other("это не адрес почты".into()));
+        }
+        let body = json!({ "update_type": "email", "email": email });
+        self.send_ok(Site::MangaLib, Method::PUT, &format!("user/{user_id}"), Some(&body))
+            .await
+    }
+
+    /// Присылает письмо для подтверждения почты ещё раз.
+    pub async fn send_email_confirmation(&self, user_id: u64) -> Result<()> {
+        self.send_ok::<()>(
+            Site::MangaLib,
+            Method::POST,
+            &format!("user/{user_id}/email-confirmation/send"),
+            None,
+        )
+        .await
+    }
+
+    /// Загружает новый аватар. В `ProfileInfo::avatar` идёт `filename` ответа.
+    /// Требования сайта: от 120×120, GIF только премиуму или с 5-го уровня.
+    pub async fn upload_avatar(&self, file_name: &str, bytes: &[u8]) -> Result<Uploaded> {
+        self.upload_profile_image("upload/image/avatar", file_name, bytes).await
+    }
+
+    /// Загружает новый фон профиля. В `ProfileInfo::cover` идёт `name` ответа.
+    pub async fn upload_background(&self, file_name: &str, bytes: &[u8]) -> Result<Uploaded> {
+        self.upload_profile_image("upload/image/background", file_name, bytes)
+            .await
+    }
+
+    /// Одна картинка в поле `content`. Есть ли у ответа обёртка `data`, по скриптам
+    /// сайта не видно, клиент принимает оба вида.
+    async fn upload_profile_image(&self, path: &str, file_name: &str, bytes: &[u8]) -> Result<Uploaded> {
+        let response = self
+            .send_api(Auth::User, |http, base| {
+                let form = reqwest::multipart::Form::new().part("content", image_part(file_name, bytes));
+                http.post(join_url(base, path))
+                    .headers(Self::site_headers(Site::MangaLib))
+                    .multipart(form)
+            })
+            .await?;
+        let bytes = response.bytes().await?;
+        let value: Value = serde_json::from_slice(&bytes).map_err(|source| Error::Decode {
+            context: path.into(),
+            source,
+        })?;
+        record_of(&value, path)?.ok_or_else(|| Error::Other("сервер не вернул загруженную картинку".into()))
+    }
+
+    /// Удаляет свой профиль. Сайт после этого выходит из аккаунта; Полке это делает
+    /// вызывающий (`Client::logout`). Баланс при удалении обнуляется без возврата.
+    pub async fn delete_profile(&self, user_id: u64) -> Result<()> {
+        self.send_ok::<()>(Site::MangaLib, Method::DELETE, &format!("user/{user_id}"), None)
+            .await
+    }
+
+    /// Отвязывает соцсеть от аккаунта. `service` – `OauthLink::service`.
+    pub async fn unlink_oauth(&self, service: &str) -> Result<()> {
+        if service.is_empty()
+            || !service
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
+            return Err(Error::Other(format!("неизвестная соцсеть: {service}")));
+        }
+        self.send_ok::<()>(
+            Site::MangaLib,
+            Method::POST,
+            &format!("auth/oauth/unlink/{service}"),
+            None,
+        )
+        .await
     }
 
     /// Сохраняет персонализацию целым объектом из `personalization_settings`.

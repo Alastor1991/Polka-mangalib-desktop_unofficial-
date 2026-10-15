@@ -1264,3 +1264,113 @@ async fn title_error_tickets() {
     law.description = "глава 12".into();
     c.report_title_error(kind("law_violation"), &law).await.unwrap();
 }
+
+// ---------- правка профиля ----------
+
+#[tokio::test]
+async fn profile_edit_writes() {
+    let server = MockServer::start().await;
+    // Профиль синтетический: форма собирается из него, имена файлов вместо адресов.
+    let profile: UserProfile = serde_json::from_value(json!({
+        "id": 1001, "username": "user1",
+        "avatar": {"filename": "a1.jpg", "url": "https://cover.cdnlibs.org/uploads/users/1001/a1.jpg"},
+        "background": {"filename": "bg1.jpg", "url": "https://cover.cdnlibs.org/uploads/users/1001/bg1.jpg"},
+        "gender": {"id": 2, "label": "Женский"},
+        "about": "Текст о себе",
+        "avatar_frame_id": null,
+        "premium_background_id": "7",
+        "oauth": [{"service": "vk", "service_id": "123"}],
+        "confirmed": 1
+    }))
+    .unwrap();
+    let mut info = ProfileInfo::from_profile(&profile);
+    assert_eq!(info.avatar.as_deref(), Some("a1.jpg"));
+    assert_eq!(profile.oauth[0].service, "vk");
+    assert_eq!(profile.confirmed, Some(true));
+
+    Mock::given(method("POST"))
+        .and(path("/api/upload/image/avatar"))
+        // У аватара важен `filename`; `name` в ответе может и не быть.
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "filename": "a2.png", "extension": "png", "url": "https://cover.cdnlibs.org/a2.png"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/upload/image/background"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {"name": "bg2.jpg"}})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path("/api/user/1001"))
+        .and(body_json(json!({
+            "update_type": "info", "username": "user1", "gender": 2, "about": "Новый текст",
+            "avatar": "a2.png", "cover": "bg2.jpg", "avatar_frame_id": null, "premium_background_id": 7
+        })))
+        .respond_with(empty_ok())
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path("/api/user/1001"))
+        .and(body_json(json!({"update_type": "email", "email": "new@example.org"})))
+        .respond_with(empty_ok())
+        .expect(1)
+        .mount(&server)
+        .await;
+    expect_write(&server, "POST", "user/1001/email-confirmation/send", json!({})).await;
+    expect_write(&server, "DELETE", "user/1001", json!({})).await;
+    expect_write(&server, "POST", "auth/oauth/unlink/vk", json!({})).await;
+
+    let c = client(&server);
+    // Пустой ник, не адрес почты и странное имя соцсети до сервера не доходят.
+    assert!(matches!(c.unlink_oauth("../user").await, Err(Error::Other(_))));
+    let mut nameless = info.clone();
+    nameless.username = " ".into();
+    assert!(matches!(
+        c.update_profile_info(1001, &nameless).await,
+        Err(Error::Other(_))
+    ));
+    assert!(matches!(c.change_email(1001, "нет").await, Err(Error::Other(_))));
+
+    let avatar = c.upload_avatar("a2.png", b"\x89PNG").await.unwrap();
+    let background = c.upload_background("bg2.jpg", b"\xff\xd8").await.unwrap();
+    info.avatar = avatar.filename;
+    info.cover = Some(background.name);
+    info.about = "Новый текст".into();
+    c.update_profile_info(1001, &info).await.unwrap();
+    c.change_email(1001, " new@example.org ").await.unwrap();
+    c.send_email_confirmation(1001).await.unwrap();
+    c.unlink_oauth("vk").await.unwrap();
+    c.delete_profile(1001).await.unwrap();
+
+    // Картинка уходит одним полем `content` с именем файла.
+    let requests = server.received_requests().await.unwrap();
+    let upload = requests
+        .iter()
+        .find(|r| r.url.path() == "/api/upload/image/avatar")
+        .unwrap();
+    let kind = upload.headers.get("content-type").unwrap().to_str().unwrap();
+    assert!(kind.starts_with("multipart/form-data"), "{kind}");
+    let body = String::from_utf8_lossy(&upload.body);
+    assert!(body.contains(r#"name="content"; filename="a2.png""#), "{body}");
+    assert!(body.contains("image/png"));
+}
+
+#[test]
+fn profile_info_without_pictures() {
+    // Без аватара и фона уходит `null`, как у сайта; «о себе» документом – текстом.
+    let profile: UserProfile = serde_json::from_value(json!({
+        "id": 1002, "username": "user2",
+        "avatar": {"filename": null, "url": "https://cover.cdnlibs.org/static/images/placeholders/user_avatar.png"},
+        "about": {"type": "doc", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Абзац"}]}]}
+    }))
+    .unwrap();
+    let info = ProfileInfo::from_profile(&profile);
+    assert_eq!(info.avatar, None);
+    assert_eq!(info.cover, None);
+    assert_eq!(info.gender, 0);
+    assert_eq!(info.about.trim(), "Абзац");
+}

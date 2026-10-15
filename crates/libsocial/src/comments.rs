@@ -310,9 +310,25 @@ pub struct NewComment {
     pub sticker: Option<Sticker>,
 }
 
-/// Загруженная на сервер картинка.
+/// Часть multipart с картинкой. Тип по расширению: редактор комментариев сайта
+/// принимает jpeg, png и gif, остальное уходит как jpeg.
+pub(crate) fn image_part(name: &str, bytes: &[u8]) -> reqwest::multipart::Part {
+    let mime = match name.rsplit('.').next().map(str::to_ascii_lowercase).as_deref() {
+        Some("png") => "image/png",
+        Some("gif") => "image/gif",
+        _ => "image/jpeg",
+    };
+    reqwest::multipart::Part::bytes(bytes.to_vec())
+        .file_name(name.to_string())
+        .mime_str(mime)
+        .expect("известный тип файла")
+}
+
+/// Загруженная на сервер картинка. Какое из имён нужно дальше, зависит от места:
+/// комментарий и фон профиля берут `name`, аватар – `filename`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Uploaded {
+    #[serde(default)]
     pub name: String,
     #[serde(default)]
     pub filename: Option<String>,
@@ -639,16 +655,7 @@ impl Client {
             .send_api(Auth::User, |http, base| {
                 let mut form = reqwest::multipart::Form::new();
                 for (name, bytes) in &files {
-                    let mime = match name.rsplit('.').next().map(str::to_ascii_lowercase).as_deref() {
-                        Some("png") => "image/png",
-                        Some("gif") => "image/gif",
-                        _ => "image/jpeg",
-                    };
-                    let part = reqwest::multipart::Part::bytes(bytes.clone())
-                        .file_name(name.clone())
-                        .mime_str(mime)
-                        .expect("известный тип файла");
-                    form = form.part("content[]", part);
+                    form = form.part("content[]", image_part(name, bytes));
                 }
                 http.post(join_url(base, "upload/image/comment"))
                     .headers(Self::site_headers(Site::MangaLib))

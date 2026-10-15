@@ -469,6 +469,23 @@ GET /api/user?page=1&filter=points&q=…&sort_by=id&sort_type=desc
 - История идёт по 40 записей без `total` и `last_page`, листать надо по `links.next`.
 - В списке пользователей `filter` принимает `weekly-top`, `points` (все сто записей за раз), `moderators`, `daily-streak`, `weekly-views`. Для общего списка параметр опускают.
 
+Правка своего профиля (`ProfileInfo`, `update_profile_info`, `change_email` и соседние методы в `users.rs`). Сняты со скриптов сайта 15 октября, вживую не проверялись.
+
+```http
+PUT    /api/user/{id}   {"update_type": "info", "username", "gender", "about", "avatar", "cover", "avatar_frame_id", "premium_background_id"}
+PUT    /api/user/{id}   {"update_type": "email", "email": "…"}
+POST   /api/user/{id}/email-confirmation/send                 письмо подтверждения ещё раз
+POST   /api/upload/image/avatar       multipart, одно поле content
+POST   /api/upload/image/background   то же для фона
+DELETE /api/user/{id}                                         удалить профиль
+POST   /api/auth/oauth/unlink/{service}                       отвязать соцсеть
+```
+
+- Форму «Информация» сайт шлёт целиком. Значения он берёт из профиля с `fields[]=about&fields[]=gender&fields[]=background&fields[]=avatar_frame_id&fields[]=premium_background_id`, причём от объектов с `filename` (аватар, фон) берёт только имя файла, а пол – как `gender.id`. У пользователя без аватара имя файла `null`, и в форму уходит `null`. «О себе» – простой текст.
+- После загрузки картинки в форму идёт поле ответа: у аватара `filename`, у фона `name`. Есть ли у ответа обёртка `data`, по скриптам не видно, клиент принимает оба вида. Сайт требует аватар от 120×120, а GIF – премиум или пятый уровень.
+- Отвязать можно сервис из `oauth` профиля (`fields[]=oauth`, только владельцу). Привязка идёт через страницу `auth.lib.social/auth/oauth/redirect/{service}` в браузере, клиент её не делает.
+- После удаления профиля сайт выходит из аккаунта. Смену пароля (`update_type: "password"`) Полка не делает: пароль вводится только на странице lib.social.
+
 ### Настройки
 
 ```http
@@ -634,11 +651,6 @@ POST /api/cards/{id}/receive-preview {card_instance_stat_id}
 
 
 ```http
-PUT    /api/user/{id}   {поля формы профиля}        правка профиля и смена почты
-POST   /api/user/{id}/email-confirmation/send
-DELETE /api/user/{id}                               удалить профиль
-POST   /api/auth/oauth/unlink/{service}             отвязать вход через соцсеть
-POST   /api/upload/image/avatar | /upload/image/background   multipart, ответ {url, …}
 GET    /api/user/{id}/settings/privacy              приватность чужого профиля (свою клиент уже читает)
 GET    /api/user/{id}/premium                       состояние подписки Premium, только чтение
 GET    /api/favorites?user_id=…&source_type=team|people|character|…   избранное пользователя списком
