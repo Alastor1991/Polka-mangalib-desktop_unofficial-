@@ -228,6 +228,7 @@ async fn catalog_constants_by_site() {
         .and(query_param("fields[]", "genres"))
         .and(query_param("fields[]", "ageRestrictionAnime"))
         .and(query_param("fields[]", "scanlateStatus"))
+        .and(query_param("fields[]", "ticketTitleTypes"))
         .respond_with(ok("catalog_constants.json"))
         .expect(1)
         .mount(&server)
@@ -256,6 +257,33 @@ async fn catalog_constants_by_site() {
     assert!(!ranobe_formats[0].is_filterable());
     assert!(c.formats_for(1)[0].is_filterable());
     assert_eq!(c.content_marking[0].id, 1);
+}
+
+#[test]
+fn ticket_types_parse() {
+    use libsocial::catalog_constants::CatalogConstants;
+
+    // Настоящий ответ `constants?fields[]=ticketTitleTypes`.
+    let data = fixture("constants_tickets.json")["data"].clone();
+    let c: CatalogConstants = serde_json::from_value(data).unwrap();
+    let ids: Vec<&str> = c.ticket_types.iter().map(|t| t.id.as_str()).collect();
+    assert!(ids.contains(&"double") && ids.contains(&"genre_tag_mismatch"));
+    let double = &c.ticket_types[0];
+    assert_eq!(double.id, "double");
+    let original = double.field("original_media").unwrap();
+    assert!(original.required && original.input == "media");
+    let law = c.ticket_types.iter().find(|t| t.id == "law_violation").unwrap();
+    let text = law.field("description").unwrap();
+    assert_eq!(text.min, Some(3));
+    assert!(text.required && text.note.is_some());
+
+    // Вид, который не разобрался, выбрасывается, остальные остаются.
+    let mixed: CatalogConstants = serde_json::from_value(json!({
+        "ticketTitleTypes": [{"label": "без id"}, {"id": "double", "fields": [{"name": "description"}]}]
+    }))
+    .unwrap();
+    assert_eq!(mixed.ticket_types.len(), 1);
+    assert!(!mixed.ticket_types[0].fields[0].required);
 }
 
 // --- ленты -----------------------------------------------------------------------------

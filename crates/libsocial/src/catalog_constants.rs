@@ -1,5 +1,6 @@
 //! Справочник значений для формы каталога: жанры, теги, типы, статусы, возрасты,
-//! форматы. Это `GET /constants` с перечнем нужных имён в `fields[]`.
+//! форматы, а заодно виды сообщений об ошибке в карточке тайтла (форме ошибки нужны
+//! те же жанры и теги). Это `GET /constants` с перечнем нужных имён в `fields[]`.
 //!
 //! Справочник общий для всей сети и от `Site-Id` не зависит, отбор по сайту делает
 //! клиент по `site_ids` каждого значения, как и сайт. Ловушки:
@@ -181,6 +182,54 @@ pub struct CatalogConstants {
         deserialize_with = "crate::serde_util::lenient_vec"
     )]
     pub content_marking: Vec<ContentMark>,
+    /// Виды сообщений об ошибке в карточке тайтла (`Client::report_title_error`).
+    #[serde(
+        default,
+        rename = "ticketTitleTypes",
+        deserialize_with = "crate::serde_util::lenient_vec"
+    )]
+    pub ticket_types: Vec<TicketType>,
+}
+
+/// Вид сообщения об ошибке в карточке тайтла: дубль, жанры и теги, нарушения.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TicketType {
+    /// Уходит в `ticket_type`: `double`, `genre_tag_mismatch`, `law_violation`…
+    #[serde(deserialize_with = "string_lenient")]
+    pub id: String,
+    #[serde(default, deserialize_with = "null_default")]
+    pub label: String,
+    /// Поля формы этого вида. Их имена совпадают с полями `TitleTicket`.
+    #[serde(default, deserialize_with = "crate::serde_util::lenient_vec")]
+    pub fields: Vec<TicketField>,
+}
+
+/// Поле формы сообщения об ошибке.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TicketField {
+    /// `description`, `original_media`, `genre_mismatch`, `genre_missing`,
+    /// `tags_mismatch`, `tags_missing`.
+    #[serde(deserialize_with = "string_lenient")]
+    pub name: String,
+    #[serde(default, deserialize_with = "null_default")]
+    pub label: String,
+    /// `text`, `media` (выбор тайтла-оригинала), `genres`, `tags`.
+    #[serde(default, deserialize_with = "null_default")]
+    pub input: String,
+    #[serde(default, deserialize_with = "crate::listing::bool_lenient")]
+    pub required: bool,
+    /// Наименьшая длина текста.
+    #[serde(default, deserialize_with = "crate::serde_util::opt_u64_lenient")]
+    pub min: Option<u64>,
+    /// Подсказка над полем, например у нарушения закона просьба указать главу.
+    #[serde(default, deserialize_with = "opt_string_lenient")]
+    pub note: Option<String>,
+}
+
+impl TicketType {
+    pub fn field(&self, name: &str) -> Option<&TicketField> {
+        self.fields.iter().find(|f| f.name == name)
+    }
 }
 
 /// Значение относится к сайту, только если назван он сам. Нуль в списке сайтом не
@@ -245,6 +294,7 @@ const FIELDS: &[&str] = &[
     "ageRestrictionAnime",
     "format",
     "contentMarking",
+    "ticketTitleTypes",
 ];
 
 impl Client {

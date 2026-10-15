@@ -359,6 +359,18 @@ POST /api/reports   {"reason": …, "metadata": {"comment": "…"}, "reportable_
 - В жалобе на подборку сайт кладёт в `reportable_id` параметр адреса страницы (`collections/:slug`), а в нём лежит id подборки, строкой. Клиент шлёт число; что сервер принимает его, не проверено.
 - Жалобу на серию сайт отправляет из выбора плеера (диалог «Обратная связь»), на главу – из читалки (недостающие, повторённые и перепутанные страницы).
 
+Ошибка в карточке тайтла уходит отдельным тикетом (`TitleTicket`, `report_title_error`):
+
+```http
+POST /api/tickets   {"ticket_type": "genre_tag_mismatch", "media_id": 7965, "media_type": "manga", "genre_mismatch": [34], "genre_missing": [], "tags_mismatch": [], "tags_missing": [328], "description": "…"}
+```
+
+- Виды тикетов лежат в справочнике: `GET /api/constants?fields[]=ticketTitleTypes`, клиент берёт их вместе с остальным справочником формы каталога (`CatalogConstants::ticket_types`). 15 октября их пять: `double` (дубль), `genre_tag_mismatch`, `law_violation`, `copyright_violation`, `lgbt_propaganda`.
+- У каждого вида свои поля формы (`fields`): `name`, `input` (`text`, `media`, `genres`, `tags`), `required`, `min` (наименьшая длина текста), `note` (подсказка). У нарушений текст обязателен, от трёх символов.
+- `media_type` – `model` тайтла, у ранобэ тоже `manga`. Списки жанров и тегов сайт шлёт всегда, пустыми тоже. `description` сайт заводит в теле, когда текст начали вводить; клиент кладёт его, только если текст непустой.
+- У дубля сайт добавляет `original_media_id` и `original_media_type` тайтла-оригинала, выбранного поиском; к другим видам оригинал не уходит.
+- `report_title_error` принимает вид тикета из справочника и до запроса проверяет его обязательные поля (`required`, у текста ещё `min`), `TitleTicket::missing` говорит, чего не хватает. Как сервер отвечает на тикет без обязательного поля, не проверено.
+
 ## Каталог, справочник, ленты и поиск
 
 Код: `crates/libsocial/src/catalog.rs` (фильтр и сортировки), `catalog_constants.rs` (справочник формы), `feeds.rs` (главная, обновления, топ, новости), `search.rs` (люди, команды, персонажи, издатели, франшизы, пользователи). Чтение работает без входа, кроме `user-latest-updates`.
@@ -631,7 +643,6 @@ GET    /api/user/{id}/settings/privacy              приватность чу�
 GET    /api/user/{id}/premium                       состояние подписки Premium, только чтение
 GET    /api/favorites?user_id=…&source_type=team|people|character|…   избранное пользователя списком
 POST   /api/favorites/bulk   {"source_type": …, "ids": […]}   из подборки: выбранные тайтлы в избранное (смысл уточнить)
-POST   /api/tickets   {"ticket_type": …, "media_id", "media_type", "genre_mismatch", "genre_missing", "tags_mismatch", "tags_missing", …}   сообщить об ошибке в карточке тайтла
 GET    /api/user/{id}/chapters|cards|characters?moderated=0|1   что пользователь залил: вкладка «Контент» профиля
 GET    /api/chapters/players/{id}                   одна озвучка манги (список у клиента есть)
 GET    /api/faq/category                            справка: разделы и статьи (есть и в Android-приложении)

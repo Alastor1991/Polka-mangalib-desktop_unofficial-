@@ -1,0 +1,111 @@
+{
+  "data": {
+    "ticketTitleTypes": [
+      {
+        "fields": [
+          {
+            "input": "text",
+            "label": "Сообщение",
+            "name": "description",
+            "outpoot": "text",
+            "required": false
+          },
+          {
+            "input": "media",
+            "label": "Пожалуйста, укажите тайтл который считаете оригиналом",
+            "name": "original_media",
+            "outpoot": "text",
+            "required": true
+          }
+        ],
+        "id": "double",
+        "label": "Дубль тайтла"
+      },
+      {
+        "fields": [
+          {
+            "input": "text",
+            "label": "Сообщение",
+            "name": "description",
+            "outpoot": "text",
+            "required": false
+          },
+          {
+            "input": "genres",
+            "label": "Выберите несоответствующие жанры",
+            "name": "genre_mismatch",
+            "outpoot": "array",
+            "required": false
+          },
+          {
+            "input": "genres",
+            "label": "Укажите жанры, которые нужно добавить",
+            "name": "genre_missing",
+            "outpoot": "array",
+            "required": false
+          },
+          {
+            "input": "tags",
+            "label": "Выберите несоответствующие теги",
+            "name": "tags_mismatch",
+            "outpoot": "array",
+            "required": false
+          },
+          {
+            "input": "tags",
+            "label": "Укажите теги, которые нужно добавить",
+            "name": "tags_missing",
+            "outpoot": "array",
+            "required": false
+          }
+        ],
+        "id": "genre_tag_mismatch",
+        "label": "Несоответствие жанров/тегов"
+      },
+      {
+        "fields": [
+          {
+            "input": "text",
+            "label": "Сообщение",
+            "min": 3,
+            "name": "description",
+            "note": "Пожалуйста, укажите в какой главе это заметили",
+            "outpoot": "text",
+            "required": true
+          }
+        ],
+        "id": "law_violation",
+        "label": "Нарушение закона РФ"
+      },
+      {
+        "fields": [
+          {
+            "input": "text",
+            "label": "Сообщение",
+            "min": 3,
+            "name": "description",
+            "outpoot": "text",
+            "required": true
+          }
+        ],
+        "id": "copyright_violation",
+        "label": "Нарушение авторских прав"
+      },
+      {
+        "fields": [
+          {
+            "input": "text",
+            "label": "Сообщение",
+            "min": 3,
+            "name": "description",
+            "note": "Пожалуйста, укажите в какой главе это заметили",
+            "outpoot": "text",
+            "required": true
+          }
+        ],
+        "id": "lgbt_propaganda",
+        "label": "Пропаганда ЛГБТ"
+      }
+    ]
+  }
+}

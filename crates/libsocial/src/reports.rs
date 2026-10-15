@@ -1,17 +1,23 @@
-//! Жалобы: на пользователя, подборку, отзыв, карточку, тему форума, главу и серию.
+//! Жалобы: на пользователя, подборку, отзыв, карточку, тему форума, главу и серию,
+//! и сообщения об ошибке в карточке тайтла (тикеты).
 //!
 //! Жалоба на комментарий идёт своим путём (`Client::report_comment`). Остальные
 //! уходят на общий `POST /reports`. Причины жалоб у каждого вида объекта свои: сайт
 //! спрашивает их по пространству имён (`namespaces`), и это же пространство кладёт
 //! в саму жалобу. `reportable_type` у главы и серии – их `model` из ответа сервиса,
 //! а не `post_type` комментариев.
+//!
+//! Тикет об ошибке в карточке тайтла устроен иначе: `POST /tickets`, вид берётся из
+//! справочника (`CatalogConstants::ticket_types`), а поля формы у каждого вида свои.
 
 use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+use crate::cards::TitleKind;
+use crate::catalog_constants::TicketType;
 use crate::client::Client;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::serde_util::{null_default, string_lenient, u64_lenient};
 use crate::site::Site;
 
@@ -108,6 +114,88 @@ impl ReportTarget {
     }
 }
 
+/// Сообщение об ошибке в карточке тайтла. Вид передаётся отдельно
+/// (`Client::report_title_error`): какие поля нужны, говорит его `fields`,
+/// остальные оставляют пустыми.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TitleTicket {
+    pub title_id: u64,
+    /// `model` тайтла: у ранобэ тоже `Manga`.
+    pub kind: TitleKind,
+    pub description: String,
+    /// Жанры, которые указаны зря, и жанры, которых не хватает (id из справочника).
+    pub genre_mismatch: Vec<u64>,
+    pub genre_missing: Vec<u64>,
+    pub tags_mismatch: Vec<u64>,
+    pub tags_missing: Vec<u64>,
+    /// Для вида `double`: тайтл, который считать оригиналом.
+    pub original: Option<(u64, TitleKind)>,
+}
+
+impl TitleTicket {
+    pub fn new(title_id: u64, kind: TitleKind) -> TitleTicket {
+        TitleTicket {
+            title_id,
+            kind,
+            description: String::new(),
+            genre_mismatch: Vec::new(),
+            genre_missing: Vec::new(),
+            tags_mismatch: Vec::new(),
+            tags_missing: Vec::new(),
+            original: None,
+        }
+    }
+
+    /// Первое обязательное поле вида, которое не заполнено, с объяснением для
+    /// пользователя. Поля с незнакомым именем клиент не проверяет.
+    pub fn missing(&self, ticket_type: &TicketType) -> Option<String> {
+        ticket_type.fields.iter().filter(|f| f.required).find_map(|f| {
+            let ok = match f.name.as_str() {
+                "description" => {
+                    let min = f.min.unwrap_or(1).max(1) as usize;
+                    self.description.trim().chars().count() >= min
+                }
+                "original_media" => self.original.is_some(),
+                "genre_mismatch" => !self.genre_mismatch.is_empty(),
+                "genre_missing" => !self.genre_missing.is_empty(),
+                "tags_mismatch" => !self.tags_mismatch.is_empty(),
+                "tags_missing" => !self.tags_missing.is_empty(),
+                _ => true,
+            };
+            (!ok).then(|| match f.min {
+                Some(min) if f.input == "text" => format!("«{}»: не короче {min} символов", f.label),
+                _ => format!("заполните поле «{}»", f.label),
+            })
+        })
+    }
+
+    fn body(&self, ticket_type: &str) -> Value {
+        let mut body = json!({
+            "ticket_type": ticket_type,
+            "media_id": self.title_id,
+            "media_type": self.kind.as_str(),
+            "genre_mismatch": self.genre_mismatch,
+            "genre_missing": self.genre_missing,
+            "tags_mismatch": self.tags_mismatch,
+            "tags_missing": self.tags_missing,
+        });
+        // Сайт заводит поле в теле, когда текст начали вводить; клиент кладёт его,
+        // только если текст непустой.
+        let description = self.description.trim();
+        if !description.is_empty() {
+            body["description"] = description.into();
+        }
+        // Оригинал сайт добавляет только к дублю, даже если выбрал его раньше.
+        if ticket_type == "double"
+            && let Some((id, kind)) = self.original
+        {
+            body["original_media_id"] = id.into();
+            body["original_media_type"] = kind.as_str().into();
+        }
+        body
+    }
+}
+
 /// Пространства имён, причины которых сайт показывает вместе (`Tr` в его скриптах).
 fn related_namespaces(namespace: &str) -> Vec<&str> {
     match namespace {
@@ -161,6 +249,17 @@ impl Client {
             "namespaces": target.namespace(),
         });
         self.send_ok(Site::MangaLib, Method::POST, "reports", Some(&body)).await
+    }
+
+    /// Сообщает об ошибке в карточке тайтла. `ticket_type` – вид из справочника
+    /// (`CatalogConstants::ticket_types`). Обязательные по справочнику поля
+    /// (`required`, `min`) клиент проверяет до запроса.
+    pub async fn report_title_error(&self, ticket_type: &TicketType, ticket: &TitleTicket) -> Result<()> {
+        if let Some(problem) = ticket.missing(ticket_type) {
+            return Err(Error::Other(problem));
+        }
+        let body = ticket.body(&ticket_type.id);
+        self.send_ok(Site::MangaLib, Method::POST, "tickets", Some(&body)).await
     }
 }
 

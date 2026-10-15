@@ -1190,3 +1190,77 @@ async fn report_reasons_filtered_like_site() {
     );
     assert_eq!(names(c.report_types().await.unwrap()), ["comment_only"]);
 }
+
+#[tokio::test]
+async fn title_error_tickets() {
+    use libsocial::cards::TitleKind;
+    use libsocial::catalog_constants::TicketType;
+    use libsocial::reports::TitleTicket;
+
+    // Виды из настоящего справочника.
+    let path_ = format!("{}/tests/fixtures/constants_tickets.json", env!("CARGO_MANIFEST_DIR"));
+    let data: Value = serde_json::from_str(&std::fs::read_to_string(&path_).unwrap()).unwrap();
+    let types: Vec<TicketType> = serde_json::from_value(data["data"]["ticketTitleTypes"].clone()).unwrap();
+    let kind = |id: &str| types.iter().find(|t| t.id == id).unwrap();
+
+    let server = MockServer::start().await;
+    // Оригинал у вида, отличного от дубля, не уходит.
+    Mock::given(method("POST"))
+        .and(path("/api/tickets"))
+        .and(body_json(json!({
+            "ticket_type": "genre_tag_mismatch", "media_id": 7965, "media_type": "manga",
+            "genre_mismatch": [34], "genre_missing": [], "tags_mismatch": [], "tags_missing": [328, 329]
+        })))
+        .respond_with(empty_ok())
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/tickets"))
+        .and(body_json(json!({
+            "ticket_type": "double", "media_id": 20591, "media_type": "anime",
+            "genre_mismatch": [], "genre_missing": [], "tags_mismatch": [], "tags_missing": [],
+            "description": "тот же сериал", "original_media_id": 1, "original_media_type": "anime"
+        })))
+        .respond_with(empty_ok())
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/tickets"))
+        .and(body_partial_json(
+            json!({"ticket_type": "law_violation", "description": "глава 12"}),
+        ))
+        .respond_with(empty_ok())
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let c = client(&server);
+    let mut genres = TitleTicket::new(7965, TitleKind::Manga);
+    genres.genre_mismatch = vec![34];
+    genres.tags_missing = vec![328, 329];
+    genres.original = Some((1, TitleKind::Manga));
+    // Пустое пояснение клиент не отправляет.
+    genres.description = "  ".into();
+    c.report_title_error(kind("genre_tag_mismatch"), &genres).await.unwrap();
+
+    let mut double = TitleTicket::new(20591, TitleKind::Anime);
+    double.description = "тот же сериал".into();
+    // Обязательные по справочнику поля проверяются до запроса.
+    assert!(matches!(
+        c.report_title_error(kind("double"), &double).await,
+        Err(Error::Other(_))
+    ));
+    double.original = Some((1, TitleKind::Anime));
+    c.report_title_error(kind("double"), &double).await.unwrap();
+
+    let mut law = TitleTicket::new(7965, TitleKind::Manga);
+    law.description = " гл ".into();
+    let Err(Error::Other(problem)) = c.report_title_error(kind("law_violation"), &law).await else {
+        panic!("короткий текст ушёл на сервер");
+    };
+    assert!(problem.contains('3'), "{problem}");
+    law.description = "глава 12".into();
+    c.report_title_error(kind("law_violation"), &law).await.unwrap();
+}
