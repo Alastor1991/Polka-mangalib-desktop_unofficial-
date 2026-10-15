@@ -427,6 +427,91 @@ async fn friends_lists_and_status() {
     c.friendship_bulk(FriendBulk::DenyAll).await.unwrap();
 }
 
+/// Запись дружбы в ответе на заявку. Пользователь синтетический.
+fn friendship_record(requested: bool, awaiting: bool, friend: bool, blocked: bool) -> Value {
+    json!({
+        "id": 5000002,
+        "user": {"id": 1004, "username": "user4"},
+        "comment": null,
+        "created_at": "2026-10-15T10:00:00.000000Z",
+        "status": {
+            "is_requested": requested,
+            "is_awaiting_confirmation": awaiting,
+            "is_friend": friend,
+            "is_blocked": blocked
+        }
+    })
+}
+
+#[tokio::test]
+async fn friend_request_writes() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/friendship"))
+        .and(body_json(json!({"recipient_id": 1004})))
+        .respond_with(
+            ResponseTemplate::new(201).set_body_json(json!({"data": friendship_record(true, false, false, false)})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    // Ответ без обёртки `data` тоже годится.
+    Mock::given(method("PUT"))
+        .and(path("/api/friendship/5000002"))
+        .and(body_json(json!({"status": 1})))
+        .respond_with(ResponseTemplate::new(200).set_body_json(friendship_record(false, false, true, false)))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path("/api/friendship/5000002"))
+        .and(body_json(json!({"status": 2})))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"data": friendship_record(false, false, false, true)})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    expect_write(&server, "DELETE", "friendship/5000002", json!({})).await;
+
+    let c = client(&server);
+    let sent = c.friend_request(1004).await.unwrap().unwrap();
+    assert_eq!(sent.id, Some(5000002));
+    assert_eq!(sent.status.available_action(), FriendshipAction::Revoke);
+    let accepted = c.accept_friend(5000002).await.unwrap().unwrap();
+    assert_eq!(accepted.status.available_action(), FriendshipAction::Remove);
+    assert_eq!(accepted.user.unwrap().username, "user4");
+    let declined = c.decline_friend(5000002).await.unwrap().unwrap();
+    assert!(declined.status.is_blocked);
+    c.remove_friend(5000002).await.unwrap();
+}
+
+#[tokio::test]
+async fn friend_request_without_record_or_refused() {
+    let server = MockServer::start().await;
+    // Запись сделана, но тела нет: это не ошибка, иначе вызывающий повторил бы запрос.
+    Mock::given(method("PUT"))
+        .and(path("/api/friendship/5000003"))
+        .respond_with(empty_ok())
+        .mount(&server)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path("/api/friendship/5000004"))
+        .respond_with(ResponseTemplate::new(204))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/friendship"))
+        .respond_with(ResponseTemplate::new(422).set_body_json(json!({"message": "Заявка уже отправлена"})))
+        .mount(&server)
+        .await;
+
+    let c = client(&server);
+    assert!(c.accept_friend(5000003).await.unwrap().is_none());
+    assert!(c.decline_friend(5000004).await.unwrap().is_none());
+    assert!(c.friend_request(1004).await.is_err());
+}
+
 #[tokio::test]
 async fn ignore_list_and_writes() {
     let server = MockServer::start().await;

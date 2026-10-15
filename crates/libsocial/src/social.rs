@@ -1,9 +1,8 @@
 //! Друзья, игнор-лист и личные сообщения. Websocket и мини-чат сюда не входят.
 //!
 //! Всё требует входа. Главные ловушки сервиса:
-//! - запросов «отправить, принять, отозвать, удалить дружбу» нет: сайт держит их в общем
-//!   куске скриптов, которого не удалось получить. Есть только чтение и массовое
-//!   принятие или отклонение входящих заявок;
+//! - заявки принимаются, отклоняются и удаляются по id записи дружбы
+//!   (`Friendship::id`), а не по id пользователя;
 //! - списки друзей и сообщений не отдают `meta.last_page`, листать надо по `has_next`,
 //!   а короткие ответы приходят без `meta` и `links` вовсе;
 //! - `GET /ignore` без `sourceable_type` отвечает 422, а игнор от имени команды или
@@ -29,6 +28,11 @@ use crate::users::UserRef;
 /// Самое длинное сообщение, которое принимает сайт.
 pub const MESSAGE_MAX_CHARS: usize = 2000;
 
+/// Статус в ответе на заявку, одиночный или массовый: принять.
+const FRIEND_ACCEPT: u8 = 1;
+/// Отклонить входящую заявку или отозвать свою.
+const FRIEND_DECLINE: u8 = 2;
+
 /// Флаги дружбы между вошедшим пользователем и другим.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FriendshipStatus {
@@ -40,6 +44,10 @@ pub struct FriendshipStatus {
     pub is_awaiting_confirmation: bool,
     #[serde(default, deserialize_with = "bool_lenient")]
     pub is_friend: bool,
+    /// Есть в скриптах сайта рядом с остальными флагами. Кто кого заблокировал,
+    /// не выяснено; в ответах, которые видел клиент, поля не было.
+    #[serde(default, deserialize_with = "bool_lenient")]
+    pub is_blocked: bool,
 }
 
 /// Что кнопка профиля предлагает сделать при таких флагах.
@@ -56,6 +64,7 @@ pub enum FriendshipAction {
 }
 
 impl FriendshipStatus {
+    /// `is_blocked` не учитывается: что он значит, не выяснено.
     pub fn available_action(self) -> FriendshipAction {
         if self.is_friend {
             FriendshipAction::Remove
@@ -105,8 +114,8 @@ impl FriendBulk {
     /// Статус дружбы в запросе: 1 принять, 2 отклонить.
     fn status(self) -> u8 {
         match self {
-            FriendBulk::AcceptAll => 1,
-            FriendBulk::DenyAll => 2,
+            FriendBulk::AcceptAll => FRIEND_ACCEPT,
+            FriendBulk::DenyAll => FRIEND_DECLINE,
         }
     }
 }
@@ -300,6 +309,59 @@ impl Client {
         let body = json!({ "status": action.status() });
         self.send_ok(Site::MangaLib, Method::PUT, "friendship/bulk", Some(&body))
             .await
+    }
+
+    /// Отправляет заявку в друзья. Сервер отвечает новой записью дружбы, сайт ставит
+    /// её вместо прежней. `None` – запрос прошёл, но записи в ответе нет.
+    pub async fn friend_request(&self, user_id: u64) -> Result<Option<Friendship>> {
+        let body = json!({ "recipient_id": user_id });
+        self.friendship_write(Method::POST, "friendship", &body).await
+    }
+
+    /// Принимает входящую заявку. `entry_id` – id записи дружбы (`Friendship::id`).
+    pub async fn accept_friend(&self, entry_id: u64) -> Result<Option<Friendship>> {
+        let body = json!({ "status": FRIEND_ACCEPT });
+        self.friendship_write(Method::PUT, &format!("friendship/{entry_id}"), &body)
+            .await
+    }
+
+    /// Отклоняет входящую заявку или отзывает свою. `entry_id` – id записи дружбы.
+    pub async fn decline_friend(&self, entry_id: u64) -> Result<Option<Friendship>> {
+        let body = json!({ "status": FRIEND_DECLINE });
+        self.friendship_write(Method::PUT, &format!("friendship/{entry_id}"), &body)
+            .await
+    }
+
+    /// Удаляет из друзей. `entry_id` – id записи дружбы, а не пользователя.
+    pub async fn remove_friend(&self, entry_id: u64) -> Result<()> {
+        self.send_ok::<()>(Site::MangaLib, Method::DELETE, &format!("friendship/{entry_id}"), None)
+            .await
+    }
+
+    /// Запись дружбы из ответа на заявку. Есть ли у этих ответов обёртка `data`, по
+    /// скриптам сайта не видно, поэтому клиент принимает запись и с ней, и без неё.
+    /// Запись на сервере к этому времени уже сделана: ответ, в котором записи нет
+    /// (пустое тело, `null`, пустой список), даёт `None`, а не ошибку, чтобы
+    /// вызывающий не повторил запрос. Состояние тогда перечитывают `friendship_with`.
+    async fn friendship_write(&self, method: Method, path: &str, body: &Value) -> Result<Option<Friendship>> {
+        let bytes = self
+            .send_raw(Site::MangaLib, method, path, &(), Some(body))
+            .await?
+            .bytes()
+            .await?;
+        let Ok(value) = serde_json::from_slice::<Value>(&bytes) else {
+            return Ok(None);
+        };
+        let record = value.get("data").unwrap_or(&value);
+        if !record.is_object() {
+            return Ok(None);
+        }
+        Friendship::deserialize(record)
+            .map(Some)
+            .map_err(|source| Error::Decode {
+                context: path.to_string(),
+                source,
+            })
     }
 
     /// Отношение игнора с одним пользователем.
@@ -504,6 +566,7 @@ mod tests {
             is_requested: r,
             is_awaiting_confirmation: a,
             is_friend: f,
+            ..Default::default()
         };
         assert_eq!(s(false, false, false).available_action(), FriendshipAction::Request);
         assert_eq!(s(false, true, false).available_action(), FriendshipAction::Accept);
