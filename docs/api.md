@@ -16,6 +16,7 @@
 - [Аккаунт и общение](#аккаунт-и-общение): уведомления, профиль, история, настройки, друзья, игнор, сообщения, подборки, папки и заметки закладок
 - [Ранобэ](#ранобэ) и серверный экспорт книг
 - [Карточки](#карточки)
+- [Запросы сайта, которых нет в клиенте](#запросы-сайта-которых-нет-в-клиенте): сверка со всеми скриптами сборки
 - [Ограничения](#ограничения), [ловушки](#ловушки-на-которые-ушло-больше-всего-времени), [источники](#источники)
 
 Что из этого уже есть в клиенте API, в ядре и в окне, сведено в [roadmap.md](roadmap.md).
@@ -447,6 +448,10 @@ GET /api/friendship?user_id={свой}&status=0&sender=0|1          входящ
 GET /api/friendship/{id}/mutual?page=1
 GET /api/friendship/{id}                                        флаги дружбы с пользователем
 PUT /api/friendship/bulk   {"status": 1}                        принять все входящие; 2 – отклонить все
+POST   /api/friendship   {"recipient_id": …}                    отправить заявку
+PUT    /api/friendship/{id записи}   {"status": 1}             принять заявку
+PUT    /api/friendship/{id записи}   {"status": 2}             отклонить входящую или отозвать свою
+DELETE /api/friendship/{id записи}                              удалить из друзей
 GET    /api/ignore?sourceable_type=user&sourceable_id={свой}&page=1
 GET    /api/ignore/{id пользователя}
 POST   /api/ignore   {"sourceable_id": …, "sourceable_type": "user", "user_id": …, "comment": "…"}
@@ -463,7 +468,7 @@ DELETE /api/messenger/threads/{id}/messages   {"messages": [id, …]}
 POST /api/chat/check-online   {"users": [id, …]}
 ```
 
-- Запросов «отправить, принять, отозвать, удалить дружбу» в доступных скриптах нет, они лежат в общем куске `shared/UserProfileWrap/user-profile-mnoF2eqC.js`. Клиент их не содержит.
+- Заявки в друзья сайт шлёт из куска `shared/UserProfileWrap/user-profile-*.js`. `{id записи}` – id записи дружбы из `GET /friendship/{id пользователя}`, а не id пользователя. Клиент этих запросов пока не содержит.
 - Друзья идут по 42 записи, `links.last` равен `null`. `GET /ignore` без `sourceable_type` отвечает 422; для игнора от имени команды (`team`) или автора (`people`) комментарий обязателен.
 - Диалогов по 15 на страницу, `find` отвечает 404, если диалога нет, и находит архивные диалоги. Сообщения идут новыми сверху. Отдельного запроса «прочитано» нет, счётчик обнуляет сам запрос сообщений.
 - Текст сообщения простой (до 2000 символов), но сайт вставляет его как HTML, при показе его надо экранировать.
@@ -577,6 +582,55 @@ POST /api/cards/{id}/receive-preview {card_instance_stat_id}
 - Без входа читаются каталог, карта, владельцы, чужой открытый инвентарь, альбомы, рынок, лоты, топ. Осколки, хаос-обмен и прямые обмены требуют входа, а прямые обмены ещё и только свои.
 - Запросы на запись и разбор их ответов не проверены вживую: они взяты из скриптов сайта. Платные действия (покупка и открытие паков, платежи, покупка глав) в клиент не входят.
 
+## Запросы сайта, которых нет в клиенте
+
+15 октября 2026 года сборка сайта скачана целиком вместе с кусками, которые он подгружает по ходу работы (72 файла `/build/assets/**/*.js`, взяты с ranobelib.me: mangalib.me и anilib.me через VPN отвечают геоблокировкой 1020). Из них вынуты все вызовы вида `клиент.метод("/путь", тело)`, 552 пары «метод и путь», и сверены с кодом `libsocial` и с этим описанием. У 179 пар, которые удалось сопоставить с кодом клиента автоматически, методы совпадают. `update` в HTTP-клиенте сайта шлёт PUT (`update(t,s){return this.request({method:"PUT",…})}`), так что PUT в клиенте Полки верен.
+
+Нет в клиенте, нужно обычному пользователю:
+
+```http
+POST   /api/friendship ...                          заявки в друзья, см. «Друзья, игнор, сообщения»
+DELETE /api/auth/oauth/token                        выход: сайт отзывает токен на сервере, Полка только забывает его у себя
+PUT    /api/news/{id}/visited                       новость прочитана, без тела, только с входом
+GET    /api/comments/subscription?source_type=manga|anime|…&source_id=…&content_id=…   подписка на новые комментарии
+POST   /api/comments/subscription   то же тело     переключает её; ответ {notify, content_id}
+POST   /api/teams/{id}/ignore                       скрыть команду (её переводы), ответ {ignored_by_user}
+DELETE /api/teams/{id}/ignore
+PUT    /api/user/{id}   {поля формы профиля}        правка профиля и смена почты
+POST   /api/user/{id}/email-confirmation/send
+DELETE /api/user/{id}                               удалить профиль
+POST   /api/auth/oauth/unlink/{service}             отвязать вход через соцсеть
+POST   /api/upload/image/avatar | /upload/image/background   multipart, ответ {url, …}
+GET    /api/user/{id}/settings/privacy              приватность чужого профиля (свою клиент уже читает)
+GET    /api/user/{id}/premium                       состояние подписки Premium, только чтение
+GET    /api/favorites?user_id=…&source_type=team|people|character|…   избранное пользователя списком
+POST   /api/favorites/bulk   {"source_type": …, "ids": […]}   из подборки: выбранные тайтлы в избранное (смысл уточнить)
+POST   /api/reports   {"reason": …, "metadata": {"comment": …}, …цель}   общая жалоба: на пользователя, команду, тайтл
+POST   /api/tickets   {"ticket_type": …, "media_id", "media_type", "genre_mismatch", "genre_missing", "tags_mismatch", "tags_missing", …}   сообщить об ошибке в карточке тайтла
+GET    /api/user/{id}/chapters|cards|characters?moderated=0|1   что пользователь залил: вкладка «Контент» профиля
+GET    /api/card-instances/{id}/history             история экземпляра карточки
+GET    /api/user/{id}/cards/history?sort=latest&per_page=18&rank=all&…   история карточек пользователя
+GET    /api/cards/albums/merge/search, POST /api/cards/albums/{id}/merge/preview, POST /api/cards/albums/{id}/merge   объединение альбомов
+```
+
+Форум – отдельный раздел, его в клиенте нет совсем (есть только темы на главной и уведомления о них):
+
+```http
+GET  /api/forum/categories
+GET  /api/forum/discussion?…                       список тем с фильтрами
+GET  /api/forum/discussion/sticky?category=…&subscription=0|1
+GET  /api/forum/discussion/{id}
+POST /api/forum/discussion   {…}                   новая тема
+PUT  /api/forum/discussion/{id}   {…}              правка
+POST /api/forum/discussion/{id}/notification       подписка на тему
+POST /api/forum/discussion/{id}/action             действия модератора с темой
+POST /api/discussion/{id}/vote   {"vote": 1}       лайк темы
+```
+
+Комментарии к теме идут через общие комментарии с целью `discussion`, они в клиенте есть. Мини-чат (`POST /chat`, `DELETE /chat/{id}`, websocket) описан в roadmap.
+
+Сознательно вне клиента: модерация и админка (`/admin`, `/moderation`, `/permissions`, `/roles`, `/bans`, `/changelog`, `/export-reports`, правка справочников и сущностей), заливка и правка глав, серий, плееров, субтитров и тайтлов (идёт на отдельный адрес `https://api.novelslib.me/api`), управление командой и её реквизитами, создание карточек и паков, платежи и донаты (`/payment`, `/foreign-service-pay`, `/teams/{id}/donats`, `/manga/{id}/bundles`), закрепление комментария командой. `GET /policy/manga/{slug}` говорит только, можно ли пользователю заливать главы и озвучку. `GET /geo` и `GET /translations` нужны интерфейсу сайта (страна для способа входа, строки интерфейса).
+
 ## Ограничения
 
 Сервис не публикует лимиты. Полка держится в таких рамках:
@@ -611,7 +665,7 @@ POST /api/cards/{id}/receive-preview {card_instance_stat_id}
 
 ## Источники
 
-- скрипты сайта mangalib.me (вход, адрес возврата). В октябре 2026 года разобраны все 49 скриптов сборки сайта (`/build/assets/*.js`, общие для всех сайтов сети): из них взяты пути и тела запросов закладок, отметок, комментариев, каталога, аккаунта, ранобэ и карточек. Кусок `shared/UserProfileWrap/user-profile-*.js` с запросами дружбы в сборку главной страницы не входит и пока не разобран;
+- скрипты сайта mangalib.me (вход, адрес возврата). В октябре 2026 года разобраны 49 скриптов сборки главной страницы (`/build/assets/*.js`, общие для всех сайтов сети): из них взяты пути и тела запросов закладок, отметок, комментариев, каталога, аккаунта, ранобэ и карточек. 15 октября сборка скачана целиком, с подгружаемыми кусками (72 файла), и сверена с клиентом, см. [запросы сайта, которых нет в клиенте](#запросы-сайта-которых-нет-в-клиенте);
 - официальное Android-приложение lib.social версии 2.0.4, разобранное jadx (адреса, клиенты OAuth, разбор плееров);
 - расширение для Mihon: [keiyoushi/extensions-source](https://github.com/keiyoushi/extensions-source), `lib-multisrc/libgroup`;
 - [vypivshiy/anicli-api](https://github.com/vypivshiy/anicli-api) и [Fazer000/AnimeLib-Mobile](https://github.com/Fazer000/AnimeLib-Mobile) (плеер Animelib);
