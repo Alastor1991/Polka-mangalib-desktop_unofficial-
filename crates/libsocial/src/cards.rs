@@ -2041,11 +2041,149 @@ pub struct ReceivePreview {
     pub card_instance_stat_id: Option<u64>,
 }
 
+// ------------------------------------------------------------- история карт
+
+/// Значения фильтров истории карт (`GET /card-history/options`, без обёртки `data`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CardHistoryOptions {
+    #[serde(default, deserialize_with = "crate::serde_util::lenient_vec")]
+    pub ranks: Vec<ValueLabel>,
+    #[serde(default, deserialize_with = "crate::serde_util::lenient_vec")]
+    pub card_types: Vec<ValueLabel>,
+    /// Откуда карта пришла или куда ушла: чтение, пак, обмен, крафт…
+    #[serde(default, deserialize_with = "crate::serde_util::lenient_vec")]
+    pub operation_types: Vec<ValueLabel>,
+    /// Пороги качества в процентах.
+    #[serde(default, deserialize_with = "crate::serde_util::lenient_vec")]
+    pub quality_values: Vec<ValueLabel>,
+    /// `latest`, `oldest`, `events_desc`, `events_asc`.
+    #[serde(default, deserialize_with = "crate::serde_util::lenient_vec")]
+    pub sorts: Vec<ValueLabel>,
+}
+
+/// Фильтр истории карт пользователя. Значения строк – `value` из
+/// `CardHistoryOptions`. Пустые поля сайт шлёт пустыми строками, клиент их не
+/// шлёт вовсе.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CardHistoryQuery {
+    /// Поиск: персонаж, тайтл, номер экземпляра, операция. От двух символов.
+    pub text: String,
+    /// По умолчанию `latest`.
+    pub sort: Option<String>,
+    pub rank: Option<Rank>,
+    pub card_type: Option<String>,
+    pub op_types: Vec<String>,
+    pub quality_min: Option<u32>,
+    pub quality_max: Option<u32>,
+    pub power_min: Option<u32>,
+    pub power_max: Option<u32>,
+    /// Даты как у сайта, `ГГГГ-ММ-ДД`.
+    pub date_from: Option<String>,
+    pub date_to: Option<String>,
+    pub page: u32,
+}
+
+impl CardHistoryQuery {
+    /// Имена параметров совпадают с полями формы фильтра сайта; сервер на них
+    /// вживую не проверялся, кроме `sort`, `per_page` и `rank`.
+    fn params(&self) -> Vec<(String, String)> {
+        let mut p = vec![
+            ("sort".into(), self.sort.clone().unwrap_or_else(|| "latest".into())),
+            ("per_page".into(), "18".into()),
+            ("page".into(), self.page.max(1).to_string()),
+        ];
+        let mut put = |key: &str, value: Option<String>| {
+            if let Some(value) = value.filter(|v| !v.is_empty()) {
+                p.push((key.into(), value));
+            }
+        };
+        put("rank", self.rank.map(|r| r.code().to_string()));
+        put("card_type", self.card_type.clone());
+        put("quality_min", self.quality_min.map(|v| v.to_string()));
+        put("quality_max", self.quality_max.map(|v| v.to_string()));
+        put("power_min", self.power_min.map(|v| v.to_string()));
+        put("power_max", self.power_max.map(|v| v.to_string()));
+        put("date_from", self.date_from.clone());
+        put("date_to", self.date_to.clone());
+        let text = self.text.trim();
+        if text.chars().count() >= 2 {
+            p.push(("q".into(), text.to_string()));
+        }
+        p.extend(self.op_types.iter().map(|t| ("op_types[]".to_string(), t.clone())));
+        p
+    }
+}
+
+/// Последнее событие с экземпляром в истории.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CardHistoryEvent {
+    #[serde(default, deserialize_with = "crate::serde_util::opt_string_lenient")]
+    pub created_at: Option<String>,
+    /// Готовая подпись события.
+    #[serde(default, deserialize_with = "string_lenient")]
+    pub title: String,
+    /// Вид события для окраски: `in`, `out`, `destroy`, `admin`.
+    #[serde(default, deserialize_with = "string_lenient")]
+    pub tone: String,
+    /// Прочие поля: полный вид записи не снят.
+    #[serde(flatten)]
+    pub extra: Map<String, Value>,
+}
+
+/// Строка истории карт: экземпляр и его последнее событие.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CardHistoryEntry {
+    #[serde(deserialize_with = "u64_lenient")]
+    pub instance_id: u64,
+    #[serde(default, deserialize_with = "crate::serde_util::opt_lenient")]
+    pub card: Option<Card>,
+    #[serde(default, deserialize_with = "crate::serde_util::opt_lenient")]
+    pub last_event: Option<CardHistoryEvent>,
+}
+
+/// Вся история одного экземпляра карты.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CardInstanceHistory {
+    #[serde(default, deserialize_with = "crate::serde_util::opt_lenient")]
+    pub card: Option<Card>,
+    /// Сам экземпляр; сайт показывает из него `public_instance_code`.
+    #[serde(default)]
+    pub instance: Option<Value>,
+    /// `locked` заблокирован, `archived` в архиве, остальное сайт называет активным.
+    #[serde(default, deserialize_with = "string_lenient")]
+    pub current_status: String,
+    /// События. Сайт берёт из них `id`, `user_id`, `user`, `is_visible_limited`,
+    /// полный вид не снят.
+    #[serde(default, deserialize_with = "null_default")]
+    pub events: Vec<Value>,
+}
+
 // ------------------------------------------------------------------- запросы
 
 impl Client {
     async fn cards_page<T: DeserializeOwned>(&self, path: &str, query: &[(String, String)]) -> Result<Page<T>> {
         self.get_page(Site::MangaLib, path, query).await
+    }
+
+    /// Значения фильтров истории карт.
+    pub async fn card_history_options(&self) -> Result<CardHistoryOptions> {
+        let value: Value = self.get_json(Site::MangaLib, "card-history/options", &()).await?;
+        Ok(crate::client::record_of(&value, "card-history/options")?.unwrap_or_default())
+    }
+
+    /// История карт пользователя по 18 записей: экземпляры и их последнее событие.
+    /// Чужую историю сервер на проверенном профиле не отдал (403).
+    pub async fn user_card_history(&self, user_id: u64, query: &CardHistoryQuery) -> Result<Page<CardHistoryEntry>> {
+        self.cards_page(&format!("user/{user_id}/cards/history"), &query.params())
+            .await
+    }
+
+    /// История одного экземпляра карты (`CardHistoryEntry::instance_id`). Есть ли у
+    /// ответа обёртка `data`, по скриптам не видно, клиент принимает оба вида.
+    pub async fn card_instance_history(&self, instance_id: u64) -> Result<CardInstanceHistory> {
+        let path = format!("card-instances/{instance_id}/history");
+        let value: Value = self.get_json(Site::MangaLib, &path, &()).await?;
+        Ok(crate::client::record_of(&value, &path)?.unwrap_or_default())
     }
 
     /// Справочник: ранги, стихии, типы. Вход не нужен.

@@ -980,3 +980,72 @@ async fn live_read_without_login() {
         Err(Error::Unauthorized)
     ));
 }
+
+#[tokio::test]
+async fn card_history_requests() {
+    let server = MockServer::start().await;
+    // Фильтры приходят без обёртки `data`, как у настоящего ответа.
+    Mock::given(method("GET"))
+        .and(path("/api/card-history/options"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "ranks": [{"value": "S", "label": "S"}],
+            "card_types": [{"value": "normal", "label": "Обычная"}],
+            "operation_types": [{"value": "pack_open", "label": "Пак"}, {"value": "trade", "label": "Обмен"}],
+            "quality_values": [{"value": "25", "label": "25%"}],
+            "sorts": [{"value": "latest", "label": "Сначала новые"}]
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    // Записи синтетические: настоящую историю снять не удалось.
+    Mock::given(method("GET"))
+        .and(path("/api/user/1001/cards/history"))
+        .and(query_param("sort", "latest"))
+        .and(query_param("per_page", "18"))
+        .and(query_param("rank", "A"))
+        .and(query_param("op_types[]", "pack_open"))
+        .and(query_param("op_types[]", "trade"))
+        .and(query_param("quality_min", "50"))
+        .and(query_param("q", "кот"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": [{"instance_id": "900", "card": {"id": 5, "name": "Карта"},
+                      "last_event": {"created_at": "2026-10-15T10:00:00.000000Z", "title": "Получена из пака", "tone": "in", "pack_id": 3}}],
+            "meta": {"current_page": 1, "last_page": 2, "total_cards": 1}
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/card-instances/900/history"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"data": {
+            "card": {"id": 5, "name": "Карта"}, "current_status": "locked", "events": [{"title": "Получена из пака"}]
+        }})))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let c = client(&server);
+    let options = c.card_history_options().await.unwrap();
+    assert_eq!(options.operation_types.len(), 2);
+    let query = CardHistoryQuery {
+        rank: Some(Rank::A),
+        op_types: vec!["pack_open".into(), "trade".into()],
+        quality_min: Some(50),
+        card_type: Some(String::new()),
+        text: " кот ".into(),
+        ..Default::default()
+    };
+    let page = c.user_card_history(1001, &query).await.unwrap();
+    assert!(page.has_next);
+    let entry = &page.items[0];
+    assert_eq!(entry.instance_id, 900);
+    let event = entry.last_event.as_ref().unwrap();
+    assert_eq!(event.tone, "in");
+    assert_eq!(event.extra["pack_id"], 3);
+    let history = c.card_instance_history(entry.instance_id).await.unwrap();
+    assert_eq!(history.current_status, "locked");
+    assert_eq!(history.events.len(), 1);
+    // Пустой тип карты не уходит в запрос.
+    let requests = server.received_requests().await.unwrap();
+    assert!(!requests[1].url.query().unwrap_or_default().contains("card_type"));
+}
