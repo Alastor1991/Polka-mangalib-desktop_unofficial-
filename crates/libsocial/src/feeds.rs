@@ -15,10 +15,12 @@
 //! - `hot-newest` на проверенных сайтах пуст, сайт показывает его избранным;
 //! - картинки новостей и баннеров лежат на хосте API (`/uploads/...`), не на CDN обложек;
 //!   в новости они подставлены в документ, в баннерах остаются путём (`Client::upload_url`);
-//! - картинка в тексте новости ссылается на вложение по имени, не по адресу.
+//! - картинка в тексте новости ссылается на вложение по имени, не по адресу;
+//! - отметку новости прочитанной сайт шлёт только вошедшему.
 
 use std::collections::BTreeMap;
 
+use reqwest::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -802,6 +804,17 @@ impl Client {
     /// Список новостей по 20. Для сайта 1 их около двухсот, для AnimeLib около двадцати.
     pub async fn news(&self, site: Site, filter: &NewsFilter, page: u32) -> Result<Page<NewsItem>> {
         self.get_page(site, "news", &filter.to_query(page)).await
+    }
+
+    /// Отмечает новость прочитанной, как сайт при открытии. Сайт шлёт этот запрос
+    /// только вошедшему, поэтому без входа клиент отказывает до запроса. Сайт заодно
+    /// кладёт `NewsItem::visited_key` в свой список прочитанных.
+    pub async fn mark_news_visited(&self, site: Site, news_id: u64) -> Result<()> {
+        if !self.is_logged_in().await {
+            return Err(Error::Unauthorized);
+        }
+        self.send_ok::<()>(site, Method::PUT, &format!("news/{news_id}/visited"), None)
+            .await
     }
 
     /// Новость по `slug_url`. Текст приходит документом ProseMirror.

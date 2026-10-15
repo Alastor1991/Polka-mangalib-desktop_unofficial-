@@ -349,6 +349,7 @@ GET /api/media/top-views?time=…&popularity=3&page=1    плоский спис
 GET /api/media/hot-newest                              пусто на всех проверенных сайтах
 GET /api/news?type[]=news&type[]=changelog&visible_for[]=all&platform[]=web&page=1
 GET /api/news/308--versiia-204                         по голому id 404
+PUT /api/news/308/visited                              прочитана, без тела, только с входом
 GET /api/people|teams|character|publisher|franchise?q=…&sort_by=…&sort_type=…&site_ids[]=1&page=1
 GET /api/people/{slug_url}                             то же для teams, character, publisher, franchise
 GET /api/user?q=…&filter=weekly-top|points|moderators|daily-streak|weekly-views&sort_by=id|username&sort_type=…
@@ -379,7 +380,7 @@ GET /api/user?q=…&filter=weekly-top|points|moderators|daily-streak|weekly-view
 - На главной `hot_newest` и `news` обычно пусты. Блоки, их порядок и видимость пользователь задаёт в настройках (`start_page_blocks`), это вне поиска. `slider` – рекламные баннеры.
 - `metadata.contentVersion` новости приходит то строкой, то числом. Прочитанные новости лежат в `visited_news` ключами `<id>_<contentVersion>`.
 - Текст новости – документ ProseMirror, картинки в нём ссылаются на `attachments[].name`, а адреса вложений (`/uploads/news/…`) лежат на хосте API, а не на `cover.cdnlibs.org`. `news_article` подставляет адреса в `Doc`, `Client::upload_url` собирает их для баннеров.
-- Отметка новости прочитанной (`/news/{id}/visited`) не реализована: её метод (PUT или PATCH) по скриптам сайта не определить.
+- Отметка новости прочитанной – `PUT /api/news/{id}/visited` без тела, только с входом (`mark_news_visited`; гостю клиент отказывает до запроса). Метод виден по сверке 15 октября: `update` в HTTP-клиенте сайта шлёт PUT. Сайт заодно кладёт `<id>_<contentVersion>` в свой список прочитанных. Вживую не проверялось, в том числе попадает ли новость после этого в `visited_news` главной.
 
 Поиск и списки:
 
@@ -595,7 +596,6 @@ POST /api/cards/{id}/receive-preview {card_instance_stat_id}
 
 
 ```http
-PUT    /api/news/{id}/visited                       новость прочитана, без тела, только с входом
 GET    /api/comments/subscription?source_type=manga|anime|…&source_id=…&content_id=…   подписка на новые комментарии
 POST   /api/comments/subscription   то же тело     переключает её; ответ {notify, content_id}
 PUT    /api/user/{id}   {поля формы профиля}        правка профиля и смена почты

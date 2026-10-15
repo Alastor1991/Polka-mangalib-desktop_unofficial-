@@ -13,7 +13,7 @@ use libsocial::feeds::{NewsFilter, NewsKind, TopGroup, TopTime};
 use libsocial::listing::SortOrder;
 use libsocial::rich::Block;
 use libsocial::search::{EntityKind, EntityQuery, EntitySort, UserFilter, UserQuery};
-use libsocial::{Client, ClientConfig, Error, Site};
+use libsocial::{Client, ClientConfig, Error, Site, Token};
 use serde_json::{Value, json};
 use wiremock::matchers::{header, method, path, query_param, query_param_is_missing};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -444,6 +444,38 @@ async fn news_list_and_article() {
     );
     assert_eq!(pictures[0].width, Some(800));
     assert!(article.content_raw["content"].is_array());
+}
+
+#[tokio::test]
+async fn news_marked_visited_only_with_login() {
+    let server = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path("/api/news/308/visited"))
+        .and(header("authorization", "Bearer t"))
+        .and(header("site-id", "5"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let c = client(&server);
+
+    // Гость: до сервера запрос не доходит.
+    assert!(matches!(
+        c.mark_news_visited(Site::AnimeLib, 308).await,
+        Err(Error::Unauthorized)
+    ));
+    c.set_token(Some(Token {
+        access_token: "t".into(),
+        refresh_token: None,
+        token_type: "Bearer".into(),
+        expires_at: libsocial::auth::now_secs() + 3600,
+        client_id: "1".into(),
+    }))
+    .await;
+    c.mark_news_visited(Site::AnimeLib, 308).await.unwrap();
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0].body.is_empty());
 }
 
 // --- поиск -----------------------------------------------------------------------------

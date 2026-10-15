@@ -154,7 +154,7 @@ flowchart LR
 | `comments.rs` | комментарии | `Target` (к чему комментарий, в том числе страница главы), `comments`, `comment_thread`, `sticky_comments`, `post_comment`, `edit_comment`, `delete_comment`, `vote`, `report_comment`, `report_types`, `sticker_packs`, `upload_comment_images`, `user_comments` |
 | `media.rs` | вокруг тайтла | `covers`, `title_stats`, `relations`, `similar` и голоса, `add_similar`, `title_characters`, звёздочки-подписки, `rate_title`, `like_chapter`, `rate_translation`, подписки на ветку и озвучку, команды и их оценка, игнор команды, отзывы целиком, озвучка манги |
 | `catalog.rs`, `catalog_constants.rs` | полный каталог и справочник формы | `CatalogFilter` со всеми параметрами, `CatalogSort`, случайный порядок с курсором, отказ до запроса там, где сервер ответил бы 422; `catalog_constants` с отбором по сайту |
-| `feeds.rs` | главная и ленты | `home`, `latest_updates`, `user_latest_updates`, `top_views`, `hot_newest`, `news`, `news_article`, `upload_url` |
+| `feeds.rs` | главная и ленты | `home`, `latest_updates`, `user_latest_updates`, `top_views`, `hot_newest`, `news`, `news_article`, `mark_news_visited`, `upload_url` |
 | `search.rs` | поиск сущностей и пользователей | `EntityKind`, `EntityCard`, `search_entities`, `entity`, `users` |
 | `notifications.rs` | уведомления | счётчики, список с типизированными событиями `NotificationEvent`, отметка прочитанным и удаление поштучно и пачкой |
 | `users.rs` | профиль и настройки | `user_profile`, `user_stats`, `user_view_statistics`, `view_history` (три вида), настройки приватности, уведомлений, фильтра контента и персонализации на чтение и запись |
