@@ -19,10 +19,7 @@ pub async fn connect(config: &Config) -> Result<(Client, TokenStore)> {
             eprintln!("не удалось сохранить токен: {e:#}");
         }
     });
-    let client = Client::new(config.client_config())?.with_token_listener(listener);
-    if let Ok(last) = std::fs::read_to_string(config.last_mirror_path()) {
-        client.prefer_api(last.trim());
-    }
+    let client = new_client(config)?.with_token_listener(listener);
     let saved = match store.load() {
         Ok(token) => token,
         Err(e) => {
@@ -39,6 +36,16 @@ pub async fn connect(config: &Config) -> Result<(Client, TokenStore)> {
         }
     }
     Ok((client, store))
+}
+
+/// Клиент по настройкам, начиная с зеркала, которое сработало в прошлый раз.
+/// Без сохранённого входа: его поднимает `connect`.
+pub fn new_client(config: &Config) -> Result<Client> {
+    let client = Client::new(config.client_config())?;
+    if let Ok(last) = std::fs::read_to_string(config.last_mirror_path()) {
+        client.prefer_api(last.trim());
+    }
+    Ok(client)
 }
 
 /// Запоминает зеркало API, которое сработало, чтобы в следующий раз начать с него.

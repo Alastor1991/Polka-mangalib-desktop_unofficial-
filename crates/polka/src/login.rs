@@ -104,11 +104,72 @@ async fn finish_login(
     Ok(())
 }
 
+/// Сколько `polka logout` ждёт сервер. Хранилище стирается и по истечении срока.
+const LOGOUT_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Чем кончился выход для токена на сервере.
+enum Revoke {
+    Revoked,
+    /// Сервер отверг refresh token: просроченный токен и так ничего не открывает.
+    AlreadyDead,
+    Failed,
+    NoLogin,
+}
+
 pub async fn cli_logout() -> Result<()> {
     let store = TokenStore::detect();
+    // Выйти должно получаться и со сломанными настройками, прокси или хранилищем:
+    // тогда токен только стирается на этом компьютере.
+    let saved = match store.load() {
+        Ok(saved) => saved,
+        Err(e) => {
+            eprintln!("не удалось прочитать сохранённый вход, просто стираю его: {e:#}");
+            None
+        }
+    };
+    let outcome = match saved {
+        None => Revoke::NoLogin,
+        Some(token) => match tokio::time::timeout(LOGOUT_WAIT, revoke(token)).await {
+            Ok(Ok(outcome)) => outcome,
+            Ok(Err(e)) => {
+                eprintln!("не удалось связаться с сервером для выхода: {e:#}");
+                Revoke::Failed
+            }
+            Err(_) => {
+                eprintln!("сервер не ответил за {} с", LOGOUT_WAIT.as_secs());
+                Revoke::Failed
+            }
+        },
+    };
     store.save(None)?;
-    println!("Вход сброшен ({}).", store.describe());
+    let place = store.describe();
+    match outcome {
+        Revoke::Revoked => println!("Вы вышли, токен отозван на сервере и стёрт ({place})."),
+        Revoke::AlreadyDead => println!("Вход уже истёк на сервере, токен стёрт ({place})."),
+        Revoke::Failed => println!(
+            "Вход сброшен ({place}). Отозвать токен на сервере не получилось: \
+             он перестанет действовать сам, когда истечёт."
+        ),
+        Revoke::NoLogin => println!("Вход и так не был выполнен ({place})."),
+    }
     Ok(())
+}
+
+/// Отзывает токен из хранилища. Клиент без слушателя: хранилище стирает `cli_logout`,
+/// а `session::connect` печатал бы сообщения о входе, неуместные при выходе.
+async fn revoke(token: libsocial::Token) -> Result<Revoke> {
+    let client = session::new_client(&Config::load()?)?;
+    // Просроченный токен сервер отзывать не станет и ответит 401, поэтому его сначала
+    // обновляем, как при запуске, и отзываем уже свежий.
+    // Прочие сбои обновления не мешают: попробуем отозвать то, что есть.
+    if let Err(libsocial::Error::RefreshRejected) = client.restore_token(token).await {
+        return Ok(Revoke::AlreadyDead);
+    }
+    Ok(if client.logout().await {
+        Revoke::Revoked
+    } else {
+        Revoke::Failed
+    })
 }
 
 pub async fn cli_whoami() -> Result<()> {

@@ -278,6 +278,122 @@ async fn expired_token_restored_offline() {
 }
 
 #[tokio::test]
+async fn logout_revokes_token() {
+    let s = MockServer::start().await;
+    Mock::given(method("DELETE"))
+        .and(path("/api/auth/oauth/token"))
+        .and(header("authorization", "Bearer old"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&s)
+        .await;
+
+    let (c, seen) = recorder(client(&[&s]));
+    c.set_token(Some(token("old"))).await;
+    assert!(c.logout().await);
+    assert!(c.token().await.is_none());
+    assert_eq!(*seen.lock().unwrap(), vec![None]);
+}
+
+#[tokio::test]
+async fn logout_forgets_token_when_server_refuses() {
+    let s = MockServer::start().await;
+    // Один запрос: ни повторов на 500, ни обновления токена на 401.
+    Mock::given(method("DELETE"))
+        .and(path("/api/auth/oauth/token"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(1)
+        .mount(&s)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/auth/oauth/token"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&s)
+        .await;
+
+    let (c, seen) = recorder(client(&[&s]));
+    c.set_token(Some(token("old"))).await;
+    assert!(!c.logout().await);
+    assert!(c.token().await.is_none());
+    assert_eq!(*seen.lock().unwrap(), vec![None]);
+}
+
+#[tokio::test]
+async fn logout_with_stale_token_does_not_refresh() {
+    let s = MockServer::start().await;
+    Mock::given(method("DELETE"))
+        .and(path("/api/auth/oauth/token"))
+        .respond_with(ResponseTemplate::new(401))
+        .expect(1)
+        .mount(&s)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/auth/oauth/token"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&s)
+        .await;
+
+    let c = client(&[&s]);
+    c.set_token(Some(token("old"))).await;
+    assert!(!c.logout().await);
+    assert!(c.token().await.is_none());
+}
+
+#[tokio::test]
+async fn logout_offline_forgets_token() {
+    let config = ClientConfig {
+        api_mirrors: vec!["http://127.0.0.1:9/api".into()],
+        api_interval: Duration::ZERO,
+        ..Default::default()
+    };
+    let (c, seen) = recorder(Client::new(config).unwrap());
+    c.set_token(Some(token("old"))).await;
+    let started = std::time::Instant::now();
+    assert!(!c.logout().await);
+    // Без сети выход не ждёт повторов с паузами.
+    assert!(started.elapsed() < Duration::from_secs(1));
+    assert!(c.token().await.is_none());
+    assert_eq!(*seen.lock().unwrap(), vec![None]);
+}
+
+#[tokio::test]
+async fn logout_forgets_token_before_server_answers() {
+    let s = MockServer::start().await;
+    Mock::given(method("DELETE"))
+        .and(path("/api/auth/oauth/token"))
+        .respond_with(ResponseTemplate::new(200).set_delay(Duration::from_secs(5)))
+        .expect(1)
+        .mount(&s)
+        .await;
+
+    let c = client(&[&s]);
+    c.set_token(Some(token("old"))).await;
+    let pending = tokio::spawn({
+        let c = c.clone();
+        async move { c.logout().await }
+    });
+    // Окно могут закрыть, не дождавшись ответа: токен к этому времени уже забыт.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert!(c.token().await.is_none());
+    pending.abort();
+}
+
+#[tokio::test]
+async fn logout_without_login_sends_nothing() {
+    let s = MockServer::start().await;
+    Mock::given(path("/api/auth/oauth/token"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&s)
+        .await;
+
+    let c = client(&[&s]);
+    assert!(!c.logout().await);
+}
+
+#[tokio::test]
 async fn page_falls_back_to_other_server() {
     use libsocial::models::PageImage;
 

@@ -126,6 +126,10 @@ pub(crate) enum Auth {
     /// Без токена и без повторов после отправки: обмен кода и обновление токена.
     /// Эти запросы одноразовые, повтор после потерянного ответа сжёг бы код.
     TokenEndpoint,
+    /// Отзыв токена при выходе. Токен к этому времени уже сброшен, его кладёт в
+    /// заголовок сам запрос. Без обновления при 401 (протухший отзывать незачем)
+    /// и без повторов: выход не должен ждать лежащий сервер.
+    Revoke,
 }
 
 impl Client {
@@ -371,7 +375,7 @@ impl Client {
             let base = &self.api_mirrors[idx];
             let token = match auth {
                 Auth::User => self.token.read().await.clone(),
-                Auth::TokenEndpoint => None,
+                Auth::TokenEndpoint | Auth::Revoke => None,
             };
             let mut request = build(&self.http, base).header(ACCEPT, "application/json");
             if let Some(token) = &token {
@@ -396,6 +400,7 @@ impl Client {
                     let retry = match auth {
                         Auth::User => e.is_timeout() || e.is_connect() || e.is_request(),
                         Auth::TokenEndpoint => e.is_connect(),
+                        Auth::Revoke => false,
                     };
                     if retry && attempt < RETRIES {
                         attempt += 1;

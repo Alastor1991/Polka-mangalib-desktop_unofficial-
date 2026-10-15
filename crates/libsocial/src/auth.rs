@@ -4,7 +4,7 @@
 //! возврата. Из этого адреса берётся код и меняется на токены. Клиент OAuth и адрес
 //! возврата задаются в `ClientConfig`, по умолчанию это веб-клиент сайта.
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -25,6 +25,10 @@ pub const CALLBACK_PATH: &str = "/ru/front/auth/oauth/callback";
 
 /// Сколько секунд до истечения считать токен уже просроченным.
 const EXPIRY_MARGIN: u64 = 120;
+
+/// Сколько ждать ответа на отзыв токена. Сайт ответа не ждёт вовсе, а выход
+/// из Полки не должен висеть минуту из-за лежащего сервера.
+const REVOKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Token {
@@ -260,8 +264,34 @@ impl Client {
         Ok(token)
     }
 
-    pub async fn logout(&self) {
-        self.drop_token().await;
+    /// Выход, как на сайте: клиент забывает токен, сервер его отзывает. Забывает
+    /// до запроса в сеть: выйти из Полки должно получаться всегда, даже если сеть
+    /// лежит, сервер отказал или окно закрыли, не дождавшись ответа. Ждать приходится
+    /// только обновление токена, если оно уже идёт.
+    /// Возвращает, отозван ли токен на сервере.
+    pub async fn logout(&self) -> bool {
+        let token = {
+            // Под замком обновление, которое уже идёт, не вернёт токен после сброса.
+            let _guard = self.refresh_lock.lock().await;
+            let token = self.token().await;
+            self.drop_token().await;
+            token
+        };
+        match token {
+            Some(token) => self.revoke_token(&token).await.is_ok(),
+            None => false,
+        }
+    }
+
+    async fn revoke_token(&self, token: &Token) -> Result<()> {
+        self.send_api(Auth::Revoke, |http, base| {
+            http.delete(join_url(base, "auth/oauth/token"))
+                .headers(Client::site_headers(Site::MangaLib))
+                .header(reqwest::header::AUTHORIZATION, token.header_value())
+                .timeout(REVOKE_TIMEOUT)
+        })
+        .await
+        .map(drop)
     }
 
     pub async fn me(&self) -> Result<Me> {
