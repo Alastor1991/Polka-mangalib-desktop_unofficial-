@@ -425,9 +425,16 @@ mod tests {
             cache.get(&client).await.unwrap();
             server.verify().await;
 
-            // Сервер пропал: отдаём то, что было.
-            drop(server);
-            assert_eq!(cache.get(&client).await.unwrap().genres_for(1).len(), 1);
+            // Сервер пропал: отдаём то, что было. Брошенный MockServer wiremock
+            // возвращает в общий пул, и его адрес может достаться соседнему тесту,
+            // поэтому недоступный сервер изображает клиент на закрытом порту.
+            let offline = Client::new(libsocial::ClientConfig {
+                api_mirrors: vec!["http://127.0.0.1:9/api".into()],
+                api_interval: Duration::ZERO,
+                ..Default::default()
+            })
+            .unwrap();
+            assert_eq!(cache.get(&offline).await.unwrap().genres_for(1).len(), 1);
         }
 
         #[tokio::test]
