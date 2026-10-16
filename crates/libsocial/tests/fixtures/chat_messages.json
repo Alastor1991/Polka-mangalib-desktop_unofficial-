@@ -1,0 +1,41 @@
+[
+  {
+    "id": 9000002,
+    "text": "@Читатель#9000001 тоже жду<br>следующую главу",
+    "created_at": "2026-10-16T18:00:05.000000Z",
+    "user": {
+      "id": 102,
+      "username": "Второй",
+      "avatar": {"filename": "a102.jpg", "url": "https://cover.cdnlibs.org/uploads/users/102/a102.jpg"},
+      "avatar_frame": {"sm": "/uploads/frames/1/sm.png", "md": "/uploads/frames/1/md.png", "lg": "/uploads/frames/1/lg.png", "orig": "/uploads/frames/1/orig.png"},
+      "last_online_at": "2026-10-16T18:00:05.000000Z",
+      "can_view_profile": true,
+      "can_view_statistics": true,
+      "viewable_statistics_site_ids": [1, 2, 3, 4, 5],
+      "can_view_previous_usernames": false,
+      "login_streak": {"last_login_at": "2026-10-16 17:00:00", "login_streak": 3, "max_login_streak": 10},
+      "login_streak_preferences": {"login_streak_dark_icon_style": "simple", "login_streak_light_icon_style": "simple", "login_streak_theme": "auto"},
+      "premium": {"enabled": false}
+    },
+    "online": "online"
+  },
+  {
+    "id": 9000001,
+    "text": "Когда выйдет глава?",
+    "created_at": "2026-10-16T17:59:00.000000Z",
+    "user": {
+      "id": 101,
+      "username": "Читатель",
+      "avatar": {"filename": null, "url": "https://cover.cdnlibs.org/uploads/users/placeholder.png"},
+      "last_online_at": null,
+      "can_view_profile": false,
+      "can_view_statistics": false,
+      "viewable_statistics_site_ids": [],
+      "can_view_previous_usernames": false,
+      "login_streak": {"last_login_at": null, "login_streak": 0, "max_login_streak": 0},
+      "login_streak_preferences": {"login_streak_dark_icon_style": "simple", "login_streak_light_icon_style": "simple", "login_streak_theme": "auto"},
+      "premium": {"enabled": true}
+    },
+    "online": "offline"
+  }
+]

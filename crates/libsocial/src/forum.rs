@@ -639,7 +639,7 @@ fn refuse_by_toast<T>(result: Option<T>, value: &Value) -> Result<Option<T>> {
 
 /// Отказ в `toast.message` (с обёрткой `data` или без). Сайт считает «not found» в
 /// тексте отсутствием темы, остальное – отказом в доступе.
-fn toast_error(value: &Value) -> Option<Error> {
+pub(crate) fn toast_error(value: &Value) -> Option<Error> {
     let toast = value
         .get("data")
         .and_then(|d| d.get("toast"))

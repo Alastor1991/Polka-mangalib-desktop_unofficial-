@@ -9,15 +9,19 @@ description = "Неофициальный клиент API lib.social: MangaLib,
 [dependencies]
 base64 = "0.23.1"
 bytes = "1.12.1"
+futures-util = "0.3.34"
 rand = "0.10.3"
 reqwest = { version = "0.13.5", features = ["json", "query", "form", "stream", "multipart"] }
+reqwest-websocket = "0.6.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
 thiserror = "2.0.21"
-tokio = { version = "1.53.2", features = ["time", "sync"] }
+tokio = { version = "1.53.2", features = ["time", "sync", "macros"] }
 url = "2.5.8"
 
 [dev-dependencies]
 tokio = { version = "1.53.2", features = ["macros", "rt-multi-thread"] }
+# Тестовый сервер websocket: та же версия, что у reqwest-websocket.
+tungstenite = { version = "0.28.0", default-features = false, features = ["handshake"] }
 wiremock = "0.6.5"

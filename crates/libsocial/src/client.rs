@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue, ORIGIN, REFERER};
@@ -95,6 +95,8 @@ struct ConstantsCache {
 #[derive(Clone)]
 pub struct Client {
     pub(crate) http: reqwest::Client,
+    /// Клиент для websocket мини-чата, создаётся при первом подключении.
+    socket_http: Arc<OnceLock<reqwest::Client>>,
     pub(crate) config: Arc<ClientConfig>,
     api_mirrors: Arc<Vec<String>>,
     auth_mirrors: Arc<Vec<String>>,
@@ -118,6 +120,21 @@ impl std::fmt::Debug for Client {
     }
 }
 
+/// Общие настройки сети для всех HTTP-клиентов: представление, прокси, интерфейс.
+fn http_builder(config: &ClientConfig) -> Result<reqwest::ClientBuilder> {
+    let mut builder = reqwest::Client::builder()
+        .user_agent(&config.user_agent)
+        .connect_timeout(Duration::from_secs(10));
+    #[cfg(any(target_os = "linux", target_os = "android", target_os = "fuchsia"))]
+    if let Some(iface) = &config.interface {
+        builder = builder.interface(iface);
+    }
+    if let Some(proxy) = &config.proxy {
+        builder = builder.proxy(reqwest::Proxy::all(proxy)?);
+    }
+    Ok(builder)
+}
+
 /// Как отправлять запрос к API.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Auth {
@@ -134,19 +151,9 @@ pub(crate) enum Auth {
 
 impl Client {
     pub fn new(config: ClientConfig) -> Result<Client> {
-        let mut builder = reqwest::Client::builder()
-            .user_agent(&config.user_agent)
-            .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(60));
-        #[cfg(any(target_os = "linux", target_os = "android", target_os = "fuchsia"))]
-        if let Some(iface) = &config.interface {
-            builder = builder.interface(iface);
-        }
-        if let Some(proxy) = &config.proxy {
-            builder = builder.proxy(reqwest::Proxy::all(proxy)?);
-        }
         Ok(Client {
-            http: builder.build()?,
+            http: http_builder(&config)?.timeout(Duration::from_secs(60)).build()?,
+            socket_http: Arc::new(OnceLock::new()),
             api_mirrors: Arc::new(mirrors::or_default(&config.api_mirrors, mirrors::API)),
             auth_mirrors: Arc::new(mirrors::or_default(&config.auth_mirrors, mirrors::AUTH)),
             config: Arc::new(config),
@@ -159,6 +166,17 @@ impl Client {
             bad_hosts: Arc::new(std::sync::Mutex::new(HashMap::new())),
             cooldown: Arc::new(std::sync::Mutex::new(None)),
         })
+    }
+
+    /// HTTP-клиент для websocket: с теми же прокси, интерфейсом и `User-Agent`, но
+    /// только HTTP/1.1 (websocket поднимается через `Upgrade`, на HTTP/2 его нет) и
+    /// без общего ограничения времени запроса, которое оборвало бы долгое соединение.
+    pub(crate) fn socket_http(&self) -> Result<reqwest::Client> {
+        if let Some(http) = self.socket_http.get() {
+            return Ok(http.clone());
+        }
+        let http = http_builder(&self.config)?.http1_only().build()?;
+        Ok(self.socket_http.get_or_init(|| http).clone())
     }
 
     pub fn with_token_listener(mut self, listener: TokenListener) -> Client {

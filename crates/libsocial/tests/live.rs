@@ -211,3 +211,26 @@ async fn title_extras() {
         assert!(matches!(c.manga_voice(v.id).await, Err(libsocial::Error::Unauthorized)));
     }
 }
+
+/// Websocket мини-чата без входа: подключение с заголовками сайта и подписка на
+/// публичный канал сообщений. В канал присутствия гость не входит, писать нечего.
+#[tokio::test]
+#[ignore]
+async fn chat_socket_as_guest() {
+    use libsocial::chat::ChatEvent;
+
+    let (tx, mut rx) = tokio::sync::mpsc::channel(16);
+    let run = tokio::spawn(client().chat_socket().presence(false).run(tx));
+    let first = tokio::time::timeout(std::time::Duration::from_secs(20), rx.recv())
+        .await
+        .expect("сервер чата не ответил за 20 секунд")
+        .expect("соединение кончилось без событий");
+    assert!(matches!(first, ChatEvent::Connected), "{first:?}");
+    // Без входа история не отдаётся, клиент отказывает до запроса.
+    assert!(matches!(
+        client().chat_messages(libsocial::chat::ChatPage::Latest).await,
+        Err(libsocial::Error::Unauthorized)
+    ));
+    drop(rx);
+    assert!(run.await.unwrap().is_ok());
+}
