@@ -279,6 +279,7 @@ impl App {
             }
             Message::Me(me) => {
                 self.ctx.user_id = me.as_ref().map(|m| m.id);
+                self.ctx.inbox.set_user(self.ctx.user_id);
                 self.me = me;
                 self.settings.me = self.me.clone();
                 let Some(user_id) = self.ctx.user_id else {

@@ -7,6 +7,7 @@ use crate::catalog::Constants;
 use crate::config::Config;
 use crate::db::Db;
 use crate::downloads::Downloader;
+use crate::inbox::Inbox;
 use crate::library::Library;
 use crate::secrets::TokenStore;
 use crate::session;
@@ -20,6 +21,8 @@ pub struct Core {
     pub library: Library,
     pub downloader: Downloader,
     pub sync: Sync,
+    /// Счётчики уведомлений и сообщений с фоновым опросом.
+    pub inbox: Inbox,
     pub config: Config,
     pub store: TokenStore,
     /// Вошедший пользователь. `None` у гостя и пока ответ сервера не пришёл.
@@ -31,9 +34,10 @@ pub struct Core {
 }
 
 impl Core {
-    /// Поднимает ядро: сохранённый вход, база, загрузчик, отправка отметок.
+    /// Поднимает ядро: сохранённый вход, база, загрузчик, отправка отметок, опрос
+    /// уведомлений.
     /// Вызывать в рантайме tokio, который живёт всё время работы приложения:
-    /// на нём крутятся загрузчик и отправка.
+    /// на нём крутятся загрузчик, отправка и опрос.
     pub async fn start(config: Config) -> Result<Core> {
         let (client, store) = session::connect(&config).await?;
         let db = Db::open(&config.db_path())?;
@@ -47,12 +51,14 @@ impl Core {
             &config.lock_path(),
         );
         let sync = Sync::start(client.clone(), db.clone());
+        let inbox = Inbox::start(client.clone());
         Ok(Core {
             client,
             db,
             library,
             downloader,
             sync,
+            inbox,
             config,
             store,
             user_id: None,
@@ -88,6 +94,7 @@ impl Core {
         );
         Core {
             sync: Sync::detached(db.clone()),
+            inbox: Inbox::detached(),
             client,
             db,
             library,

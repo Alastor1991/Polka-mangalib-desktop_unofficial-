@@ -58,6 +58,11 @@ impl NotificationTab {
         }
     }
 
+    /// Вкладка по строке сервера, например по `Notification::category`.
+    pub fn parse(s: &str) -> Option<NotificationTab> {
+        NotificationTab::ALL.into_iter().find(|t| t.as_str() == s)
+    }
+
     /// Название вкладки, как на сайте.
     pub fn label(self) -> &'static str {
         match self {
@@ -131,6 +136,18 @@ impl TabCounts {
             NotificationTab::Message => self.message,
             NotificationTab::Card => self.card,
             NotificationTab::Other => self.other,
+        }
+    }
+
+    pub fn get_mut(&mut self, tab: NotificationTab) -> &mut u64 {
+        match tab {
+            NotificationTab::All => &mut self.all,
+            NotificationTab::Chapter => &mut self.chapter,
+            NotificationTab::Episode => &mut self.episode,
+            NotificationTab::Comments => &mut self.comments,
+            NotificationTab::Message => &mut self.message,
+            NotificationTab::Card => &mut self.card,
+            NotificationTab::Other => &mut self.other,
         }
     }
 }
