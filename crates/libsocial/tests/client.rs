@@ -788,6 +788,51 @@ async fn comment_writes() {
 }
 
 #[tokio::test]
+async fn comment_images() {
+    use libsocial::comments::{NewComment, Target};
+    use libsocial::rich::Doc;
+
+    let s = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/upload/image/comment"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"data": [{"name": "img-1", "filename": "img-1.jpg"}]})),
+        )
+        .expect(1)
+        .mount(&s)
+        .await;
+    // Картинка – узел `image` в конце документа по имени загрузки и запись в `attachments`.
+    Mock::given(method("POST"))
+        .and(path("/api/comments"))
+        .and(body_partial_json(json!({
+            "comment": {"type": "doc", "content": [
+                {"type": "paragraph", "content": [{"type": "text", "text": "смотри"}]},
+                {"type": "image", "attrs": {"description": "", "images": [{"image": "img-1"}]}}
+            ]},
+            "attachments": [{"name": "img-1", "filename": "img-1.jpg"}],
+            "post_type": "manga", "post_id": 1
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({"data": {"id": 9, "comment": "<p>смотри</p>"}})))
+        .expect(1)
+        .mount(&s)
+        .await;
+
+    let c = client(&[&s]);
+    let images = c
+        .upload_comment_images(vec![("a.jpg".into(), b"\xff\xd8".to_vec())])
+        .await
+        .unwrap();
+    let new = NewComment {
+        target: Target::Manga(1),
+        text: Doc::from_plain("смотри"),
+        reply_to: None,
+        images,
+        sticker: None,
+    };
+    assert_eq!(c.post_comment(&new).await.unwrap().id, 9);
+}
+
+#[tokio::test]
 async fn place_without_position_sends_no_progress() {
     let s = MockServer::start().await;
     Mock::given(method("POST"))

@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1500,
+    "title": "Правила раздела",
+    "chatter_category_id": 5,
+    "user": {
+      "id": 1001,
+      "username": "user1",
+      "avatar": {
+        "filename": "a.jpg",
+        "url": "https://cover.cdnlibs.org/uploads/users/1001/a.jpg"
+      },
+      "last_online_at": null,
+      "can_view_profile": true,
+      "can_view_statistics": true,
+      "viewable_statistics_site_ids": [],
+      "can_view_previous_usernames": false,
+      "login_streak": {
+        "last_login_at": null
+      },
+      "login_streak_preferences": {
+        "login_streak_dark_icon_style": "default",
+        "login_streak_light_icon_style": "default",
+        "login_streak_theme": "default"
+      },
+      "premium": {
+        "enabled": null
+      }
+    },
+    "body": null,
+    "answered": 120,
+    "views": 9000,
+    "votes": {
+      "up": 50
+    },
+    "sticky": 1,
+    "locked": false,
+    "yaoi": false,
+    "created_at": "2025-01-01T10:00:00.000000Z",
+    "last_reply_at": null
+  }
+]

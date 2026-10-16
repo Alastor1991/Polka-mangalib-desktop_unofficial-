@@ -142,6 +142,37 @@ impl Doc {
         }
     }
 
+    /// Разбирает документ редактора Quill (`{"ops": [...]}`). В нём хранятся старые
+    /// темы форума, до перехода сайта на ProseMirror.
+    pub fn from_quill(value: &Value) -> Doc {
+        let mut lines = QuillLines::default();
+        for op in value.get("ops").and_then(Value::as_array).into_iter().flatten() {
+            let attrs = op.get("attributes").unwrap_or(&Value::Null);
+            match op.get("insert") {
+                Some(Value::String(text)) => {
+                    // Перевод строки закрывает строку, и оформление строки (заголовок,
+                    // список, цитата) лежит в атрибутах именно этой вставки.
+                    let marks = quill_marks(attrs);
+                    let mut parts = text.split('\n');
+                    if let Some(first) = parts.next() {
+                        lines.text(first, &marks);
+                    }
+                    for part in parts {
+                        lines.end_line(attrs);
+                        lines.text(part, &marks);
+                    }
+                }
+                Some(embed @ Value::Object(_)) => {
+                    if let Some(picture) = quill_picture(embed) {
+                        lines.inlines.push(Inline::Image(picture));
+                    }
+                }
+                _ => {}
+            }
+        }
+        lines.finish()
+    }
+
     /// Разбирает HTML, который сервер присылает в комментариях и тексте глав.
     pub fn from_html(html: &str) -> Doc {
         let nodes = parse_html(html);
@@ -347,6 +378,130 @@ fn parse_clock(s: &str) -> Option<u64> {
     parts
         .iter()
         .try_fold(0u64, |acc, p| Some(acc * 60 + p.parse::<u64>().ok()?))
+}
+
+// --- Quill → Doc ---
+
+/// Строки документа Quill, из которых собираются блоки. Соседние строки одного
+/// списка или одной цитаты сливаются в один блок.
+#[derive(Default)]
+struct QuillLines {
+    blocks: Vec<Block>,
+    inlines: Vec<Inline>,
+    /// Список или цитата, в который пойдёт следующая строка того же вида.
+    open: Option<QuillGroup>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum QuillGroup {
+    List { ordered: bool },
+    Quote,
+}
+
+impl QuillLines {
+    fn text(&mut self, text: &str, marks: &Marks) {
+        if !text.is_empty() {
+            self.inlines.push(Inline::Text {
+                text: text.to_string(),
+                marks: marks.clone(),
+            });
+        }
+    }
+
+    fn end_line(&mut self, attrs: &Value) {
+        let inlines = std::mem::take(&mut self.inlines);
+        let group = match attrs.get("list").and_then(Value::as_str) {
+            Some(kind) => Some(QuillGroup::List {
+                ordered: kind == "ordered",
+            }),
+            None if matches!(attrs.get("blockquote"), Some(Value::Bool(true))) => Some(QuillGroup::Quote),
+            None => None,
+        };
+        // Пустые строки в Quill – отступы между абзацами, блоком они не становятся.
+        // Пустой пункт списка или строка цитаты свой блок не закрывает, иначе
+        // нумерованный список начался бы заново.
+        let blank = inlines
+            .iter()
+            .all(|i| matches!(i, Inline::Text { text, .. } if text.trim().is_empty()));
+        if blank {
+            if group.is_none() {
+                self.open = None;
+            }
+            return;
+        }
+        let pictures: Vec<Picture> = inlines
+            .iter()
+            .filter_map(|i| match i {
+                Inline::Image(p) => Some(p.clone()),
+                _ => None,
+            })
+            .collect();
+        let block = if pictures.len() == inlines.len() {
+            Block::Images(pictures)
+        } else if let Some(level) = attrs.get("header").and_then(Value::as_u64) {
+            Block::Heading {
+                level: level.clamp(1, 6) as u8,
+                content: inlines,
+            }
+        } else {
+            Block::Paragraph(inlines)
+        };
+        let continues = group.is_some() && group == self.open;
+        match (group, self.blocks.last_mut()) {
+            (Some(QuillGroup::List { .. }), Some(Block::List { items, .. })) if continues => items.push(vec![block]),
+            (Some(QuillGroup::Quote), Some(Block::Quote(blocks))) if continues => blocks.push(block),
+            (Some(QuillGroup::List { ordered }), _) => self.blocks.push(Block::List {
+                ordered,
+                items: vec![vec![block]],
+            }),
+            (Some(QuillGroup::Quote), _) => self.blocks.push(Block::Quote(vec![block])),
+            (None, _) => self.blocks.push(block),
+        }
+        self.open = group;
+    }
+
+    fn finish(mut self) -> Doc {
+        // Последняя строка без перевода строки в конце.
+        if !self.inlines.is_empty() {
+            self.end_line(&Value::Null);
+        }
+        Doc { blocks: self.blocks }
+    }
+}
+
+fn quill_marks(attrs: &Value) -> Marks {
+    let on = |key: &str| attrs.get(key).and_then(Value::as_bool).unwrap_or(false);
+    Marks {
+        bold: on("bold"),
+        italic: on("italic"),
+        underline: on("underline"),
+        strike: on("strike"),
+        link: str_attr(attrs, "link"),
+    }
+}
+
+/// Картинка Quill: `{"image": адрес}` или `{"image": {"src": …, "width": …}}`.
+fn quill_picture(embed: &Value) -> Option<Picture> {
+    let image = embed.get("image")?;
+    let (url, attrs) = match image {
+        Value::String(s) => (s.clone(), &Value::Null),
+        other => (str_attr(other, "src")?, other),
+    };
+    if url.is_empty() {
+        return None;
+    }
+    let size = |key: &str| {
+        attrs
+            .get(key)
+            .and_then(|v| v.as_u64().or_else(|| v.as_str()?.trim().parse().ok()))
+            .and_then(|n| u32::try_from(n).ok())
+    };
+    Some(Picture {
+        url,
+        original: None,
+        width: size("width"),
+        height: size("height"),
+    })
 }
 
 // --- Doc → ProseMirror ---
@@ -1030,5 +1185,71 @@ mod tests {
         let Block::Paragraph(b) = &back.blocks[0] else { panic!() };
         assert_eq!(b[..2], p[..2]);
         assert!(matches!(&b[2], Inline::Text { text, .. } if text == "1:02:03"));
+    }
+
+    #[test]
+    fn quill_lines_and_groups() {
+        let json = serde_json::json!({"ops": [
+            {"insert": "Заголовок"},
+            {"insert": "\n", "attributes": {"header": 2}},
+            {"insert": "Первый абзац, "},
+            {"insert": "жирно", "attributes": {"bold": true}},
+            {"insert": " и "},
+            {"insert": "ссылка", "attributes": {"link": "https://a.b/", "underline": true}},
+            {"insert": "\n\nВторой абзац\nраз"},
+            {"insert": "\n", "attributes": {"list": "bullet"}},
+            {"insert": "два"},
+            {"insert": "\n", "attributes": {"list": "bullet"}},
+            {"insert": "цитата"},
+            {"insert": "\n", "attributes": {"blockquote": true}},
+            {"insert": {"image": {"src": "https://i.example/x.png", "width": "640"}}},
+            {"insert": "\nхвост без перевода строки"}
+        ]});
+        let doc = Doc::from_quill(&json);
+        assert!(matches!(&doc.blocks[0], Block::Heading { level: 2, content } if content == &vec![text("Заголовок")]));
+        let Block::Paragraph(p) = &doc.blocks[1] else {
+            panic!("{:?}", doc.blocks[1])
+        };
+        assert_eq!(p.len(), 4);
+        assert!(matches!(&p[1], Inline::Text { marks, .. } if marks.bold));
+        assert!(
+            matches!(&p[3], Inline::Text { marks, .. } if marks.underline && marks.link.as_deref() == Some("https://a.b/"))
+        );
+        // Пустая строка между абзацами блоком не стала.
+        assert_eq!(doc.blocks[2], Block::Paragraph(vec![text("Второй абзац")]));
+        let Block::List { ordered: false, items } = &doc.blocks[3] else {
+            panic!("{:?}", doc.blocks[3])
+        };
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[1], vec![Block::Paragraph(vec![text("два")])]);
+        assert_eq!(
+            doc.blocks[4],
+            Block::Quote(vec![Block::Paragraph(vec![text("цитата")])])
+        );
+        assert!(
+            matches!(&doc.blocks[5], Block::Images(p) if p[0].url == "https://i.example/x.png" && p[0].width == Some(640))
+        );
+        assert_eq!(doc.blocks[6], Block::Paragraph(vec![text("хвост без перевода строки")]));
+        assert_eq!(doc.blocks.len(), 7);
+        assert!(Doc::from_quill(&serde_json::json!({"ops": []})).blocks.is_empty());
+    }
+
+    #[test]
+    fn quill_ordered_list_survives_empty_item() {
+        let json = serde_json::json!({"ops": [
+            {"insert": "раз"}, {"insert": "\n", "attributes": {"list": "ordered"}},
+            {"insert": "\n", "attributes": {"list": "ordered"}},
+            {"insert": "два"}, {"insert": "\n", "attributes": {"list": "ordered"}},
+            {"insert": "не цитата\n", "attributes": {"blockquote": false}},
+            {"insert": "Заголовок\n", "attributes": {"header": 1}}
+        ]});
+        let doc = Doc::from_quill(&json);
+        let Block::List { ordered: true, items } = &doc.blocks[0] else {
+            panic!("{:?}", doc.blocks)
+        };
+        assert_eq!(items.len(), 2);
+        assert_eq!(doc.blocks[1], Block::Paragraph(vec![text("не цитата")]));
+        assert!(matches!(&doc.blocks[2], Block::Heading { level: 1, .. }));
+        assert_eq!(doc.blocks.len(), 3);
     }
 }

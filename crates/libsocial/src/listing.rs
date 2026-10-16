@@ -3,7 +3,9 @@
 //!
 //! Списки сервиса пагинируются по-разному. У одних есть `meta.total` и `links.next`,
 //! у других только `links.next`, у третьих (сообщения короткого диалога, общие друзья,
-//! топ-100 пользователей) нет ни `meta`, ни `links`. `Page` справляется со всеми тремя.
+//! топ-100 пользователей) нет ни `meta`, ни `links`. Форум отвечает плоским пагинатором
+//! Laravel: номера страниц и `next_page_url` лежат рядом с `data`, а `links` – массив
+//! кнопок. `Page` справляется со всеми четырьмя.
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -34,20 +36,23 @@ impl SortOrder {
 /// Страница любого списка API. Элемент, который не разобрался, в неё не попадает.
 ///
 /// Разбирается прямо из ответа сервера `{"data": [...], "links": ..., "meta": ...}`
-/// любого из трёх видов: курсорного (только `links.next`), полного (с `last_page` и
-/// `total`) и списка целиком без `links` и `meta`.
+/// любого из четырёх видов: курсорного (только `links.next`), полного (с `last_page` и
+/// `total`), списка целиком без `links` и `meta` и плоского, где номера страниц лежат
+/// на верхнем уровне ответа.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(from = "RawPage<T>", bound(deserialize = "T: DeserializeOwned"))]
 pub struct Page<T> {
     pub items: Vec<T>,
     /// Есть ли следующая страница. Сервер говорит об этом по-разному, учитывается всё:
     /// непустой `links.next`, `meta.has_next_page`, `meta.next_page_url` (в закладках
-    /// он булев) и `current_page < last_page`. У аниме `has_next_page` нет вовсе.
+    /// он булев), непустой `next_page_url` плоского ответа и `current_page < last_page`.
+    /// У аниме `has_next_page` нет вовсе.
     pub has_next: bool,
-    /// Общее число записей (`meta.total` или `meta.items_count`). У большинства
-    /// списков его нет, при поиске `q` обычно пропадает: листать надо до `has_next`.
+    /// Общее число записей (`meta.total` или `meta.items_count`, у плоского ответа
+    /// `total`). У большинства списков его нет, при поиске `q` обычно пропадает:
+    /// листать надо до `has_next`.
     pub total: Option<u64>,
-    /// Номер страницы по `meta.current_page`.
+    /// Номер страницы по `meta.current_page` (у плоского ответа `current_page`).
     pub page: Option<u32>,
     pub per_page: Option<u32>,
     pub last_page: Option<u32>,
@@ -86,20 +91,36 @@ struct RawPage<T> {
     links: Value,
     #[serde(default)]
     meta: Value,
+    /// Поля плоского пагинатора Laravel (форум). У остальных списков их нет.
+    #[serde(default)]
+    current_page: Value,
+    #[serde(default)]
+    last_page: Value,
+    #[serde(default)]
+    per_page: Value,
+    #[serde(default)]
+    total: Value,
+    #[serde(default)]
+    next_page_url: Value,
 }
 
 impl<T> From<RawPage<T>> for Page<T> {
     fn from(raw: RawPage<T>) -> Page<T> {
         let meta = raw.meta;
-        let page = meta_u32(&meta, "current_page");
-        let last_page = meta_u32(&meta, "last_page");
+        // Число берётся из `meta`, а если его там нет, с верхнего уровня ответа.
+        let number = |key: &str, flat: &Value| meta_u64(&meta, key).or_else(|| value_u64(flat));
+        let small = |key: &str, flat: &Value| number(key, flat).and_then(|n| u32::try_from(n).ok());
+        let page = small("current_page", &raw.current_page);
+        let last_page = small("last_page", &raw.last_page);
         let by_numbers = matches!((page, last_page), (Some(cur), Some(last)) if cur < last);
+        // У плоского ответа `next_page_url` – адрес. В `meta` закладок под тем же именем лежит флаг.
+        let flat_next = raw.next_page_url.as_str().is_some_and(|s| !s.is_empty());
         Page {
             items: raw.data,
-            has_next: has_next(&raw.links, &meta) || by_numbers,
-            total: meta_u64(&meta, "total").or_else(|| meta_u64(&meta, "items_count")),
+            has_next: has_next(&raw.links, &meta) || flat_next || by_numbers,
+            total: number("total", &raw.total).or_else(|| meta_u64(&meta, "items_count")),
             page,
-            per_page: meta_u32(&meta, "per_page"),
+            per_page: small("per_page", &raw.per_page),
             last_page,
             meta,
         }
@@ -123,15 +144,15 @@ pub(crate) fn has_next(links: &Value, meta: &Value) -> bool {
 
 /// Число из `meta`: сервер присылает его то числом, то строкой.
 fn meta_u64(meta: &Value, key: &str) -> Option<u64> {
-    match meta.get(key)? {
+    value_u64(meta.get(key)?)
+}
+
+fn value_u64(value: &Value) -> Option<u64> {
+    match value {
         Value::Number(n) => n.as_u64(),
         Value::String(s) => s.trim().parse().ok(),
         _ => None,
     }
-}
-
-fn meta_u32(meta: &Value, key: &str) -> Option<u32> {
-    meta_u64(meta, key).and_then(|n| u32::try_from(n).ok())
 }
 
 impl Client {
@@ -232,6 +253,37 @@ mod tests {
         let flat = parse(json!({"data": [7], "meta": [], "links": []}));
         assert_eq!(flat.items, vec![7]);
         assert!(!flat.has_next && flat.page.is_none());
+    }
+
+    #[test]
+    fn laravel_flat_page() {
+        // Форум: номера страниц рядом с `data`, `links` – массив кнопок пагинации.
+        let first = parse(json!({
+            "current_page": 1, "data": [1, 2], "first_page_url": "https://api/forum/discussion?page=1",
+            "from": 1, "last_page": 50839, "links": [{"url": null, "label": "&laquo; Previous", "active": false}],
+            "next_page_url": "https://api/forum/discussion?page=2", "path": "https://api/forum/discussion",
+            "per_page": 10, "prev_page_url": null, "to": 10, "total": 508384
+        }));
+        assert_eq!(first.items, vec![1, 2]);
+        assert!(first.has_next);
+        assert_eq!(
+            (first.page, first.last_page, first.per_page, first.total),
+            (Some(1), Some(50839), Some(10), Some(508384))
+        );
+
+        // Последняя страница: адреса следующей нет, номера совпадают.
+        let last = parse(json!({"current_page": "3", "data": [1], "last_page": 3, "next_page_url": null, "total": 21}));
+        assert!(!last.has_next);
+        assert_eq!((last.page, last.total), (Some(3), Some(21)));
+
+        // Только адрес следующей страницы, без номеров.
+        let linked = parse(json!({"data": [], "next_page_url": "u"}));
+        assert!(linked.has_next && linked.page.is_none());
+
+        // `meta` важнее верхнего уровня, если есть оба.
+        let both = parse(json!({"data": [], "current_page": 7, "meta": {"current_page": 2, "last_page": 2}}));
+        assert_eq!(both.page, Some(2));
+        assert!(!both.has_next);
     }
 
     #[test]

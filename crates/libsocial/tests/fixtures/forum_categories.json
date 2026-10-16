@@ -1,0 +1,145 @@
+[
+  {
+    "color": "#f44336",
+    "created_at": null,
+    "icon": "bug",
+    "id": 1,
+    "name": "Баги и проблемы",
+    "order": 1,
+    "parent_id": null,
+    "slug": "bugs",
+    "updated_at": null
+  },
+  {
+    "color": "#007aff",
+    "created_at": null,
+    "icon": "gamepad",
+    "id": 8,
+    "name": "Видеоигры",
+    "order": 8,
+    "parent_id": null,
+    "slug": "videoigry",
+    "updated_at": null
+  },
+  {
+    "color": "#F25F5C",
+    "created_at": null,
+    "icon": "comments",
+    "id": 13,
+    "name": "Другое",
+    "order": 13,
+    "parent_id": null,
+    "slug": "otherwise",
+    "updated_at": null
+  },
+  {
+    "color": "#d00026",
+    "created_at": null,
+    "icon": "pencil",
+    "id": 10,
+    "name": "Как переводить мангу",
+    "order": 10,
+    "parent_id": null,
+    "slug": "kak-perevodit-mangu",
+    "updated_at": null
+  },
+  {
+    "color": "#f90",
+    "created_at": null,
+    "icon": "pencil",
+    "id": 11,
+    "name": "Как рисовать мангу",
+    "order": 11,
+    "parent_id": null,
+    "slug": "kak-risovat-mangu",
+    "updated_at": null
+  },
+  {
+    "color": "#2ECC71",
+    "created_at": null,
+    "icon": "comment",
+    "id": 6,
+    "name": "Обсуждение Аниме",
+    "order": 6,
+    "parent_id": null,
+    "slug": "discussion_anime",
+    "updated_at": null
+  },
+  {
+    "color": "#FF8C00",
+    "created_at": null,
+    "icon": "comment",
+    "id": 5,
+    "name": "Обсуждение Манги",
+    "order": 5,
+    "parent_id": null,
+    "slug": "discussion_manga",
+    "updated_at": null
+  },
+  {
+    "color": "#2ea3e7",
+    "created_at": null,
+    "icon": "comment",
+    "id": 7,
+    "name": "Обсуждение Ранобэ",
+    "order": 7,
+    "parent_id": null,
+    "slug": "discussion_ranobe",
+    "updated_at": null
+  },
+  {
+    "color": "#3cce7b",
+    "created_at": null,
+    "icon": "comments",
+    "id": 12,
+    "name": "Общение",
+    "order": 12,
+    "parent_id": null,
+    "slug": "Obshhenie",
+    "updated_at": null
+  },
+  {
+    "color": "#247BA0",
+    "created_at": null,
+    "icon": "users",
+    "id": 9,
+    "name": "Переводчикам",
+    "order": 9,
+    "parent_id": null,
+    "slug": "teams",
+    "updated_at": null
+  },
+  {
+    "color": "#6f42c1",
+    "created_at": null,
+    "icon": "user-plus",
+    "id": 4,
+    "name": "Поиск кадров",
+    "order": 4,
+    "parent_id": null,
+    "slug": "search_staff",
+    "updated_at": null
+  },
+  {
+    "color": "#007feb",
+    "created_at": null,
+    "icon": "search-plus",
+    "id": 3,
+    "name": "Поиск тайтлов",
+    "order": 3,
+    "parent_id": null,
+    "slug": "search_media",
+    "updated_at": null
+  },
+  {
+    "color": "#f44336",
+    "created_at": null,
+    "icon": "thumbs-up",
+    "id": 2,
+    "name": "Предложения для сайта",
+    "order": 2,
+    "parent_id": null,
+    "slug": "offers",
+    "updated_at": null
+  }
+]

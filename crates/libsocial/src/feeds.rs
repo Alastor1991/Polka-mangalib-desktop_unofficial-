@@ -27,6 +27,7 @@ use serde_json::Value;
 use crate::catalog::lenient_object;
 use crate::client::Client;
 use crate::error::{Error, Result};
+pub use crate::forum::ForumCategory;
 use crate::listing::Page;
 use crate::models::{Cover, Label, RestrictedView, Team, TitleShort};
 use crate::rich::Doc;
@@ -361,16 +362,6 @@ impl From<RawBanner> for Banner {
             site_ids: raw.site_ids,
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ForumCategory {
-    #[serde(default, deserialize_with = "u64_lenient")]
-    pub id: u64,
-    #[serde(default, deserialize_with = "string_lenient")]
-    pub name: String,
-    #[serde(default, deserialize_with = "opt_string_lenient")]
-    pub color: Option<String>,
 }
 
 /// Обсуждение форума на главной.

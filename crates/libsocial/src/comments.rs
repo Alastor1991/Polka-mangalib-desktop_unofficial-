@@ -324,6 +324,16 @@ pub(crate) fn image_part(name: &str, bytes: &[u8]) -> reqwest::multipart::Part {
         .expect("известный тип файла")
 }
 
+/// Узел `image` документа ProseMirror с загруженными картинками: так редактор сайта
+/// ссылается на вложения по имени. `None`, если картинок нет.
+pub(crate) fn image_node(images: &[Uploaded]) -> Option<Value> {
+    if images.is_empty() {
+        return None;
+    }
+    let images: Vec<Value> = images.iter().map(|i| json!({"image": i.name})).collect();
+    Some(json!({"type": "image", "attrs": {"description": "", "images": images}}))
+}
+
 /// Загруженная на сервер картинка. Какое из имён нужно дальше, зависит от места:
 /// комментарий и фон профиля берут `name`, аватар – `filename`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -555,10 +565,7 @@ impl Client {
     pub async fn post_comment(&self, new: &NewComment) -> Result<Comment> {
         let mut doc = new.text.to_prosemirror();
         let content = doc["content"].as_array_mut().expect("документ со списком блоков");
-        if !new.images.is_empty() {
-            let images: Vec<Value> = new.images.iter().map(|i| json!({"image": i.name})).collect();
-            content.push(json!({"type": "image", "attrs": {"description": "", "images": images}}));
-        }
+        content.extend(image_node(&new.images));
         if let Some(s) = &new.sticker {
             content.push(json!({"type": "sticker", "attrs": {"stickers": [{
                 "sticker_pack_id": s.sticker_pack_id, "extension": s.extension, "name": s.name, "id": s.id
@@ -651,13 +658,19 @@ impl Client {
 
     /// Загружает картинки для комментария: jpeg, png, gif. Только премиум.
     pub async fn upload_comment_images(&self, files: Vec<(String, Vec<u8>)>) -> Result<Vec<Uploaded>> {
+        self.upload_images("upload/image/comment", files).await
+    }
+
+    /// Загрузка картинок для текста редактора сайта: multipart, поле `content[]`.
+    /// Комментарии и темы форума отличаются только путём.
+    pub(crate) async fn upload_images(&self, path: &str, files: Vec<(String, Vec<u8>)>) -> Result<Vec<Uploaded>> {
         let response = self
             .send_api(Auth::User, |http, base| {
                 let mut form = reqwest::multipart::Form::new();
                 for (name, bytes) in &files {
                     form = form.part("content[]", image_part(name, bytes));
                 }
-                http.post(join_url(base, "upload/image/comment"))
+                http.post(join_url(base, path))
                     .headers(Self::site_headers(Site::MangaLib))
                     .multipart(form)
             })
@@ -665,7 +678,7 @@ impl Client {
         let bytes = response.bytes().await?;
         let body: crate::models::Data<Vec<Uploaded>> =
             serde_json::from_slice(&bytes).map_err(|source| Error::Decode {
-                context: "upload/image/comment".into(),
+                context: path.to_string(),
                 source,
             })?;
         Ok(body.data)
