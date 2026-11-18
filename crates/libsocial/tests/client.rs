@@ -178,6 +178,59 @@ async fn long_retry_after_on_image_server() {
 }
 
 #[tokio::test]
+async fn comment_is_sent_once_after_gateway_error() {
+    use libsocial::comments::{NewComment, Target};
+    use libsocial::rich::Doc;
+
+    let a = MockServer::start().await;
+    let b = MockServer::start().await;
+    for (server, count) in [(&a, 1u64), (&b, 0)] {
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(502).insert_header("Retry-After", "0"))
+            .expect(count)
+            .mount(server)
+            .await;
+    }
+    let comment = NewComment {
+        target: Target::Chapter {
+            chapter_id: 50,
+            page: None,
+        },
+        text: Doc::from_plain("текст"),
+        reply_to: None,
+        images: Vec::new(),
+        sticker: None,
+    };
+    assert!(matches!(
+        client(&[&a, &b]).post_comment(&comment).await,
+        Err(Error::ServiceDown { .. })
+    ));
+}
+
+#[tokio::test]
+async fn queued_request_observes_cooldown() {
+    let server = MockServer::start().await;
+    Mock::given(path("/api/auth/me"))
+        .respond_with(
+            ResponseTemplate::new(429)
+                .insert_header("Retry-After", "600")
+                .set_delay(Duration::from_millis(50)),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let c = Client::new(ClientConfig {
+        api_mirrors: vec![format!("{}/api", server.uri())],
+        api_interval: Duration::from_millis(200),
+        ..Default::default()
+    })
+    .unwrap();
+    let (first, queued) = tokio::join!(c.me(), c.me());
+    assert!(matches!(first, Err(Error::RateLimited { .. })));
+    assert!(matches!(queued, Err(Error::RateLimited { .. })));
+}
+
+#[tokio::test]
 async fn retries_429() {
     let s = MockServer::start().await;
     Mock::given(path("/api/auth/me"))
