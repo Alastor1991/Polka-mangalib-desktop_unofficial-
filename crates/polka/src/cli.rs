@@ -1,6 +1,6 @@
 //! Команды без интерфейса: скачивание из терминала.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{Context, Result, bail};
 use libsocial::models::{PlayerKind, TitleDetails};
@@ -23,6 +23,9 @@ pub async fn download(args: &[String]) -> Result<()> {
         // Загрузчик пока умеет только главы-картинки и серии. Текст ранобэ клиент API
         // уже разбирает, задание для него ещё не написано (docs/roadmap.md).
         bail!("скачивание ранобэ пока не поддерживается");
+    }
+    if rest.len() > 1 {
+        bail!("после тайтла можно указать один диапазон");
     }
     let range = rest.first().map(|r| parse_range(r)).transpose()?;
 
@@ -64,9 +67,25 @@ pub async fn download(args: &[String]) -> Result<()> {
     }
     println!("В очереди: {waiting}, уже скачано или ждёт: {}", jobs.len() - waiting);
 
-    while has_pending(&db, site, slug)? {
+    let requested: HashSet<_> = jobs.iter().map(|(_, job)| job.item_key()).collect();
+    let (done, failed) = loop {
+        let rows = db.downloads_for(site, &title.slug)?;
+        let mut pending = false;
+        let mut done = 0;
+        let mut failed = 0;
+        for row in rows.iter().filter(|r| requested.contains(&r.item)) {
+            match row.state {
+                DownloadState::Queued | DownloadState::Running => pending = true,
+                DownloadState::Done => done += 1,
+                DownloadState::Failed => failed += 1,
+                DownloadState::Paused => {}
+            }
+        }
+        if !pending {
+            break (done, failed);
+        }
         match tokio::time::timeout(std::time::Duration::from_secs(5), events.recv()).await {
-            Ok(Ok(e)) if e.slug == *slug => match e.state {
+            Ok(Ok(e)) if e.site == site && e.slug == title.slug && requested.contains(&e.item) => match e.state {
                 DownloadState::Running if e.total > 0 => {
                     eprint!(
                         "\r{:<14} {:>6}/{:<6}",
@@ -83,22 +102,16 @@ pub async fn download(args: &[String]) -> Result<()> {
             },
             _ => {}
         }
-    }
-    let rows = db.downloads_for(site, slug)?;
-    let failed = rows.iter().filter(|r| r.state == DownloadState::Failed).count();
-    let done = rows.iter().filter(|r| r.state == DownloadState::Done).count();
+    };
+    let interrupted = requested.len() - done - failed;
     println!(
-        "\nСкачано: {done}, с ошибкой: {failed}. Папка: {}",
+        "\nСкачано: {done}, с ошибкой: {failed}, остановлено или удалено: {interrupted}. Папка: {}",
         config.library_dir().display()
     );
+    if done != requested.len() {
+        bail!("часть запрошенных загрузок не завершена");
+    }
     Ok(())
-}
-
-fn has_pending(db: &Db, site: Site, slug: &str) -> Result<bool> {
-    Ok(db
-        .downloads_for(site, slug)?
-        .iter()
-        .any(|r| matches!(r.state, DownloadState::Queued | DownloadState::Running)))
 }
 
 /// Для глав прогресс в страницах, для видео в байтах.
@@ -114,6 +127,9 @@ fn parse_range(s: &str) -> Result<(f64, f64)> {
     let (a, b) = s.split_once('-').unwrap_or((s, s));
     let a: f64 = a.trim().parse().with_context(|| format!("не число: {a}"))?;
     let b: f64 = b.trim().parse().with_context(|| format!("не число: {b}"))?;
+    if !a.is_finite() || !b.is_finite() {
+        bail!("границы диапазона должны быть конечными числами");
+    }
     Ok((a.min(b), a.max(b)))
 }
 
@@ -138,7 +154,7 @@ async fn manga_jobs(
     let mut jobs = Vec::new();
     let mut locked = 0;
     for chapter in &chapters {
-        let n = chapter.number_f32() as f64;
+        let n: f64 = chapter.number.parse().unwrap_or(0.0);
         if range.is_some_and(|(a, b)| n < a || n > b) {
             continue;
         }
@@ -199,4 +215,18 @@ async fn anime_jobs(
         }
     }
     Ok(jobs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ranges_accept_fractional_numbers_and_reject_nonfinite_bounds() {
+        assert_eq!(parse_range("1.1").unwrap(), (1.1, 1.1));
+        assert_eq!(parse_range("3-2").unwrap(), (2.0, 3.0));
+        for input in ["NaN", "1-inf", ""] {
+            assert!(parse_range(input).is_err());
+        }
+    }
 }

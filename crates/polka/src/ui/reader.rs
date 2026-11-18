@@ -74,7 +74,7 @@ impl Reader {
         self.loading = false;
         let (source, resume) = self.s.open_chapter(ctx);
         match source {
-            Source::Ready => Task::batch([self.ensure_window(images), self.jump_to(resume)]),
+            Source::Ready => Task::batch([self.jump_to(resume), self.ensure_window(images)]),
             Source::Unavailable(why) => {
                 self.error = Some(why.into());
                 Task::none()
@@ -143,7 +143,7 @@ impl Reader {
                     Ok(pages) if !pages.is_empty() => {
                         self.s.pages = pages.into_iter().map(PageSrc::Remote).collect();
                         let resume = self.saved_page.take();
-                        Task::batch([self.ensure_window(images), self.jump_to(resume)])
+                        Task::batch([self.jump_to(resume), self.ensure_window(images)])
                     }
                     Ok(_) => {
                         self.error = Some("В главе нет страниц".into());

@@ -322,6 +322,37 @@ impl Db {
         })
     }
 
+    /// Держит запись SQLite до конца удаления файлов. Иначе другой процесс успеет
+    /// забрать задание после чтения состояния, но до удаления строки.
+    pub(crate) fn remove_download_files(
+        &self,
+        site: Site,
+        slug: &str,
+        item: &str,
+        worker_finished: bool,
+        remove_files: impl FnOnce(&Path) -> Result<()>,
+    ) -> Result<()> {
+        let mut conn = self.conn.lock().expect("соединение с базой отравлено");
+        let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let key = params![site.key(), slug, item];
+        let row = tx
+            .query_row(
+                "SELECT state, path FROM downloads WHERE site = ?1 AND slug = ?2 AND item = ?3",
+                key,
+                |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+            )
+            .optional()?;
+        if let Some((state, path)) = row {
+            if state == "running" && !worker_finished {
+                anyhow::bail!("загрузка идёт в другом процессе Полки, удалите её там");
+            }
+            remove_files(Path::new(&path))?;
+            tx.execute("DELETE FROM downloads WHERE site = ?1 AND slug = ?2 AND item = ?3", key)?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     /// Забирает задание из очереди в работу. Возвращает `false`, если его успели
     /// поставить на паузу или удалить после чтения очереди.
     pub fn claim(&self, site: Site, slug: &str, item: &str) -> Result<bool> {
@@ -357,8 +388,8 @@ impl Db {
                 Some(state) if allowed.contains(&state.as_str()) => c
                     .execute(
                         "UPDATE downloads SET state = ?4, error = NULL, updated_at = ?5
-                         WHERE site = ?1 AND slug = ?2 AND item = ?3",
-                        params![site.key(), slug, item, to.as_str(), now()],
+                         WHERE site = ?1 AND slug = ?2 AND item = ?3 AND state = ?6",
+                        params![site.key(), slug, item, to.as_str(), now(), state],
                     )
                     .map(|n| n == 1),
                 _ => Ok(false),

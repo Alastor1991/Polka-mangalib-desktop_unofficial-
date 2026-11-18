@@ -248,7 +248,6 @@ impl Downloader {
     pub fn pause(&self, site: Site, slug: &str, item: &str) -> Result<()> {
         let running = self.running.lock().expect("running отравлен");
         if let Some(r) = running.as_ref().filter(|r| r.is(site, slug, item)) {
-            r.remove.store(false, Ordering::SeqCst);
             r.stop.store(true, Ordering::SeqCst);
             return Ok(());
         }
@@ -281,14 +280,12 @@ impl Downloader {
             r.stop.store(true, Ordering::SeqCst);
             return Ok(());
         }
-        self.remove_now(site, slug, item)
+        self.remove_now(site, slug, item, false)
     }
 
-    fn remove_now(&self, site: Site, slug: &str, item: &str) -> Result<()> {
-        if let Some(row) = self.db.download(site, slug, item)? {
-            remove_path(Path::new(&row.path))?;
-        }
-        self.db.remove_download(site, slug, item)?;
+    fn remove_now(&self, site: Site, slug: &str, item: &str, worker_finished: bool) -> Result<()> {
+        self.db
+            .remove_download_files(site, slug, item, worker_finished, remove_path)?;
         self.emit(DownloadEvent {
             site,
             slug: slug.to_string(),
@@ -404,8 +401,12 @@ impl Downloader {
         let removing = remove.load(Ordering::SeqCst);
         *running = None;
         if removing {
-            if let Err(e) = self.remove_now(row.site, &row.slug, &row.item) {
-                eprintln!("не удалось удалить загрузку: {e:#}");
+            if let Err(e) = self.remove_now(row.site, &row.slug, &row.item, true) {
+                let msg = format!("не удалось удалить загрузку: {e:#}");
+                let _ = self
+                    .db
+                    .set_state(row.site, &row.slug, &row.item, DownloadState::Failed, Some(&msg));
+                self.emit_row(row.site, &row.slug, &row.item, false);
             }
             return Verdict::Skipped;
         }
@@ -584,7 +585,11 @@ impl Downloader {
             .ok()
             .and_then(|b| serde_json::from_slice(&b).ok());
         if saved.as_ref() != Some(&identity) {
-            let _ = tokio::fs::remove_file(&part).await;
+            match tokio::fs::remove_file(&part).await {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e.into()),
+            }
         }
         write_file(&sidecar, &serde_json::to_vec(&identity)?).await?;
 
@@ -605,24 +610,29 @@ impl Downloader {
 
     /// Качает файл в `.part`, продолжая с того места, где остановились.
     async fn stream_to(&self, row: &DownloadRow, url: &str, part: &Path, stop: &AtomicBool) -> Result<Outcome> {
-        let have = tokio::fs::metadata(part).await.map(|m| m.len()).unwrap_or(0);
-        let response = match self.client.fetch_stream(Site::AnimeLib, url, have).await {
-            Ok(r) => r,
-            // Кусок за концом файла: всё уже скачано, процесс прервали перед переименованием.
-            Err(libsocial::Error::RangeNotSatisfiable) => return Ok(Outcome::Done),
-            // Сервер не умеет докачивать: только в этом случае начинаем заново.
-            Err(libsocial::Error::RangeUnsupported) => {
-                tokio::fs::remove_file(part).await.ok();
-                self.client.fetch_stream(Site::AnimeLib, url, 0).await?
-            }
-            // Остальные ошибки временные: недокачанное сохраняем до следующей попытки.
+        let mut have = match tokio::fs::metadata(part).await {
+            Ok(meta) => meta.len(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => 0,
             Err(e) => return Err(e.into()),
         };
-        let have = tokio::fs::metadata(part).await.map(|m| m.len()).unwrap_or(0);
-        let total = response.content_length().map(|n| n + have).unwrap_or(0);
+        let (response, total) = match self.client.fetch_stream_with_size(Site::AnimeLib, url, have).await {
+            Ok(stream) => stream,
+            Err(libsocial::Error::RangeNotSatisfiable) => {
+                self.report(row, have, have);
+                return Ok(Outcome::Done);
+            }
+            Err(libsocial::Error::RangeUnsupported) if have > 0 => {
+                // Сохраняем кусок, пока сервер не подтвердит загрузку с начала.
+                have = 0;
+                self.client.fetch_stream_with_size(Site::AnimeLib, url, 0).await?
+            }
+            Err(e) => return Err(e.into()),
+        };
         let mut file = tokio::fs::OpenOptions::new()
             .create(true)
-            .append(true)
+            .write(true)
+            .append(have > 0)
+            .truncate(have == 0)
             .open(part)
             .await?;
         let mut done = have;
@@ -641,18 +651,26 @@ impl Downloader {
                     return Err(anyhow!("сервер перестал отдавать видео, продолжу позже"));
                 }
             };
+            if total.is_some_and(|n| chunk.len() as u64 > n - done) {
+                return Err(anyhow!("сервер прислал больше байтов, чем указал"));
+            }
             file.write_all(&chunk).await?;
             done += chunk.len() as u64;
             if done - reported > 2 * 1024 * 1024 {
                 reported = done;
-                self.report(row, done, total);
+                self.report(row, done, total.unwrap_or(0));
             }
         }
         file.flush().await?;
-        if total > 0 && done < total {
+        if let Some(total) = total
+            && done < total
+        {
             return Err(anyhow!("видео оборвалось на {} из {} МБ", done >> 20, total >> 20));
         }
-        self.report(row, done, total.max(done));
+        if done == 0 {
+            return Err(anyhow!("сервер вернул пустое видео"));
+        }
+        self.report(row, done, done);
         Ok(Outcome::Done)
     }
 
@@ -708,14 +726,13 @@ struct PartIdentity {
     quality: u64,
 }
 
-/// Расширение субтитров из ответа сервера: только буквы и цифры, иначе vtt.
+/// Только расширения субтитров: имя видео и служебные файлы зарезервированы.
 fn subtitle_ext(format: &str) -> &str {
     let f = format.trim().trim_start_matches('.');
-    if !f.is_empty() && f.len() <= 5 && f.chars().all(|c| c.is_ascii_alphanumeric()) {
-        f
-    } else {
-        "vtt"
-    }
+    ["vtt", "srt", "ass", "ssa", "sub", "ttml", "dfxp", "smi", "lrc"]
+        .into_iter()
+        .find(|ext| f.eq_ignore_ascii_case(ext))
+        .unwrap_or("vtt")
 }
 
 /// Главы ранобэ – текст, а задание на главу качает картинки страниц. Пока задания
@@ -784,11 +801,14 @@ fn remove_path(path: &Path) -> Result<()> {
     let (Some(dir), Some(stem)) = (path.parent(), path.file_stem().and_then(|s| s.to_str())) else {
         return Ok(());
     };
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return Ok(());
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e.into()),
     };
     let prefix = format!("{stem}.");
-    for entry in entries.filter_map(|e| e.ok()) {
+    for entry in entries {
+        let entry = entry?;
         let name = entry.file_name();
         if name.to_str().is_some_and(|n| n.starts_with(&prefix)) && entry.path().is_file() {
             match std::fs::remove_file(entry.path()) {
@@ -812,6 +832,8 @@ mod tests {
         assert_eq!(subtitle_ext("../x"), "vtt");
         assert_eq!(subtitle_ext("a/b"), "vtt");
         assert_eq!(subtitle_ext(""), "vtt");
+        assert_eq!(subtitle_ext("mp4"), "vtt");
+        assert_eq!(subtitle_ext(".SRT"), "srt");
     }
 
     #[test]
@@ -1184,6 +1206,7 @@ mod job_tests {
         })
         .await;
         e.downloader.remove(Site::MangaLib, MANGA, &item).unwrap();
+        e.downloader.pause(Site::MangaLib, MANGA, &item).unwrap();
 
         wait_for(&e.db, Site::MangaLib, MANGA, &item, |r| r.is_none()).await;
         assert!(!e.library.job_path(Site::MangaLib, MANGA, &job).exists());
@@ -1209,6 +1232,41 @@ mod job_tests {
             .unwrap();
         e.downloader.wake.notify_one();
         wait_state(&e.db, Site::MangaLib, MANGA, &job.item_key(), DownloadState::Done).await;
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn other_process_cannot_remove_running_job() {
+        let e = env("other-remove").await;
+        let path = e.dir.join("db.sqlite3");
+        let worker = Db::open(&path).unwrap();
+        let other = Db::open(&path).unwrap();
+        let job = chapter_job();
+        let item = job.item_key();
+        let dir = e.library.job_path(Site::MangaLib, MANGA, &job);
+        std::fs::create_dir_all(&dir).unwrap();
+        let row = DownloadRow {
+            site: Site::MangaLib,
+            slug: MANGA.into(),
+            item: item.clone(),
+            label: "Глава".into(),
+            sort: 1.0,
+            state: DownloadState::Queued,
+            done: 0,
+            total: 0,
+            error: None,
+            path: dir.to_string_lossy().into_owned(),
+            job: serde_json::to_string(&job).unwrap(),
+        };
+        worker.enqueue(&row).unwrap();
+        assert!(worker.claim(row.site, MANGA, &item).unwrap());
+        let mut downloader = e.downloader.clone();
+        downloader.db = other;
+        assert!(downloader.remove(row.site, MANGA, &item).is_err());
+        assert!(dir.is_dir());
+        assert_eq!(
+            worker.download(row.site, MANGA, &item).unwrap().unwrap().state,
+            DownloadState::Running
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1256,7 +1314,14 @@ mod job_tests {
         let full = video_bytes();
         Mock::given(path(format!("/video{VIDEO_HREF}")))
             .and(header("range", "bytes=4000-"))
-            .respond_with(ResponseTemplate::new(206).set_body_bytes(&full[4000..]))
+            .respond_with(
+                ResponseTemplate::new(206)
+                    .insert_header(
+                        "Content-Range",
+                        format!("bytes 4000-{}/{}", full.len() - 1, full.len()).as_str(),
+                    )
+                    .set_body_bytes(&full[4000..]),
+            )
             .mount(&e.server)
             .await;
         let job = episode_job();
@@ -1324,7 +1389,9 @@ mod job_tests {
         let full = video_bytes();
         Mock::given(path(format!("/video{VIDEO_HREF}")))
             .and(header("range", format!("bytes={}-", full.len()).as_str()))
-            .respond_with(ResponseTemplate::new(416))
+            .respond_with(
+                ResponseTemplate::new(416).insert_header("Content-Range", format!("bytes */{}", full.len()).as_str()),
+            )
             .mount(&e.server)
             .await;
         let job = episode_job();
@@ -1337,6 +1404,48 @@ mod job_tests {
 
         wait_state(&e.db, Site::AnimeLib, ANIME, &job.item_key(), DownloadState::Done).await;
         assert_eq!(std::fs::read(&target).unwrap(), full);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn unconfirmed_range_restarts_without_appending() {
+        for (name, response) in [
+            (
+                "wrong-start",
+                ResponseTemplate::new(206)
+                    .insert_header("Content-Range", "bytes 0-2/3")
+                    .set_body_bytes(b"abc"),
+            ),
+            ("missing-size", ResponseTemplate::new(416)),
+            (
+                "wrong-size",
+                ResponseTemplate::new(416).insert_header("Content-Range", "bytes */3"),
+            ),
+        ] {
+            let e = env(name).await;
+            mount_episode(&e.server).await;
+            mount_subtitles(&e.server, ResponseTemplate::new(404)).await;
+            let full = video_bytes();
+            Mock::given(path(format!("/video{VIDEO_HREF}")))
+                .and(header("range", "bytes=4000-"))
+                .respond_with(response)
+                .with_priority(2)
+                .expect(1)
+                .mount(&e.server)
+                .await;
+            Mock::given(path(format!("/video{VIDEO_HREF}")))
+                .respond_with(ResponseTemplate::new(200).set_body_bytes(full.as_slice()))
+                .expect(1)
+                .mount(&e.server)
+                .await;
+            let job = episode_job();
+            let target = e.library.job_path(Site::AnimeLib, ANIME, &job);
+            put_part(&target, &[0xAB; 4000], VIDEO_HREF);
+            e.downloader
+                .enqueue(&title(Site::AnimeLib, ANIME), "Серия", job.clone())
+                .unwrap();
+            wait_state(&e.db, Site::AnimeLib, ANIME, &job.item_key(), DownloadState::Done).await;
+            assert_eq!(std::fs::read(target).unwrap(), full);
+        }
     }
 
     #[tokio::test(flavor = "multi_thread")]

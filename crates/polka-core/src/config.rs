@@ -1,5 +1,6 @@
 //! Пути и настройки. Каталоги считаются по XDG вручную, без лишних зависимостей.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -157,8 +158,32 @@ impl Config {
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     let dir = path.parent().context("у пути нет каталога")?;
     std::fs::create_dir_all(dir)?;
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, bytes)?;
-    std::fs::rename(&tmp, path)?;
+    let mut tmp = tempfile::NamedTempFile::new_in(dir)?;
+    tmp.write_all(bytes)?;
+    tmp.as_file().sync_all()?;
+    tmp.persist(path)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn concurrent_writes_publish_whole_private_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings");
+        std::thread::scope(|scope| {
+            for byte in 1..=8 {
+                let path = &path;
+                scope.spawn(move || write_atomic(path, &[byte; 8192]).unwrap());
+            }
+        });
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(bytes.len(), 8192);
+        assert!(bytes.iter().all(|b| *b == bytes[0]));
+        assert_eq!(path.metadata().unwrap().permissions().mode() & 0o777, 0o600);
+        assert_eq!(dir.path().read_dir().unwrap().count(), 1);
+    }
 }

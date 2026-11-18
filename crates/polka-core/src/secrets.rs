@@ -62,7 +62,7 @@ impl TokenStore {
                 Ok(()) | Err(keyring::Error::NoEntry) => {}
                 Err(e) => return Err(e.into()),
             },
-            (TokenStore::File(path), Some(token)) => write_private(path, &serde_json::to_vec(token)?)?,
+            (TokenStore::File(path), Some(token)) => config::write_atomic(path, &serde_json::to_vec(token)?)?,
             (TokenStore::File(path), None) => match std::fs::remove_file(path) {
                 Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
@@ -71,25 +71,4 @@ impl TokenStore {
         }
         Ok(())
     }
-}
-
-/// Файл, который может прочитать только владелец.
-fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<()> {
-    use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
-
-    let dir = path.parent().context("у пути нет каталога")?;
-    std::fs::create_dir_all(dir)?;
-    // create_new: старый временный файл с чужими правами не переиспользуем.
-    let tmp = path.with_extension(format!("tmp.{}", std::process::id()));
-    let _ = std::fs::remove_file(&tmp);
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(&tmp)?;
-    file.write_all(bytes)?;
-    file.sync_all()?;
-    std::fs::rename(&tmp, path)?;
-    Ok(())
 }

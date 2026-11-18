@@ -208,27 +208,17 @@ pub fn export_cbz(series: &str, chapters: &[ExportChapter], out: &Path) -> Resul
             anyhow::bail!("глава {} скачана не полностью", chapter.number);
         }
     }
-    if let Some(dir) = out.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let tmp = out.with_extension("cbz.part");
-    let result = write_cbz(series, first, chapters, &tmp);
-    match result {
-        Ok(()) => {
-            std::fs::rename(&tmp, out)?;
-            Ok(())
-        }
-        Err(e) => {
-            let _ = std::fs::remove_file(&tmp);
-            Err(e)
-        }
-    }
+    let dir = out.parent().context("у пути нет каталога")?;
+    std::fs::create_dir_all(dir)?;
+    let mut tmp = tempfile::NamedTempFile::new_in(dir)?;
+    write_cbz(series, first, chapters, tmp.as_file_mut())?;
+    tmp.persist(out)?;
+    Ok(())
 }
 
-fn write_cbz(series: &str, first: &ExportChapter, chapters: &[ExportChapter], tmp: &Path) -> Result<()> {
+fn write_cbz(series: &str, first: &ExportChapter, chapters: &[ExportChapter], file: &mut std::fs::File) -> Result<()> {
     use zip::write::SimpleFileOptions;
 
-    let file = std::fs::File::create(tmp).with_context(|| format!("не создать {}", tmp.display()))?;
     let mut zip = zip::ZipWriter::new(file);
     let stored = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
     let number = if chapters.len() == 1 {
@@ -249,7 +239,17 @@ fn write_cbz(series: &str, first: &ExportChapter, chapters: &[ExportChapter], tm
     zip.start_file("ComicInfo.xml", SimpleFileOptions::default())?;
     zip.write_all(info.as_bytes())?;
     for (ci, chapter) in chapters.iter().enumerate() {
-        for (pi, page) in chapter_pages(&chapter.dir)?.iter().enumerate() {
+        let pages = chapter_pages(&chapter.dir)?;
+        let marker: serde_json::Value =
+            serde_json::from_reader(std::fs::File::open(chapter.dir.join(CHAPTER_MARKER))?)?;
+        if pages.is_empty()
+            || marker["pages"]
+                .as_u64()
+                .is_some_and(|count| count != pages.len() as u64)
+        {
+            anyhow::bail!("в главе {} отсутствуют страницы, скачайте её заново", chapter.number);
+        }
+        for (pi, page) in pages.iter().enumerate() {
             let ext = page.extension().and_then(|e| e.to_str()).unwrap_or("jpg");
             zip.start_file(format!("{:04}-{:04}.{ext}", ci + 1, pi + 1), stored)?;
             std::io::copy(&mut std::fs::File::open(page)?, &mut zip)?;
@@ -276,7 +276,9 @@ pub fn safe(s: &str) -> String {
             c => c,
         })
         .collect();
-    let trimmed = cleaned.trim_start_matches('.').trim();
+    let trimmed = cleaned
+        .trim_start_matches(|c: char| c == '.' || c.is_whitespace())
+        .trim_end();
     if trimmed.is_empty() {
         return "_".into();
     }
@@ -301,6 +303,7 @@ mod tests {
         assert_eq!(safe("../etc/passwd"), "_etc_passwd");
         assert_eq!(safe("7965--chainsaw-man"), "7965--chainsaw-man");
         assert_eq!(safe(".."), "_");
+        assert_eq!(safe("  .  .  "), "_");
         assert!(!safe("a/b").contains('/'));
         assert!(safe(&"я".repeat(300)).len() <= 200);
     }
@@ -348,6 +351,11 @@ mod tests {
             .map(|i| zip.by_index(i).unwrap().name().unwrap().to_string())
             .collect();
         assert_eq!(names, ["ComicInfo.xml", "0001-0001.jpg", "0001-0002.png"]);
+        let before = std::fs::read(&out).unwrap();
+        std::fs::write(ch.join(CHAPTER_MARKER), br#"{"pages":2}"#).unwrap();
+        std::fs::remove_file(ch.join("0001.jpg")).unwrap();
+        assert!(export_cbz("Икс", &chapters, &out).is_err());
+        assert_eq!(std::fs::read(&out).unwrap(), before);
         std::fs::remove_dir_all(&tmp).unwrap();
     }
 }

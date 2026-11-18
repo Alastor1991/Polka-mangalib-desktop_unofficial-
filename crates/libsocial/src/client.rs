@@ -224,15 +224,21 @@ impl Client {
     }
 
     /// Ждёт своей очереди, чтобы не долбить API чаще заданного интервала.
-    async fn throttle(&self) {
-        let wait_until = {
+    async fn throttle(&self) -> Result<()> {
+        loop {
             let mut next = self.limiter.lock().await;
+            if let Some(left) = self.cooldown_remaining() {
+                return Err(Error::RateLimited { retry_after: left });
+            }
             let now = Instant::now();
-            let slot = (*next).max(now);
-            *next = slot + self.config.api_interval;
-            slot
-        };
-        tokio::time::sleep_until(wait_until).await;
+            if *next <= now {
+                *next = now + self.config.api_interval;
+                return Ok(());
+            }
+            let slot = *next;
+            drop(next);
+            tokio::time::sleep_until(slot).await;
+        }
     }
 
     /// Сколько ещё сервис просил не присылать запросы к API. `None`, если паузы нет.
@@ -408,10 +414,7 @@ impl Client {
         let mut attempt = 0;
         let mut mirrors_tried = 1;
         loop {
-            if let Some(left) = self.cooldown_remaining() {
-                return Err(Error::RateLimited { retry_after: left });
-            }
-            self.throttle().await;
+            self.throttle().await?;
             let idx = self.active_api.load(Ordering::Relaxed) % mirrors;
             let base = &self.api_mirrors[idx];
             let token = match auth {
@@ -423,12 +426,17 @@ impl Client {
                 request = request.header(AUTHORIZATION, token.header_value());
             }
 
-            let outcome = request.send().await;
+            let request = request.build()?;
+            // Ответ шлюза или обрыв не говорят, успел ли сервер выполнить запись.
+            let repeat_after_send = auth == Auth::User && request.method().is_safe();
+            let outcome = self.http.execute(request).await;
             let mirror_down = match &outcome {
                 Ok(r) => is_mirror_block(r),
                 Err(e) => e.is_connect() || (auth == Auth::User && e.is_timeout()),
             };
-            if mirror_down && mirrors_tried < mirrors {
+            let can_switch =
+                repeat_after_send || (auth != Auth::Revoke && outcome.as_ref().is_err_and(|e| e.is_connect()));
+            if mirror_down && can_switch && mirrors_tried < mirrors {
                 // Зеркало закрыто для этой сети или не отвечает: следующее, без паузы.
                 self.switch_mirror(idx);
                 mirrors_tried += 1;
@@ -439,7 +447,7 @@ impl Client {
                 Err(e) => {
                     // Для одноразовых запросов повторяем, только если запрос точно не ушёл.
                     let retry = match auth {
-                        Auth::User => e.is_timeout() || e.is_connect() || e.is_request(),
+                        Auth::User => e.is_connect() || (repeat_after_send && (e.is_timeout() || e.is_request())),
                         Auth::TokenEndpoint => e.is_connect(),
                         Auth::Revoke => false,
                     };
@@ -483,7 +491,7 @@ impl Client {
                 self.start_cooldown(delay);
                 return Err(Error::RateLimited { retry_after: delay });
             }
-            let retryable = status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error();
+            let retryable = status == StatusCode::TOO_MANY_REQUESTS || (repeat_after_send && status.is_server_error());
             if retryable && auth == Auth::User && attempt < RETRIES {
                 attempt += 1;
                 let delay = retry_after(&response)
@@ -495,6 +503,11 @@ impl Client {
                     tokio::time::sleep(delay).await;
                 }
                 continue;
+            }
+            if status == StatusCode::TOO_MANY_REQUESTS {
+                let delay = retry_after(&response).unwrap_or_else(|| backoff_delay(attempt + 1));
+                self.penalize(delay).await;
+                return Err(Error::RateLimited { retry_after: delay });
             }
             return Err(status_error(response).await);
         }
@@ -629,10 +642,20 @@ impl Client {
     }
 
     /// Начинает потоковую загрузку большого файла (видео). Вызывающий читает тело сам.
-    /// При докачке сервер обязан ответить 206. Если он отдал файл целиком, это
-    /// `RangeUnsupported`, а 416 означает `RangeNotSatisfiable`: дозапись с начала
-    /// испортила бы файл.
     pub async fn fetch_stream(&self, site: Site, url: &str, resume_from: u64) -> Result<Response> {
+        self.fetch_stream_with_size(site, url, resume_from)
+            .await
+            .map(|(response, _)| response)
+    }
+
+    /// Поток и ожидаемый размер всего файла. У ответа 206 длина тела относится
+    /// только к хвосту, а полный размер берётся из Content-Range.
+    pub async fn fetch_stream_with_size(
+        &self,
+        site: Site,
+        url: &str,
+        resume_from: u64,
+    ) -> Result<(Response, Option<u64>)> {
         let mut request = self
             .http
             .get(url)
@@ -643,18 +666,36 @@ impl Client {
         }
         let response = request.send().await?;
         let status = response.status();
-        if resume_from > 0 {
-            match status {
-                StatusCode::PARTIAL_CONTENT => {}
-                StatusCode::RANGE_NOT_SATISFIABLE => return Err(Error::RangeNotSatisfiable),
-                s if s.is_success() => return Err(Error::RangeUnsupported),
-                _ => return Err(status_error(response).await),
+        let range = response
+            .headers()
+            .get(reqwest::header::CONTENT_RANGE)
+            .and_then(|v| v.to_str().ok());
+        match status {
+            StatusCode::OK if resume_from == 0 => {
+                let size = response.content_length();
+                Ok((response, size))
             }
-        }
-        if status.is_success() {
-            Ok(response)
-        } else {
-            Err(status_error(response).await)
+            StatusCode::PARTIAL_CONTENT => {
+                if let Some(size) = complete_range_size(range, resume_from)
+                    && response.content_length().is_none_or(|n| n == size - resume_from)
+                {
+                    Ok((response, Some(size)))
+                } else {
+                    Err(Error::RangeUnsupported)
+                }
+            }
+            StatusCode::RANGE_NOT_SATISFIABLE if resume_from > 0 => {
+                let size = range
+                    .and_then(|r| r.strip_prefix("bytes */"))
+                    .and_then(|s| s.parse::<u64>().ok());
+                if size == Some(resume_from) {
+                    Err(Error::RangeNotSatisfiable)
+                } else {
+                    Err(Error::RangeUnsupported)
+                }
+            }
+            StatusCode::OK => Err(Error::RangeUnsupported),
+            _ => Err(status_error(response).await),
         }
     }
 
@@ -681,6 +722,14 @@ impl Client {
             }
         }
     }
+}
+
+/// Принимаем только хвост нужного файла до последнего байта.
+fn complete_range_size(range: Option<&str>, offset: u64) -> Option<u64> {
+    let (span, size) = range?.strip_prefix("bytes ")?.split_once('/')?;
+    let (first, last) = span.split_once('-')?;
+    let size = size.parse::<u64>().ok()?;
+    (first.parse::<u64>().ok()? == offset && size > offset && last.parse::<u64>().ok()? == size - 1).then_some(size)
 }
 
 /// Ответ похож на страницу блокировки или упавший шлюз, а не на ответ API.
